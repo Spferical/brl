@@ -13,7 +13,16 @@ pub mod prelude {
 }
 
 use bevy::prelude::*;
+use bevy_egui::{EguiContexts, egui};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins(interaction::plugin);
+    app.add_systems(PreUpdate, init_egui_theme);
+}
+
+fn init_egui_theme(mut contexts: EguiContexts) -> Result {
+    contexts.ctx_mut()?.style_mut(|style| {
+        style.visuals.widgets.noninteractive.fg_stroke.color = bevy_egui::egui::Color32::WHITE;
+    });
+    Ok(())
 }

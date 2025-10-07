@@ -1,55 +1,55 @@
 //! The main menu (seen on the title screen).
-
 use bevy::prelude::*;
+use bevy_egui::EguiContexts;
+use bevy_egui::EguiPrimaryContextPass;
+use bevy_egui::egui;
 
-use crate::{asset_tracking::ResourceHandles, menus::Menu, screens::Screen, theme::widget};
+use crate::{asset_tracking::ResourceHandles, menus::Menu, screens::Screen};
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(Menu::Main), spawn_main_menu);
+    app.add_systems(
+        EguiPrimaryContextPass,
+        main_menu.run_if(in_state(Menu::Main)),
+    );
 }
 
-fn spawn_main_menu(mut commands: Commands) {
-    commands.spawn((
-        widget::ui_root("Main Menu"),
-        GlobalZIndex(2),
-        DespawnOnExit(Menu::Main),
-        #[cfg(not(target_family = "wasm"))]
-        children![
-            widget::button("Play", enter_loading_or_gameplay_screen),
-            widget::button("Settings", open_settings_menu),
-            widget::button("Credits", open_credits_menu),
-            widget::button("Exit", exit_app),
-        ],
-        #[cfg(target_family = "wasm")]
-        children![
-            widget::button("Play", enter_loading_or_gameplay_screen),
-            widget::button("Settings", open_settings_menu),
-            widget::button("Credits", open_credits_menu),
-        ],
-    ));
-}
-
-fn enter_loading_or_gameplay_screen(
-    _: On<Pointer<Click>>,
+fn main_menu(
+    mut contexts: EguiContexts,
     resource_handles: Res<ResourceHandles>,
     mut next_screen: ResMut<NextState<Screen>>,
+    mut next_menu: ResMut<NextState<Menu>>,
 ) {
-    if resource_handles.is_all_done() {
-        next_screen.set(Screen::Gameplay);
-    } else {
-        next_screen.set(Screen::Loading);
-    }
-}
-
-fn open_settings_menu(_: On<Pointer<Click>>, mut next_menu: ResMut<NextState<Menu>>) {
-    next_menu.set(Menu::Settings);
-}
-
-fn open_credits_menu(_: On<Pointer<Click>>, mut next_menu: ResMut<NextState<Menu>>) {
-    next_menu.set(Menu::Credits);
-}
-
-#[cfg(not(target_family = "wasm"))]
-fn exit_app(_: On<Pointer<Click>>, mut app_exit: MessageWriter<AppExit>) {
-    app_exit.write(AppExit::Success);
+    let Ok(ctx) = contexts.ctx_mut() else {
+        return;
+    };
+    egui::CentralPanel::default().show(ctx, |ui| {
+        ui.vertical_centered_justified(|ui| {
+            ui.style_mut().text_styles.insert(
+                egui::TextStyle::Heading,
+                egui::FontId::new(30.0, egui::FontFamily::Proportional),
+            );
+            ui.style_mut().text_styles.insert(
+                egui::TextStyle::Button,
+                egui::FontId::new(20.0, egui::FontFamily::Proportional),
+            );
+            ui.label(egui::RichText::new("Untitled 0.1\n").heading());
+            if ui.button("Play").clicked() {
+                if resource_handles.is_all_done() {
+                    next_screen.set(Screen::Gameplay);
+                } else {
+                    next_screen.set(Screen::Loading);
+                }
+            }
+            if ui.button("Settings").clicked() {
+                next_menu.set(Menu::Settings);
+            }
+            if ui.button("Credits").clicked() {
+                next_menu.set(Menu::Credits);
+            }
+            #[cfg(target_family = "wasm")]
+            if ui.button("Exit").clicked() {
+                app_exit.write(AppExit::Success);
+            }
+        });
+    });
 }
