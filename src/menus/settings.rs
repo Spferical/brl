@@ -3,12 +3,9 @@
 //! Additional settings and accessibility options should go here.
 
 use bevy::{audio::Volume, prelude::*};
-use bevy_egui::{
-    EguiContexts, EguiPrimaryContextPass,
-    egui::{self, RichText},
-};
+use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
 
-use crate::{menus::Menu, screens::Screen, theme::TITLE_STYLE};
+use crate::{menus::Menu, screens::Screen};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
@@ -28,27 +25,30 @@ fn settings_menu(
         return;
     };
     ctx.style_mut(crate::theme::use_menu_theme);
-    egui::CentralPanel::default().show(ctx, |ui| {
-        ui.vertical_centered_justified(|ui| {
-            ui.label(RichText::new("Settings").text_style(TITLE_STYLE.clone()));
-            ui.add(
-                egui::Slider::from_get_set(0.0..=3.0, |vol| {
-                    if let Some(vol) = vol {
-                        global_volume.volume = Volume::Linear(vol as f32);
-                        vol
+    egui::Window::new("Settings")
+        .resizable(false)
+        .collapsible(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::new(0.0, 0.0))
+        .show(ctx, |ui| {
+            ui.vertical_centered_justified(|ui| {
+                ui.add(
+                    egui::Slider::from_get_set(0.0..=3.0, |vol| {
+                        if let Some(vol) = vol {
+                            global_volume.volume = Volume::Linear(vol as f32);
+                            vol
+                        } else {
+                            global_volume.volume.to_linear() as f64
+                        }
+                    })
+                    .text("Volume"),
+                );
+                if ui.button("Back").clicked() || keyboard_input.just_pressed(KeyCode::Escape) {
+                    next_menu.set(if screen.get() == &Screen::Title {
+                        Menu::Main
                     } else {
-                        global_volume.volume.to_linear() as f64
-                    }
-                })
-                .text("Volume"),
-            );
-            if ui.button("Back").clicked() || keyboard_input.just_pressed(KeyCode::Escape) {
-                next_menu.set(if screen.get() == &Screen::Title {
-                    Menu::Main
-                } else {
-                    Menu::Pause
-                });
-            }
-        })
-    });
+                        Menu::Pause
+                    });
+                }
+            })
+        });
 }

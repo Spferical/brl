@@ -5,7 +5,6 @@ use bevy_egui::egui;
 use bevy_egui::{EguiContexts, EguiPrimaryContextPass};
 
 use crate::menus::Menu;
-use crate::theme::TITLE_STYLE;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
@@ -23,13 +22,36 @@ fn credits_menu(
         return;
     };
     ctx.style_mut(crate::theme::use_menu_theme);
-    egui::CentralPanel::default().show(ctx, |ui| {
-        ui.vertical_centered_justified(|ui| {
-            ui.label(egui::RichText::new("Credits").text_style(TITLE_STYLE.clone()));
-            ui.label("By Spferical");
-            if ui.button("Back").clicked() || keyboard_input.just_pressed(KeyCode::Escape) {
-                next_menu.set(Menu::Main);
-            }
+    egui::Window::new("Credits")
+        .resizable(false)
+        .collapsible(false)
+        .anchor(egui::Align2::CENTER_CENTER, egui::Vec2::new(0.0, 0.0))
+        .show(ctx, |ui| {
+            ui.vertical(|ui| {
+                ui.label(egui::RichText::new("Created by").heading());
+                egui::Grid::new("credits_grid")
+                    .num_columns(2)
+                    .spacing([40.0, 4.0])
+                    .show(ui, |ui| {
+                        ui.label("Spferical");
+                        ui.label("Programming & Level Design");
+                        ui.end_row();
+                        ui.label("AnimatedRNG");
+                        ui.label("Programming & Level Design");
+                        ui.end_row();
+                        ui.label("Micheal Chang");
+                        ui.label("Level Design");
+                        ui.end_row();
+                        ui.label("inexazkt");
+                        ui.label("Music");
+                        ui.end_row();
+                    });
+                ui.label(egui::RichText::new("Assets").heading());
+                ui.label("Winlu Spaceship Tileset");
+                ui.label("2D Platformer Shooter Space Combat Suit Character Sprite");
+                if ui.button("Back").clicked() || keyboard_input.just_pressed(KeyCode::Escape) {
+                    next_menu.set(Menu::Main);
+                }
+            });
         });
-    });
 }
