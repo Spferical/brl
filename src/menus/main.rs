@@ -22,16 +22,9 @@ fn main_menu(
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };
+    ctx.style_mut(crate::theme::use_menu_theme);
     egui::CentralPanel::default().show(ctx, |ui| {
         ui.vertical_centered_justified(|ui| {
-            ui.style_mut().text_styles.insert(
-                egui::TextStyle::Heading,
-                egui::FontId::new(30.0, egui::FontFamily::Proportional),
-            );
-            ui.style_mut().text_styles.insert(
-                egui::TextStyle::Button,
-                egui::FontId::new(20.0, egui::FontFamily::Proportional),
-            );
             ui.label(egui::RichText::new("Untitled 0.1\n").heading());
             if ui.button("Play").clicked() {
                 if resource_handles.is_all_done() {

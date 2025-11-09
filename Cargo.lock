@@ -1621,6 +1621,7 @@ dependencies = [
  "bevy",
  "bevy_egui",
  "getrandom",
+ "once_cell",
  "rand",
  "tracing",
 ]
