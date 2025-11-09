@@ -14,7 +14,11 @@ pub(super) fn plugin(app: &mut App) {
     );
 }
 
-fn credits_menu(mut contexts: EguiContexts, mut next_menu: ResMut<NextState<Menu>>) {
+fn credits_menu(
+    mut contexts: EguiContexts,
+    mut next_menu: ResMut<NextState<Menu>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+) {
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };
@@ -23,7 +27,7 @@ fn credits_menu(mut contexts: EguiContexts, mut next_menu: ResMut<NextState<Menu
         ui.vertical_centered_justified(|ui| {
             ui.label(egui::RichText::new("Credits").text_style(TITLE_STYLE.clone()));
             ui.label("By Spferical");
-            if ui.button("Back").clicked() {
+            if ui.button("Back").clicked() || keyboard_input.just_pressed(KeyCode::Escape) {
                 next_menu.set(Menu::Main);
             }
         });
