@@ -13,16 +13,18 @@ pub mod prelude {
 }
 
 use bevy::prelude::*;
-use bevy_egui::{EguiContexts, egui};
+use bevy_egui::{EguiContexts, EguiPrimaryContextPass};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins(interaction::plugin);
-    app.add_systems(PreUpdate, init_egui_theme);
+    app.add_systems(EguiPrimaryContextPass, init_egui_theme);
 }
 
-fn init_egui_theme(mut contexts: EguiContexts) -> Result {
-    contexts.ctx_mut()?.style_mut(|style| {
+fn init_egui_theme(mut contexts: EguiContexts) {
+    let Ok(ctx) = contexts.ctx_mut() else {
+        return;
+    };
+    ctx.style_mut(|style| {
         style.visuals.widgets.noninteractive.fg_stroke.color = bevy_egui::egui::Color32::WHITE;
     });
-    Ok(())
 }
