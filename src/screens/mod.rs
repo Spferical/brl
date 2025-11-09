@@ -2,7 +2,6 @@
 
 mod gameplay;
 mod loading;
-mod splash;
 mod title;
 
 use bevy::prelude::*;
@@ -13,7 +12,6 @@ pub(super) fn plugin(app: &mut App) {
     app.add_plugins((
         gameplay::plugin,
         loading::plugin,
-        splash::plugin,
         title::plugin,
     ));
 }
@@ -22,7 +20,6 @@ pub(super) fn plugin(app: &mut App) {
 #[derive(States, Copy, Clone, Eq, PartialEq, Hash, Debug, Default)]
 pub enum Screen {
     #[default]
-    Splash,
     Title,
     Loading,
     Gameplay,
