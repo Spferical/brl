@@ -1,0 +1,26 @@
+{
+    "activeFile": "urizen_onebit_tileset__v2d0.tsx",
+    "expandedProjectPaths": [
+    ],
+    "fileStates": {
+        "urizen_onebit_tileset__v2d0.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 4.2687
+        }
+    },
+    "last.imagePath": "/home/matthew/dev/games/bevyrl/assets",
+    "openFiles": [
+        "urizen_onebit_tileset__v2d0.tsx"
+    ],
+    "project": "bevyrl.tiled-project",
+    "recentFiles": [
+        "urizen_onebit_tileset__v2d0.tsx"
+    ],
+    "tileset.lastUsedFormat": "tsx",
+    "tileset.margin": 1,
+    "tileset.spacing": 1,
+    "tileset.tileSize": {
+        "height": 12,
+        "width": 12
+    }
+}

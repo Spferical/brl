@@ -1623,6 +1623,7 @@ dependencies = [
  "getrandom",
  "once_cell",
  "rand",
+ "rogue-algebra",
  "tracing",
 ]
 
@@ -4303,6 +4304,14 @@ checksum = "e7ceb6607dd738c99bc8cb28eff249b7cd5c8ec88b9db96c0608c1480d140fb1"
 dependencies = [
  "cpal",
  "lewton",
+]
+
+[[package]]
+name = "rogue-algebra"
+version = "0.1.0"
+dependencies = [
+ "bevy_math",
+ "rand",
 ]
 
 [[package]]

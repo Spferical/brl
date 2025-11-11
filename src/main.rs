@@ -5,9 +5,9 @@
 
 mod asset_tracking;
 mod audio;
-mod demo;
 #[cfg(feature = "dev")]
 mod dev_tools;
+mod game;
 mod menus;
 mod screens;
 mod theme;
@@ -33,6 +33,7 @@ impl Plugin for AppPlugin {
                     meta_check: AssetMetaCheck::Never,
                     ..default()
                 })
+                .set(ImagePlugin::default_nearest())
                 .set(WindowPlugin {
                     primary_window: Window {
                         title: "Bevyrl".to_string(),
@@ -49,7 +50,7 @@ impl Plugin for AppPlugin {
             EguiPlugin::default(),
             asset_tracking::plugin,
             audio::plugin,
-            demo::plugin,
+            game::plugin,
             #[cfg(feature = "dev")]
             dev_tools::plugin,
             menus::plugin,
