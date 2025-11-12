@@ -1,16 +1,18 @@
 use std::time::Duration;
 
 use bevy::prelude::*;
+use rand::Rng;
 
 use crate::asset_tracking::LoadResource as _;
 
 mod camera;
 
-const MAP_WIDTH: usize = 50;
-const MAP_HEIGHT: usize = 16;
+const MAP_WIDTH: i32 = 50;
+const MAP_HEIGHT: i32 = 16;
 const TILE_WIDTH: f32 = 24.0;
 const TILE_HEIGHT: f32 = 24.0;
 const PLAYER_Z: f32 = 10.0;
+const TILE_Z: f32 = 0.0;
 
 pub(super) fn plugin(app: &mut App) {
     app.load_resource::<WorldAssets>();
@@ -32,6 +34,20 @@ pub struct WorldAssets {
     #[dependency]
     urizen: Handle<Image>,
     urizen_layout: Handle<TextureAtlasLayout>,
+}
+
+impl WorldAssets {
+    fn get_urizen_sprite(&self, index: usize) -> Sprite {
+        let mut player_sprite = Sprite::from_atlas_image(
+            self.urizen.clone(),
+            TextureAtlas {
+                layout: self.urizen_layout.clone(),
+                index,
+            },
+        );
+        player_sprite.custom_size = Some(Vec2::new(TILE_WIDTH, TILE_HEIGHT));
+        player_sprite
+    }
 }
 
 impl FromWorld for WorldAssets {
@@ -98,22 +114,15 @@ impl MapPos {
 pub struct MoveIntent(pub IVec2);
 
 pub fn enter(mut commands: Commands, assets: Res<WorldAssets>) {
-    // let tiles = [(); MAP_WIDTH].map(|_| [(); MAP_HEIGHT].map(commands.spawn(())));
-    let mut player_sprite = Sprite::from_atlas_image(
-        assets.urizen.clone(),
-        TextureAtlas {
-            layout: assets.urizen_layout.clone(),
-            index: 104,
-        },
-    );
-    player_sprite.custom_size = Some(Vec2::new(TILE_WIDTH, TILE_HEIGHT));
-    let map_pos = MapPos(IVec2::new(0, 0));
     let game_world = (
         GameWorld,
         Transform::IDENTITY,
         GlobalTransform::IDENTITY,
         InheritedVisibility::VISIBLE,
     );
+
+    let player_sprite = assets.get_urizen_sprite(104);
+    let map_pos = MapPos(IVec2::new(0, 0));
     let player = (
         Player,
         camera::CameraFollow,
@@ -121,7 +130,30 @@ pub fn enter(mut commands: Commands, assets: Res<WorldAssets>) {
         map_pos,
         Transform::from_translation(map_pos.to_vec3(PLAYER_Z)),
     );
-    commands.spawn(game_world).with_child(player);
+
+    let mut tiles = vec![];
+    for x in 0..=MAP_WIDTH {
+        for y in 0..=MAP_HEIGHT {
+            let rng = &mut rand::rng();
+            let sprite = assets.get_urizen_sprite(rng.random_range(1857..=1872));
+            let map_pos = MapPos(IVec2::new(x, y));
+            let tile = (
+                sprite,
+                map_pos,
+                Transform::from_translation(map_pos.to_vec3(TILE_Z)),
+            );
+            tiles.push(tile);
+        }
+    }
+
+    commands
+        .spawn(game_world)
+        .with_child(player)
+        .with_children(|commands| {
+            for t in tiles {
+                commands.spawn(t);
+            }
+        });
 }
 
 fn handle_input(
