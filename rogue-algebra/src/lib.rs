@@ -411,8 +411,8 @@ impl Rect {
     }
     /// Chooses a random position in this rectangle.
     pub fn choose(&self, rng: &mut impl Rng) -> Pos {
-        let x = rng.gen_range(self.x1..=self.x2);
-        let y = rng.gen_range(self.y1..=self.y2);
+        let x = rng.random_range(self.x1..=self.x2);
+        let y = rng.random_range(self.y1..=self.y2);
         Pos { x, y }
     }
     /// Chooses a random position on the edge of this rectangle.
@@ -454,7 +454,7 @@ impl Rect {
             });
         }
         let num_valid_squares = valid_rects.iter().map(Rect::len).sum::<usize>();
-        let rand = rng.gen_range(0..num_valid_squares);
+        let rand = rng.random_range(0..num_valid_squares);
         let mut running_len = 0;
         for rect in valid_rects {
             running_len += rect.len();
