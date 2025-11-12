@@ -4,6 +4,8 @@ use bevy::prelude::*;
 
 use crate::asset_tracking::LoadResource as _;
 
+mod camera;
+
 const MAP_WIDTH: usize = 50;
 const MAP_HEIGHT: usize = 16;
 const TILE_WIDTH: f32 = 24.0;
@@ -12,7 +14,16 @@ const PLAYER_Z: f32 = 10.0;
 
 pub(super) fn plugin(app: &mut App) {
     app.load_resource::<WorldAssets>();
-    app.add_systems(Update, (handle_input, move_player, move_sprites).chain());
+    app.add_systems(
+        Update,
+        (
+            handle_input,
+            move_player,
+            move_sprites,
+            camera::update_camera,
+        )
+            .chain(),
+    );
 }
 
 #[derive(Resource, Asset, Clone, Reflect)]
@@ -105,6 +116,7 @@ pub fn enter(mut commands: Commands, assets: Res<WorldAssets>) {
     );
     let player = (
         Player,
+        camera::CameraFollow,
         player_sprite,
         map_pos,
         Transform::from_translation(map_pos.to_vec3(PLAYER_Z)),
