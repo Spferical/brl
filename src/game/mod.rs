@@ -116,6 +116,7 @@ pub struct MoveIntent(pub IVec2);
 pub fn enter(mut commands: Commands, assets: Res<WorldAssets>) {
     let game_world = (
         GameWorld,
+        Name::new("GameWorldRoot"),
         Transform::IDENTITY,
         GlobalTransform::IDENTITY,
         InheritedVisibility::VISIBLE,
@@ -125,6 +126,7 @@ pub fn enter(mut commands: Commands, assets: Res<WorldAssets>) {
     let map_pos = MapPos(IVec2::new(0, 0));
     let player = (
         Player,
+        Name::new("Player"),
         camera::CameraFollow,
         player_sprite,
         map_pos,
