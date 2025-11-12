@@ -159,11 +159,8 @@ pub fn enter(mut commands: Commands, assets: Res<WorldAssets>) {
 fn handle_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
-    q_player: Query<Entity, With<Player>>,
+    player_entity: Single<Entity, With<Player>>,
 ) {
-    let Ok(player_entity) = q_player.single() else {
-        return;
-    };
     let mut intent = IVec2::ZERO;
     for (key, dir) in [
         (KeyCode::KeyW, IVec2::new(0, 1)),
@@ -180,17 +177,15 @@ fn handle_input(
         }
     }
     if intent != IVec2::ZERO {
-        commands.entity(player_entity).insert(MoveIntent(intent));
+        commands.entity(*player_entity).insert(MoveIntent(intent));
     }
 }
 
 fn move_player(
-    mut q_player: Query<(Entity, &mut MapPos, &MoveIntent), With<Player>>,
+    player: Single<(Entity, &mut MapPos, &MoveIntent), With<Player>>,
     mut commands: Commands,
 ) {
-    let Ok((player_entity, mut pos, intent)) = q_player.single_mut() else {
-        return;
-    };
+    let (player_entity, mut pos, intent) = player.into_inner();
     let old_pos = *pos;
     pos.0 += intent.0;
     commands
