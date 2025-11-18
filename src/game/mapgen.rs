@@ -58,12 +58,12 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
     }
     // Spawners on top and bottom
     for pos in world_rect.top_edge() {
-        if rng.random_bool(0.2) {
+        if rng.random_bool(1.0) {
             draft.insert(pos, TileKind::TopSpawner);
         }
     }
     for pos in world_rect.bottom_edge() {
-        if rng.random_bool(0.2) {
+        if rng.random_bool(1.0) {
             draft.insert(pos, TileKind::BottomSpawner);
         }
     }
@@ -110,7 +110,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
                     sprite,
                     MobSpawner {
                         spawns: top_spawns.clone(),
-                        odds: 0.04,
+                        odds: 0.004,
                     },
                 ));
             }
@@ -120,7 +120,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
                     sprite,
                     MobSpawner {
                         spawns: bottom_spawns.clone(),
-                        odds: 0.04,
+                        odds: 0.004,
                     },
                 ));
             }

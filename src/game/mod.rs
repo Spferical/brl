@@ -5,11 +5,7 @@ use rand::{Rng as _, seq::IndexedRandom};
 
 use crate::{
     asset_tracking::LoadResource as _,
-    game::{
-        assets::WorldAssets,
-        input::MoveIntent,
-        map::{BlocksMovement, MapPos},
-    },
+    game::{input::MoveIntent, map::MapPos},
     screens::Screen,
 };
 
@@ -31,6 +27,7 @@ pub(super) fn plugin(app: &mut App) {
             input::handle_input,
             map::update_walk_blocked_map,
             process_turn,
+            prune_dead,
             move_sprites,
             camera::update_camera,
         )
@@ -72,7 +69,6 @@ fn process_turn(
     q_spawners: Query<(&MapPos, &MobSpawner), (Without<Player>, Without<Mob>, Without<GameWorld>)>,
     mut walk_blocked_map: ResMut<map::WalkBlockedMap>,
     mut commands: Commands,
-    world_assets: If<Res<WorldAssets>>,
 ) {
     let (player_entity, mut pos, intent) = player.into_inner();
     let world_entity = world.into_inner();
@@ -107,13 +103,7 @@ fn process_turn(
             let spawn = spawner.spawns.choose(rng).expect("Spawner has no spawns");
             let transform = Transform::from_translation(pos.to_vec3(TILE_Z));
             let new_mob = commands
-                .spawn((
-                    spawn.sprite.clone(),
-                    spawn.mob.clone(),
-                    *pos,
-                    transform,
-                    BlocksMovement,
-                ))
+                .spawn((spawn.sprite.clone(), spawn.mob.clone(), *pos, transform))
                 .id();
             commands.entity(world_entity).add_child(new_mob);
         }
@@ -121,32 +111,31 @@ fn process_turn(
 
     // Process enemies.
     let mut mobs = mobs.iter_mut().collect::<Vec<_>>();
-
     let mut pos_to_mob_idx = HashMap::new();
     for (i, (_entity, pos, _mob)) in mobs.iter().enumerate() {
         pos_to_mob_idx.insert(pos.0, i);
     }
-    let mut mob_moves = vec![];
 
+    // Determine mob intentions.
+    let mut mob_moves = vec![];
     // For each enemy, target their nearest enemy
     for (i, (_entity, pos, mob)) in mobs.iter().enumerate() {
         let starts = &[pos.0.into()];
-        let maxdist = 30;
+        let maxdist = 20;
         let reachable = |p: rogue_algebra::Pos| {
             rogue_algebra::DIRECTIONS
                 .map(|o| p + o)
                 .into_iter()
+                // Avoid walls
+                .filter(|rogue_algebra::Pos { x, y }| {
+                    !walk_blocked_map.contains(&IVec2::new(*x, *y))
+                })
                 // Avoid friendlies
                 .filter(|pos| {
                     pos_to_mob_idx
                         .get(&IVec2::from(*pos))
                         .filter(|i| mobs[**i].2.faction == mob.faction)
                         .is_none()
-                })
-                // Avoid walls
-                .filter(|rogue_algebra::Pos { x, y }| {
-                    !walk_blocked_map.contains(&IVec2::new(*x, *y))
-                        || pos_to_mob_idx.contains_key(&IVec2::new(*x, *y))
                 })
                 .collect()
         };
@@ -169,18 +158,34 @@ fn process_turn(
             walk_blocked_map.insert(target_move.into());
         }
     }
+
+    // Apply moves.
     for (i, dest) in mob_moves.into_iter() {
         let old_pos = *mobs[i].1;
         let new_pos = MapPos(IVec2::from(dest));
-        *mobs[i].1 = new_pos;
-        commands.entity(mobs[i].0).insert(MoveAnimation {
-            from: old_pos.to_vec3(PLAYER_Z),
-            to: new_pos.to_vec3(PLAYER_Z),
-            timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
+        if let Some(enemy_idx) = pos_to_mob_idx.get(&new_pos.0) {
+            // attack
+            mobs[*enemy_idx].2.hp -= mobs[i].2.strength;
+        } else {
+            // move
+            *mobs[i].1 = new_pos;
+            commands.entity(mobs[i].0).insert(MoveAnimation {
+                from: old_pos.to_vec3(PLAYER_Z),
+                to: new_pos.to_vec3(PLAYER_Z),
+                timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
 
-            ease: EaseFunction::CubicIn,
-            rotation: None,
-        });
+                ease: EaseFunction::CubicIn,
+                rotation: None,
+            });
+        }
+    }
+}
+
+fn prune_dead(mut commands: Commands, q_mobs: Query<(Entity, &Mob)>) {
+    for (entity, mob) in q_mobs {
+        if mob.hp <= 0 {
+            commands.entity(entity).despawn();
+        }
     }
 }
 
