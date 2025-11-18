@@ -1,8 +1,8 @@
 use crate::game::{
-    GameWorld, PLAYER_Z, Player, TILE_Z,
+    GameWorld, Mob, MobSpawner, MobTemplate, PLAYER_Z, Player, TILE_Z,
     assets::WorldAssets,
     camera::CameraFollow,
-    map::{self, MapPos},
+    map::{self, MAP_HEIGHT, MapPos},
 };
 use bevy::{platform::collections::HashMap, prelude::*};
 use rand::Rng;
@@ -10,9 +10,12 @@ use rand::Rng;
 enum TileKind {
     Floor,
     Wall,
+    TopSpawner,
+    BottomSpawner,
 }
 
 pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
+    let rng = &mut rand::rng();
     let game_world = (
         GameWorld,
         Name::new("GameWorldRoot"),
@@ -22,7 +25,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
     );
 
     let player_sprite = assets.get_urizen_sprite(104);
-    let map_pos = MapPos(IVec2::new(0, 0));
+    let map_pos = MapPos(IVec2::new(3, MAP_HEIGHT / 2));
     let player = (
         Player,
         Name::new("Player"),
@@ -46,7 +49,6 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
     }
     // Dig a tunnel
     for pos in world_rect {
-        let rng = &mut rand::rng();
         let tile_kind = if rng.random_bool(0.1) {
             TileKind::Wall
         } else {
@@ -54,10 +56,42 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
         };
         draft.insert(pos, tile_kind);
     }
+    // Spawners on top and bottom
+    for pos in world_rect.top_edge() {
+        if rng.random_bool(0.2) {
+            draft.insert(pos, TileKind::TopSpawner);
+        }
+    }
+    for pos in world_rect.bottom_edge() {
+        if rng.random_bool(0.2) {
+            draft.insert(pos, TileKind::BottomSpawner);
+        }
+    }
 
     let mut tiles = vec![];
+    let goblin_template = MobTemplate {
+        mob: Mob {
+            hp: 5,
+            faction: -1,
+            max_hp: 5,
+            strength: 3,
+        },
+        sprite: assets.get_urizen_sprite(976),
+    };
+    let dwarf_template = MobTemplate {
+        mob: Mob {
+            hp: 5,
+            faction: 1,
+            max_hp: 5,
+            strength: 3,
+        },
+        sprite: assets.get_urizen_sprite(2785),
+    };
+
+    let bottom_spawns = vec![goblin_template];
+    let top_spawns = vec![dwarf_template];
+
     for (rogue_algebra::Pos { x, y }, tile_kind) in draft.into_iter() {
-        let rng = &mut rand::rng();
         let map_pos = MapPos(IVec2::new(x, y));
         let transform = Transform::from_translation(map_pos.to_vec3(TILE_Z));
         let mut tile = commands.spawn((map_pos, transform));
@@ -69,6 +103,26 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             TileKind::Wall => {
                 let sprite = assets.get_urizen_sprite(rng.random_range(0..=1));
                 tile.insert((sprite, map::BlocksMovement));
+            }
+            TileKind::TopSpawner => {
+                let sprite = assets.get_urizen_sprite(207);
+                tile.insert((
+                    sprite,
+                    MobSpawner {
+                        spawns: top_spawns.clone(),
+                        odds: 0.04,
+                    },
+                ));
+            }
+            TileKind::BottomSpawner => {
+                let sprite = assets.get_urizen_sprite(207);
+                tile.insert((
+                    sprite,
+                    MobSpawner {
+                        spawns: bottom_spawns.clone(),
+                        odds: 0.04,
+                    },
+                ));
             }
         }
         tiles.push(tile.id());

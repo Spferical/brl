@@ -1,10 +1,16 @@
 use std::time::Duration;
 
-use bevy::prelude::*;
+use bevy::{platform::collections::HashMap, prelude::*};
+use rand::{Rng as _, seq::IndexedRandom};
 
 use crate::{
     asset_tracking::LoadResource as _,
-    game::{input::MoveIntent, map::MapPos},
+    game::{
+        assets::WorldAssets,
+        input::MoveIntent,
+        map::{BlocksMovement, MapPos},
+    },
+    screens::Screen,
 };
 
 mod assets;
@@ -24,10 +30,11 @@ pub(super) fn plugin(app: &mut App) {
         (
             input::handle_input,
             map::update_walk_blocked_map,
-            move_player,
+            process_turn,
             move_sprites,
             camera::update_camera,
         )
+            .run_if(in_state(Screen::Gameplay))
             .chain(),
     );
 }
@@ -38,18 +45,46 @@ struct GameWorld;
 #[derive(Component)]
 struct Player;
 
-fn move_player(
-    player: Single<(Entity, &mut MapPos, &MoveIntent), With<Player>>,
-    walk_blocked_map: Res<map::WalkBlockedMap>,
+#[derive(Clone)]
+struct MobTemplate {
+    mob: Mob,
+    sprite: Sprite,
+}
+
+#[derive(Component)]
+struct MobSpawner {
+    spawns: Vec<MobTemplate>,
+    odds: f64,
+}
+
+#[derive(Component, Clone, Debug)]
+struct Mob {
+    hp: i32,
+    faction: i32,
+    max_hp: i32,
+    strength: i32,
+}
+
+fn process_turn(
+    world: Single<Entity, With<GameWorld>>,
+    player: Single<(Entity, &mut MapPos, &MoveIntent), (With<Player>, Without<GameWorld>)>,
+    mut mobs: Query<(Entity, &mut MapPos, &mut Mob), (Without<Player>, Without<GameWorld>)>,
+    q_spawners: Query<(&MapPos, &MobSpawner), (Without<Player>, Without<Mob>, Without<GameWorld>)>,
+    mut walk_blocked_map: ResMut<map::WalkBlockedMap>,
     mut commands: Commands,
+    world_assets: If<Res<WorldAssets>>,
 ) {
     let (player_entity, mut pos, intent) = player.into_inner();
+    let world_entity = world.into_inner();
     commands.entity(player_entity).remove::<MoveIntent>();
+
     let old_pos = *pos;
     let new_pos = pos.0 + intent.0;
     if walk_blocked_map.contains(&new_pos) {
         return;
     }
+
+    // Move the player
     pos.0 = new_pos;
     commands
         .entity(player_entity)
@@ -62,6 +97,91 @@ fn move_player(
             ease: EaseFunction::CubicIn,
             rotation: None,
         });
+    walk_blocked_map.remove(&old_pos.0);
+    walk_blocked_map.insert(new_pos);
+
+    // Spawners.
+    let rng = &mut rand::rng();
+    for (pos, spawner) in q_spawners {
+        if !walk_blocked_map.contains(&pos.0) && rng.random_bool(spawner.odds) {
+            let spawn = spawner.spawns.choose(rng).expect("Spawner has no spawns");
+            let transform = Transform::from_translation(pos.to_vec3(TILE_Z));
+            let new_mob = commands
+                .spawn((
+                    spawn.sprite.clone(),
+                    spawn.mob.clone(),
+                    *pos,
+                    transform,
+                    BlocksMovement,
+                ))
+                .id();
+            commands.entity(world_entity).add_child(new_mob);
+        }
+    }
+
+    // Process enemies.
+    let mut mobs = mobs.iter_mut().collect::<Vec<_>>();
+
+    let mut pos_to_mob_idx = HashMap::new();
+    for (i, (_entity, pos, _mob)) in mobs.iter().enumerate() {
+        pos_to_mob_idx.insert(pos.0, i);
+    }
+    let mut mob_moves = vec![];
+
+    // For each enemy, target their nearest enemy
+    for (i, (_entity, pos, mob)) in mobs.iter().enumerate() {
+        let starts = &[pos.0.into()];
+        let maxdist = 30;
+        let reachable = |p: rogue_algebra::Pos| {
+            rogue_algebra::DIRECTIONS
+                .map(|o| p + o)
+                .into_iter()
+                // Avoid friendlies
+                .filter(|pos| {
+                    pos_to_mob_idx
+                        .get(&IVec2::from(*pos))
+                        .filter(|i| mobs[**i].2.faction == mob.faction)
+                        .is_none()
+                })
+                // Avoid walls
+                .filter(|rogue_algebra::Pos { x, y }| {
+                    !walk_blocked_map.contains(&IVec2::new(*x, *y))
+                        || pos_to_mob_idx.contains_key(&IVec2::new(*x, *y))
+                })
+                .collect()
+        };
+        // let mut target_dest = None;
+        let mut target_move = None;
+        for path in rogue_algebra::path::bfs_paths(starts, maxdist, reachable) {
+            let last = *path.last().unwrap();
+            if let Some(other_mob_idx) = pos_to_mob_idx.get(&IVec2::from(last))
+                && mobs[*other_mob_idx].2.faction != mob.faction
+            {
+                // target this mob
+                // target_dest = Some(last);
+                target_move = path.get(1).cloned();
+                break;
+            }
+        }
+        if let Some(target_move) = target_move {
+            // move
+            mob_moves.push((i, target_move));
+            walk_blocked_map.insert(target_move.into());
+        }
+    }
+    for (i, dest) in mob_moves.into_iter() {
+        let old_pos = *mobs[i].1;
+        let new_pos = MapPos(IVec2::from(dest));
+        *mobs[i].1 = new_pos;
+        commands.entity(mobs[i].0).insert(MoveAnimation {
+            from: old_pos.to_vec3(PLAYER_Z),
+            to: new_pos.to_vec3(PLAYER_Z),
+            timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
+
+            ease: EaseFunction::CubicIn,
+            rotation: None,
+        });
+    }
 }
 
 #[derive(Component, Debug)]
