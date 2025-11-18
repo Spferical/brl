@@ -73,7 +73,6 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
         mob: Mob {
             hp: 5,
             faction: -1,
-            max_hp: 5,
             strength: 3,
         },
         sprite: assets.get_urizen_sprite(976),
@@ -82,7 +81,6 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
         mob: Mob {
             hp: 5,
             faction: 1,
-            max_hp: 5,
             strength: 3,
         },
         sprite: assets.get_urizen_sprite(2785),

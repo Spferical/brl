@@ -58,7 +58,6 @@ struct MobSpawner {
 struct Mob {
     hp: i32,
     faction: i32,
-    max_hp: i32,
     strength: i32,
 }
 
