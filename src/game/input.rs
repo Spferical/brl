@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::game::Player;
+use crate::game::{Player, Turn};
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MoveIntent(pub IVec2);
@@ -43,5 +43,6 @@ pub(crate) fn handle_input(
     }
     if intent != IVec2::ZERO {
         commands.entity(*player_entity).insert(MoveIntent(intent));
+        commands.run_schedule(Turn);
     }
 }

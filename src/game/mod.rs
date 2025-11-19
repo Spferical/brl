@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::{ecs::schedule::ScheduleLabel, platform::collections::HashMap, prelude::*};
 use rand::{Rng as _, seq::IndexedRandom};
 
 use crate::{
@@ -23,16 +23,14 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<map::WalkBlockedMap>();
     app.add_systems(
         Update,
-        (
-            input::handle_input,
-            map::update_walk_blocked_map,
-            process_turn,
-            prune_dead,
-            move_sprites,
-            camera::update_camera,
-        )
+        (input::handle_input, move_sprites, camera::update_camera)
             .run_if(in_state(Screen::Gameplay))
             .chain(),
+    );
+    app.init_schedule(Turn);
+    app.add_systems(
+        Turn,
+        (map::update_walk_blocked_map, process_turn, prune_dead).chain(),
     );
 }
 
@@ -60,6 +58,9 @@ struct Mob {
     faction: i32,
     strength: i32,
 }
+
+#[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash, Default)]
+struct Turn;
 
 fn process_turn(
     world: Single<Entity, With<GameWorld>>,
