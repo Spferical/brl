@@ -52,11 +52,18 @@ struct MobSpawner {
     odds: f64,
 }
 
+#[derive(Component)]
+struct Bullet {
+    direction: IVec2,
+    damage: i32,
+}
+
 #[derive(Component, Clone, Debug)]
 struct Mob {
     hp: i32,
     faction: i32,
     strength: i32,
+    ranged: bool,
 }
 
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash, Default)]
@@ -166,6 +173,8 @@ fn process_turn(
         if let Some(enemy_idx) = pos_to_mob_idx.get(&new_pos.0) {
             // attack
             mobs[*enemy_idx].2.hp -= mobs[i].2.strength;
+        } else if mobs[i].2.ranged && rng.random_bool(0.5) {
+            // fire weapon
         } else {
             // move
             *mobs[i].1 = new_pos;

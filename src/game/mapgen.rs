@@ -74,20 +74,50 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             hp: 5,
             faction: -1,
             strength: 3,
+            ranged: false,
         },
         sprite: assets.get_urizen_sprite(976),
     };
+    let orc_template = MobTemplate {
+        mob: Mob {
+            hp: 10,
+            faction: -1,
+            strength: 4,
+            ranged: false,
+        },
+        sprite: assets.get_urizen_sprite(1166),
+    };
+    // let arrow_sprite = assets.get_urizen_sprite(2093);
+    let devil_template = MobTemplate {
+        mob: Mob {
+            hp: 20,
+            faction: -1,
+            strength: 5,
+            ranged: false,
+        },
+        sprite: assets.get_urizen_sprite(1390),
+    };
     let dwarf_template = MobTemplate {
         mob: Mob {
-            hp: 5,
+            hp: 10,
             faction: 1,
-            strength: 3,
+            strength: 6,
+            ranged: false,
         },
         sprite: assets.get_urizen_sprite(2785),
     };
+    let dwarf_ranger_template = MobTemplate {
+        mob: Mob {
+            hp: 10,
+            faction: 1,
+            strength: 2,
+            ranged: true,
+        },
+        sprite: assets.get_urizen_sprite(2835),
+    };
 
-    let bottom_spawns = vec![goblin_template];
-    let top_spawns = vec![dwarf_template];
+    let bottom_spawns = vec![goblin_template, orc_template, devil_template];
+    let top_spawns = vec![dwarf_template, dwarf_ranger_template];
 
     for (rogue_algebra::Pos { x, y }, tile_kind) in draft.into_iter() {
         let map_pos = MapPos(IVec2::new(x, y));
