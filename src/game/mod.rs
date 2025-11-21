@@ -28,6 +28,7 @@ pub(super) fn plugin(app: &mut App) {
     app.insert_resource(ClearColor(Color::from(GRAY_500)));
     app.load_resource::<assets::WorldAssets>();
     app.init_resource::<map::WalkBlockedMap>();
+    app.init_resource::<PlayerMoved>();
     app.add_systems(
         Update,
         (
@@ -43,7 +44,15 @@ pub(super) fn plugin(app: &mut App) {
     app.init_schedule(Turn);
     app.add_systems(
         Turn,
-        (map::update_walk_blocked_map, process_turn, prune_dead).chain(),
+        (
+            map::update_walk_blocked_map,
+            handle_player_move,
+            (process_spawners, process_mob_turn)
+                .chain()
+                .run_if(player_moved),
+            prune_dead,
+        )
+            .chain(),
     );
 }
 
@@ -83,21 +92,26 @@ struct Mob {
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash, Default)]
 struct Turn;
 
-fn process_turn(
-    world: Single<Entity, With<GameWorld>>,
-    player: Single<(Entity, &mut MapPos, &MoveIntent), (With<Player>, Without<GameWorld>)>,
-    mut mobs: Query<(Entity, &mut MapPos, &mut Mob), (Without<Player>, Without<GameWorld>)>,
-    q_spawners: Query<(&MapPos, &MobSpawner), (Without<Player>, Without<Mob>, Without<GameWorld>)>,
-    mut walk_blocked_map: ResMut<map::WalkBlockedMap>,
+#[derive(Resource, Default)]
+struct PlayerMoved(bool);
+
+fn player_moved(moved: Res<PlayerMoved>) -> bool {
+    moved.0
+}
+
+fn handle_player_move(
     mut commands: Commands,
+    player: Single<(Entity, &mut MapPos, &MoveIntent), With<Player>>,
+    mut walk_blocked_map: ResMut<map::WalkBlockedMap>,
+    mut moved: ResMut<PlayerMoved>,
 ) {
     let (player_entity, mut pos, intent) = player.into_inner();
-    let world_entity = world.into_inner();
     commands.entity(player_entity).remove::<MoveIntent>();
 
     let old_pos = *pos;
     let new_pos = pos.0 + intent.0;
     if walk_blocked_map.contains(&new_pos) {
+        moved.0 = false;
         return;
     }
 
@@ -116,8 +130,16 @@ fn process_turn(
         });
     walk_blocked_map.remove(&old_pos.0);
     walk_blocked_map.insert(new_pos);
+    moved.0 = true;
+}
 
-    // Spawners.
+fn process_spawners(
+    mut commands: Commands,
+    walk_blocked_map: Res<map::WalkBlockedMap>,
+    world: Single<Entity, With<GameWorld>>,
+    q_spawners: Query<(&MapPos, &MobSpawner)>,
+) {
+    let world_entity = world.into_inner();
     let rng = &mut rand::rng();
     for (pos, spawner) in q_spawners {
         if !walk_blocked_map.contains(&pos.0) && rng.random_bool(spawner.odds) {
@@ -135,7 +157,14 @@ fn process_turn(
             commands.entity(world_entity).add_child(new_mob);
         }
     }
+}
 
+fn process_mob_turn(
+    mut mobs: Query<(Entity, &mut MapPos, &mut Mob), (Without<Player>, Without<GameWorld>)>,
+    mut walk_blocked_map: ResMut<map::WalkBlockedMap>,
+    mut commands: Commands,
+) {
+    let rng = &mut rand::rng();
     // Process enemies.
     let mut mobs = mobs.iter_mut().collect::<Vec<_>>();
     let mut pos_to_mob_idx = HashMap::new();
