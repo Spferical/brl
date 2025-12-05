@@ -129,7 +129,7 @@ fn process_turn(
                     spawn.mob.clone(),
                     *pos,
                     transform,
-                    lighting::Occluder,
+                    // lighting::Occluder,
                 ))
                 .id();
             commands.entity(world_entity).add_child(new_mob);

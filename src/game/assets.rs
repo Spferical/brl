@@ -31,6 +31,10 @@ impl WorldAssets {
     pub(crate) fn get_urizen_sprite_mask(&self) -> Handle<Image> {
         self.urizen_mask.clone()
     }
+
+    pub(crate) fn get_urizen_layout(&self) -> Handle<TextureAtlasLayout> {
+        self.urizen_layout.clone()
+    }
 }
 
 impl FromWorld for WorldAssets {
@@ -47,10 +51,11 @@ impl FromWorld for WorldAssets {
         .unwrap();
 
         let data = image.data.as_ref().expect("Image data should be present");
-        let mut mask_data = Vec::with_capacity(data.len() / 4);
+        let mut mask_data = Vec::with_capacity(data.len());
         for chunk in data.chunks(4) {
             let alpha = chunk[3];
-            mask_data.push(if alpha > 0 { 255 } else { 0 });
+            let val = if alpha > 0 { 255 } else { 0 };
+            mask_data.extend_from_slice(&[val, val, val, val]);
         }
 
         let mask_image = Image::new(
@@ -61,7 +66,7 @@ impl FromWorld for WorldAssets {
             },
             TextureDimension::D2,
             mask_data,
-            TextureFormat::R8Unorm,
+            TextureFormat::Rgba8Unorm,
             RenderAssetUsages::default(),
         );
 
