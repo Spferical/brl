@@ -1036,6 +1036,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bevy_lit"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "845bb5b46bf00704e2689d7172bbbb3516c13e6961ce96f0931ed98b51ee8e63"
+dependencies = [
+ "bevy",
+ "bytemuck",
+ "fixedbitset",
+]
+
+[[package]]
 name = "bevy_log"
 version = "0.17.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1672,6 +1683,7 @@ dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "bevy_egui",
+ "bevy_lit",
  "getrandom",
  "once_cell",
  "rand",

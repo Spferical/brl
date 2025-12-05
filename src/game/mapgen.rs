@@ -2,6 +2,7 @@ use crate::game::{
     GameWorld, Mob, MobSpawner, MobTemplate, PLAYER_Z, Player, TILE_Z,
     assets::WorldAssets,
     camera::CameraFollow,
+    lighting::Occluder,
     map::{self, MAP_HEIGHT, MapPos},
 };
 use bevy::{platform::collections::HashMap, prelude::*};
@@ -77,6 +78,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             ranged: false,
         },
         sprite: assets.get_urizen_sprite(976),
+        mask: assets.get_urizen_sprite_mask(),
     };
     let orc_template = MobTemplate {
         mob: Mob {
@@ -86,6 +88,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             ranged: false,
         },
         sprite: assets.get_urizen_sprite(1166),
+        mask: assets.get_urizen_sprite_mask(),
     };
     // let arrow_sprite = assets.get_urizen_sprite(2093);
     let devil_template = MobTemplate {
@@ -96,6 +99,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             ranged: false,
         },
         sprite: assets.get_urizen_sprite(1390),
+        mask: assets.get_urizen_sprite_mask(),
     };
     let dwarf_template = MobTemplate {
         mob: Mob {
@@ -105,6 +109,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             ranged: false,
         },
         sprite: assets.get_urizen_sprite(2785),
+        mask: assets.get_urizen_sprite_mask(),
     };
     let dwarf_ranger_template = MobTemplate {
         mob: Mob {
@@ -114,6 +119,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             ranged: true,
         },
         sprite: assets.get_urizen_sprite(2835),
+        mask: assets.get_urizen_sprite_mask(),
     };
 
     let bottom_spawns = vec![goblin_template, orc_template, devil_template];
@@ -130,7 +136,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             }
             TileKind::Wall => {
                 let sprite = assets.get_urizen_sprite(rng.random_range(0..=1));
-                tile.insert((sprite, map::BlocksMovement));
+                tile.insert((sprite, map::BlocksMovement, Occluder));
             }
             TileKind::TopSpawner => {
                 let sprite = assets.get_urizen_sprite(207);

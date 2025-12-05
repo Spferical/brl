@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use bevy::{ecs::schedule::ScheduleLabel, platform::collections::HashMap, prelude::*};
+use bevy::{color::palettes::tailwind::GRAY_500, ecs::schedule::ScheduleLabel, platform::collections::HashMap, prelude::*};
+use bevy_lit::prelude::Lighting2dPlugin;
 use rand::{Rng as _, seq::IndexedRandom};
 
 use crate::{
@@ -12,6 +13,7 @@ use crate::{
 mod assets;
 mod camera;
 mod input;
+pub mod lighting;
 mod map;
 mod mapgen;
 
@@ -19,11 +21,19 @@ const PLAYER_Z: f32 = 10.0;
 const TILE_Z: f32 = 0.0;
 
 pub(super) fn plugin(app: &mut App) {
+    app.add_plugins(Lighting2dPlugin);
+    app.insert_resource(ClearColor(Color::from(GRAY_500)));
     app.load_resource::<assets::WorldAssets>();
     app.init_resource::<map::WalkBlockedMap>();
     app.add_systems(
         Update,
-        (input::handle_input, move_sprites, camera::update_camera)
+        (
+            input::handle_input,
+            move_sprites,
+            camera::update_camera,
+            lighting::on_add_occluder,
+            lighting::on_add_player,
+        )
             .run_if(in_state(Screen::Gameplay))
             .chain(),
     );
@@ -44,6 +54,7 @@ struct Player;
 struct MobTemplate {
     mob: Mob,
     sprite: Sprite,
+    mask: Handle<Image>,
 }
 
 #[derive(Component)]
@@ -110,7 +121,13 @@ fn process_turn(
             let spawn = spawner.spawns.choose(rng).expect("Spawner has no spawns");
             let transform = Transform::from_translation(pos.to_vec3(TILE_Z));
             let new_mob = commands
-                .spawn((spawn.sprite.clone(), spawn.mob.clone(), *pos, transform))
+                .spawn((
+                    spawn.sprite.clone(),
+                    spawn.mob.clone(),
+                    *pos,
+                    transform,
+                    lighting::Occluder,
+                ))
                 .id();
             commands.entity(world_entity).add_child(new_mob);
         }
@@ -229,8 +246,15 @@ fn move_sprites(
     }
 }
 
-pub fn enter(commands: Commands, assets: Res<assets::WorldAssets>) {
+pub fn enter(
+    mut commands: Commands,
+    assets: Res<assets::WorldAssets>,
+    q_camera: Single<Entity, With<Camera2d>>,
+) {
+    lighting::enable_lighting(&mut commands, *q_camera);
     mapgen::gen_map(commands, assets);
 }
 
-pub fn exit() {}
+pub fn exit(mut commands: Commands, q_camera: Single<Entity, With<Camera2d>>) {
+    lighting::disable_lighting(&mut commands, *q_camera);
+}
