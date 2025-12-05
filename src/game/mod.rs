@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use bevy::{color::palettes::tailwind::GRAY_500, ecs::schedule::ScheduleLabel, platform::collections::HashMap, prelude::*};
+use bevy::{
+    color::palettes::tailwind::GRAY_500, ecs::schedule::ScheduleLabel,
+    platform::collections::HashMap, prelude::*,
+};
 use bevy_lit::prelude::Lighting2dPlugin;
 use rand::{Rng as _, seq::IndexedRandom};
 
@@ -28,11 +31,11 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Update,
         (
+            lighting::on_add_occluder,
+            lighting::on_add_player,
             input::handle_input,
             move_sprites,
             camera::update_camera,
-            lighting::on_add_occluder,
-            lighting::on_add_player,
         )
             .run_if(in_state(Screen::Gameplay))
             .chain(),
@@ -108,7 +111,7 @@ fn process_turn(
             to: pos.to_vec3(PLAYER_Z),
             timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
 
-            ease: EaseFunction::CubicIn,
+            ease: EaseFunction::SineInOut,
             rotation: None,
         });
     walk_blocked_map.remove(&old_pos.0);
@@ -200,7 +203,7 @@ fn process_turn(
                 to: new_pos.to_vec3(PLAYER_Z),
                 timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
 
-                ease: EaseFunction::CubicIn,
+                ease: EaseFunction::SineInOut,
                 rotation: None,
             });
         }

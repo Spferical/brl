@@ -44,7 +44,7 @@ impl FromWorld for WorldAssets {
             ImageSampler::Default,
             RenderAssetUsages::default(),
         )
-            .unwrap();
+        .unwrap();
 
         let data = image.data.as_ref().expect("Image data should be present");
         let mut mask_data = Vec::with_capacity(data.len() / 4);
