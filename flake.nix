@@ -1,6 +1,6 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/release-25.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/release-25.11";
 
     crane = {
       url = "github:ipetkov/crane";
@@ -186,6 +186,9 @@
                 trunk
                 rust-analyzer
             ];
+            shellHook = ''
+              exec zsh
+            '';
           };
       });
 }
