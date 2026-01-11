@@ -75,6 +75,7 @@ impl Plugin for AppPlugin {
 
         // Spawn the main camera.
         app.add_systems(Startup, spawn_camera);
+        app.insert_resource(ClearColor(Color::BLACK));
     }
 }
 
