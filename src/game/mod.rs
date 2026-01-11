@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{f32::consts::PI, time::Duration};
 
 use bevy::{
     color::palettes::tailwind::GRAY_500, ecs::schedule::ScheduleLabel,
@@ -9,7 +9,7 @@ use rand::{Rng as _, seq::IndexedRandom};
 
 use crate::{
     asset_tracking::LoadResource as _,
-    game::{input::MoveIntent, map::MapPos},
+    game::{assets::WorldAssets, input::MoveIntent, map::MapPos},
     screens::Screen,
 };
 
@@ -160,7 +160,9 @@ fn process_spawners(
 }
 
 fn process_mob_turn(
-    mut mobs: Query<(Entity, &mut MapPos, &mut Mob), (Without<Player>, Without<GameWorld>)>,
+    assets: Res<WorldAssets>,
+    mut bullets: Query<(Entity, &mut MapPos, &Bullet)>,
+    mut mobs: Query<(Entity, &mut MapPos, &mut Mob), Without<Bullet>>,
     mut walk_blocked_map: ResMut<map::WalkBlockedMap>,
     mut commands: Commands,
 ) {
@@ -170,6 +172,36 @@ fn process_mob_turn(
     let mut pos_to_mob_idx = HashMap::new();
     for (i, (_entity, pos, _mob)) in mobs.iter().enumerate() {
         pos_to_mob_idx.insert(pos.0, i);
+    }
+
+    // Move bullets.
+    for (entity, mut pos, bullet) in bullets.iter_mut() {
+        // Check for collision.
+        if let Some(mob_idx) = pos_to_mob_idx.get(&pos.0) {
+            mobs[*mob_idx].2.hp -= bullet.damage;
+        }
+        if pos_to_mob_idx.contains_key(&pos.0) || walk_blocked_map.0.contains(&pos.0) {
+            commands.entity(entity).despawn();
+        } else {
+            // Move bullet and check for collision again.
+            let old_pos = *pos;
+            pos.0 += bullet.direction;
+            if let Some(mob_idx) = pos_to_mob_idx.get(&pos.0) {
+                mobs[*mob_idx].2.hp -= bullet.damage;
+            }
+            if pos_to_mob_idx.contains_key(&pos.0) || walk_blocked_map.0.contains(&pos.0) {
+                commands.entity(entity).despawn();
+            } else {
+                commands.entity(entity).insert(MoveAnimation {
+                    from: old_pos.to_vec3(PLAYER_Z),
+                    to: pos.to_vec3(PLAYER_Z),
+                    timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
+
+                    ease: EaseFunction::Linear,
+                    rotation: None,
+                });
+            }
+        }
     }
 
     // Determine mob intentions.
@@ -224,6 +256,27 @@ fn process_mob_turn(
             mobs[*enemy_idx].2.hp -= mobs[i].2.strength;
         } else if mobs[i].2.ranged && rng.random_bool(0.5) {
             // fire weapon
+            let direction = new_pos.0 - old_pos.0;
+            // TODO: bullet sprite rotation
+            let (sprite_idx, rotation) = match (direction.x, direction.y) {
+                (1, 1) => (2093, 0.0),
+                (-1, 1) => (2093, PI / 2.0),
+                (-1, -1) => (2093, PI),
+                (1, -1) => (2093, PI * 1.5),
+                (0, 1) => (2094, 0.0),
+                (-1, 0) => (2094, PI / 2.0),
+                (0, -1) => (2094, PI),
+                (1, 0) => (2094, PI * 1.5),
+                _ => panic!("Unexpected bullet direction: {direction:?}"),
+            };
+            let bullet_sprite = assets.get_urizen_sprite(sprite_idx);
+            let transform = Transform::from_translation(new_pos.to_vec3(PLAYER_Z))
+                .with_rotation(Quat::from_rotation_z(rotation));
+            let bullet = Bullet {
+                direction,
+                damage: 5,
+            };
+            commands.spawn((bullet, bullet_sprite, new_pos, transform));
         } else {
             // move
             *mobs[i].1 = new_pos;
