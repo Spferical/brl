@@ -145,13 +145,7 @@ fn process_spawners(
             let spawn = spawner.spawns.choose(rng).expect("Spawner has no spawns");
             let transform = Transform::from_translation(pos.to_vec3(TILE_Z));
             let new_mob = commands
-                .spawn((
-                    spawn.sprite.clone(),
-                    spawn.mob.clone(),
-                    *pos,
-                    transform,
-                    // lighting::Occluder,
-                ))
+                .spawn((spawn.sprite.clone(), spawn.mob.clone(), *pos, transform))
                 .id();
             commands.entity(world_entity).add_child(new_mob);
         }
