@@ -39,10 +39,10 @@ impl<R: FnMut(Pos) -> Vec<Pos>> Iterator for Dfs<R> {
     }
 }
 
-pub fn bfs_paths(
+pub fn bfs_paths<T: IntoIterator<Item = Pos>>(
     starts: &[Pos],
     maxdist: usize,
-    reachable: impl FnMut(Pos) -> Vec<Pos>,
+    reachable: impl FnMut(Pos) -> T,
 ) -> impl Iterator<Item = Vec<Pos>> {
     Bfs {
         periphery: starts.iter().map(|p| vec![*p]).collect(),
@@ -54,7 +54,7 @@ pub fn bfs_paths(
     }
 }
 
-struct Bfs<R: FnMut(Pos) -> Vec<Pos>> {
+struct Bfs<T: IntoIterator<Item = Pos>, R: FnMut(Pos) -> T> {
     periphery: Vec<Vec<Pos>>,
     new_periphery: Vec<Vec<Pos>>,
     visited: HashSet<Pos>,
@@ -63,7 +63,7 @@ struct Bfs<R: FnMut(Pos) -> Vec<Pos>> {
     maxdist: usize,
 }
 
-impl<R: FnMut(Pos) -> Vec<Pos>> Iterator for Bfs<R> {
+impl<T: IntoIterator<Item = Pos>, R: FnMut(Pos) -> T> Iterator for Bfs<T, R> {
     type Item = Vec<Pos>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -72,16 +72,17 @@ impl<R: FnMut(Pos) -> Vec<Pos>> Iterator for Bfs<R> {
                 return Some(path);
             }
             if let Some(mut path) = self.periphery.pop() {
-                let mut reachable = (self.reachable)(*path.last().unwrap());
-                reachable.retain(|p| !self.visited.contains(p));
-                self.visited.extend(reachable.iter());
+                let reachable = (self.reachable)(*path.last().unwrap()).into_iter();
                 for pos in reachable {
-                    path.push(pos);
-                    self.to_emit.push(path.clone());
-                    if path.len() < self.maxdist {
-                        self.new_periphery.push(path.clone());
+                    if !self.visited.contains(&pos) {
+                        self.visited.insert(pos);
+                        path.push(pos);
+                        self.to_emit.push(path.clone());
+                        if path.len() < self.maxdist {
+                            self.new_periphery.push(path.clone());
+                        }
+                        path.pop();
                     }
-                    path.pop();
                 }
             } else if !self.new_periphery.is_empty() {
                 std::mem::swap(&mut self.periphery, &mut self.new_periphery);
