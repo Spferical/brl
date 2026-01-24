@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::Pos;
 
@@ -91,4 +91,18 @@ impl<T: IntoIterator<Item = Pos>, R: FnMut(Pos) -> T> Iterator for Bfs<T, R> {
             }
         }
     }
+}
+
+pub fn build_dijkstra_map<T: IntoIterator<Item = Pos>>(
+    starts: &[Pos],
+    maxdist: usize,
+    reachable: impl FnMut(Pos) -> T,
+) -> HashMap<Pos, usize> {
+    starts
+        .iter()
+        .map(|p| (*p, 0))
+        .chain(
+            bfs_paths(starts, maxdist, reachable).map(|path| (*path.last().unwrap(), path.len())),
+        )
+        .collect()
 }
