@@ -103,7 +103,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
     };
     let dwarf_template = MobTemplate {
         mob: Mob {
-            hp: 10,
+            hp: 20,
             faction: 1,
             strength: 6,
             ranged: false,
