@@ -161,28 +161,27 @@ fn process_mob_turn(
 ) {
     let rng = &mut rand::rng();
     // Process enemies.
-    let mut mobs = mobs.iter_mut().collect::<Vec<_>>();
-    let mut pos_to_mob_idx = HashMap::new();
-    for (i, (_entity, pos, _mob)) in mobs.iter().enumerate() {
-        pos_to_mob_idx.insert(pos.0, i);
+    let mut pos_to_mob = HashMap::new();
+    for (entity, pos, _mob) in mobs.iter() {
+        pos_to_mob.insert(pos.0, entity);
     }
 
     // Move bullets.
     for (entity, mut pos, bullet) in bullets.iter_mut() {
         // Check for collision.
-        if let Some(mob_idx) = pos_to_mob_idx.get(&pos.0) {
-            mobs[*mob_idx].2.hp -= bullet.damage;
+        if let Some(mob) = pos_to_mob.get(&pos.0) {
+            mobs.get_mut(*mob).unwrap().2.hp -= bullet.damage;
         }
-        if pos_to_mob_idx.contains_key(&pos.0) || walk_blocked_map.0.contains(&pos.0) {
+        if pos_to_mob.contains_key(&pos.0) || walk_blocked_map.0.contains(&pos.0) {
             commands.entity(entity).despawn();
         } else {
             // Move bullet and check for collision again.
             let old_pos = *pos;
             pos.0 += bullet.direction;
-            if let Some(mob_idx) = pos_to_mob_idx.get(&pos.0) {
-                mobs[*mob_idx].2.hp -= bullet.damage;
+            if let Some(mob) = pos_to_mob.get(&pos.0) {
+                mobs.get_mut(*mob).unwrap().2.hp -= bullet.damage;
             }
-            if pos_to_mob_idx.contains_key(&pos.0) || walk_blocked_map.0.contains(&pos.0) {
+            if pos_to_mob.contains_key(&pos.0) || walk_blocked_map.0.contains(&pos.0) {
                 commands.entity(entity).despawn();
             } else {
                 commands.entity(entity).insert(MoveAnimation {
@@ -198,7 +197,7 @@ fn process_mob_turn(
     }
 
     // Determine mob intentions.
-    let mut mob_moves = vec![];
+    let mut mob_moves = HashMap::new();
     // For each enemy, target their nearest enemy
     // Build a dijkstra map _from_ each faction, towards all enemies of that faction.
     let mut positions_per_faction = HashMap::<i32, Vec<rogue_algebra::Pos>>::new();
@@ -221,9 +220,10 @@ fn process_mob_turn(
             .filter(|rogue_algebra::Pos { x, y }| !walk_blocked_map.contains(&IVec2::new(*x, *y)))
             // Avoid friendlies
             .filter(|pos| {
-                pos_to_mob_idx
+                pos_to_mob
                     .get(&IVec2::from(*pos))
-                    .filter(|i| mobs[**i].2.faction == faction)
+                    .copied()
+                    .filter(|mob| mobs.get(*mob).unwrap().2.faction == faction)
                     .is_none()
             })
             .collect()
@@ -243,7 +243,7 @@ fn process_mob_turn(
         );
     }
 
-    for (i, (_entity, pos, mob)) in mobs.iter().enumerate() {
+    for (entity, pos, mob) in mobs.iter() {
         // follow dijkstra map
         let dijkstra_map = dijkstra_map_per_faction.get(&mob.faction).unwrap();
         let adj = reachable(pos.0.into(), mob.faction, &walk_blocked_map);
@@ -253,19 +253,20 @@ fn process_mob_turn(
             .cloned();
         if let Some(target_move) = target_move {
             // move
-            mob_moves.push((i, target_move));
+            mob_moves.insert(entity, target_move);
             walk_blocked_map.insert(IVec2::from(target_move));
         }
     }
 
     // Apply moves.
-    for (i, dest) in mob_moves.into_iter() {
-        let old_pos = *mobs[i].1;
+    for (entity, dest) in mob_moves.into_iter() {
+        let (entity, mut pos, mob) = mobs.get_mut(entity).unwrap();
+        let old_pos = *pos;
         let new_pos = MapPos(IVec2::from(dest));
-        if let Some(enemy_idx) = pos_to_mob_idx.get(&new_pos.0) {
+        if let Some(enemy) = pos_to_mob.get(&new_pos.0) {
             // attack
-            mobs[*enemy_idx].2.hp -= mobs[i].2.strength;
-        } else if mobs[i].2.ranged && rng.random_bool(0.5) {
+            mobs.get_mut(*enemy).unwrap().2.hp -= mob.strength;
+        } else if mob.ranged && rng.random_bool(0.5) {
             // fire weapon
             let direction = new_pos.0 - old_pos.0;
             let (sprite_idx, rotation) = match (direction.x, direction.y) {
@@ -289,8 +290,8 @@ fn process_mob_turn(
             commands.spawn((bullet, bullet_sprite, new_pos, transform));
         } else {
             // move
-            *mobs[i].1 = new_pos;
-            commands.entity(mobs[i].0).insert(MoveAnimation {
+            *pos = new_pos;
+            commands.entity(entity).insert(MoveAnimation {
                 from: old_pos.to_vec3(PLAYER_Z),
                 to: new_pos.to_vec3(PLAYER_Z),
                 timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
