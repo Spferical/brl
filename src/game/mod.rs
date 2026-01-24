@@ -66,7 +66,6 @@ struct Player;
 struct MobTemplate {
     mob: Mob,
     sprite: Sprite,
-    mask: Handle<Image>,
 }
 
 #[derive(Component)]

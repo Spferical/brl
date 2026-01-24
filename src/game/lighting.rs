@@ -95,7 +95,6 @@ pub(super) fn on_add_occluder(
             Mesh2d(mesh_handle.clone()),
             LightOccluder2d {
                 occluder_mask: mask.clone(),
-                ..default()
             },
         ));
     }
