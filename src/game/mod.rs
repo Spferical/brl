@@ -207,43 +207,61 @@ fn process_mob_turn(
     // Determine mob intentions.
     let mut mob_moves = vec![];
     // For each enemy, target their nearest enemy
-    for (i, (_entity, pos, mob)) in mobs.iter().enumerate() {
-        let starts = &[pos.0.into()];
+    // Build a dijkstra map _from_ each faction, towards all enemies of that faction.
+    let mut positions_per_faction = HashMap::<i32, Vec<rogue_algebra::Pos>>::new();
+    for (_entity, pos, mob) in mobs.iter() {
+        positions_per_faction
+            .entry(mob.faction)
+            .or_default()
+            .push(rogue_algebra::Pos::from(pos.0));
+    }
+    let mut dijkstra_map_per_faction =
+        HashMap::<i32, std::collections::HashMap<rogue_algebra::Pos, usize>>::new();
+    let reachable = |p: rogue_algebra::Pos,
+                     faction: i32,
+                     walk_blocked_map: &map::WalkBlockedMap|
+     -> Vec<rogue_algebra::Pos> {
+        rogue_algebra::DIRECTIONS
+            .map(|o| p + o)
+            .into_iter()
+            // Avoid walls
+            .filter(|rogue_algebra::Pos { x, y }| !walk_blocked_map.contains(&IVec2::new(*x, *y)))
+            // Avoid friendlies
+            .filter(|pos| {
+                pos_to_mob_idx
+                    .get(&IVec2::from(*pos))
+                    .filter(|i| mobs[**i].2.faction == faction)
+                    .is_none()
+            })
+            .collect()
+    };
+    for faction in positions_per_faction.keys().copied() {
+        let enemy_positions = positions_per_faction
+            .iter()
+            .filter(|(f, _positions)| **f != faction)
+            .flat_map(|(_f, positions)| positions)
+            .copied()
+            .collect::<Vec<_>>();
+        let reachable_cb = |p| reachable(p, faction, &walk_blocked_map);
         let maxdist = 20;
-        let reachable = |p: rogue_algebra::Pos| {
-            rogue_algebra::DIRECTIONS
-                .map(|o| p + o)
-                .into_iter()
-                // Avoid walls
-                .filter(|rogue_algebra::Pos { x, y }| {
-                    !walk_blocked_map.contains(&IVec2::new(*x, *y))
-                })
-                // Avoid friendlies
-                .filter(|pos| {
-                    pos_to_mob_idx
-                        .get(&IVec2::from(*pos))
-                        .filter(|i| mobs[**i].2.faction == mob.faction)
-                        .is_none()
-                })
-                .collect()
-        };
-        // let mut target_dest = None;
-        let mut target_move = None;
-        for path in rogue_algebra::path::bfs_paths(starts, maxdist, reachable) {
-            let last = *path.last().unwrap();
-            if let Some(other_mob_idx) = pos_to_mob_idx.get(&IVec2::from(last))
-                && mobs[*other_mob_idx].2.faction != mob.faction
-            {
-                // target this mob
-                // target_dest = Some(last);
-                target_move = path.get(1).cloned();
-                break;
-            }
-        }
+        dijkstra_map_per_faction.insert(
+            faction,
+            rogue_algebra::path::build_dijkstra_map(&enemy_positions, maxdist, reachable_cb),
+        );
+    }
+
+    for (i, (_entity, pos, mob)) in mobs.iter().enumerate() {
+        // follow dijkstra map
+        let dijkstra_map = dijkstra_map_per_faction.get(&mob.faction).unwrap();
+        let adj = reachable(pos.0.into(), mob.faction, &walk_blocked_map);
+        let target_move = adj
+            .iter()
+            .min_by_key(|p| dijkstra_map.get(p).cloned().unwrap_or(0))
+            .cloned();
         if let Some(target_move) = target_move {
             // move
             mob_moves.push((i, target_move));
-            walk_blocked_map.insert(target_move.into());
+            walk_blocked_map.insert(IVec2::from(target_move));
         }
     }
 
@@ -257,7 +275,6 @@ fn process_mob_turn(
         } else if mobs[i].2.ranged && rng.random_bool(0.5) {
             // fire weapon
             let direction = new_pos.0 - old_pos.0;
-            // TODO: bullet sprite rotation
             let (sprite_idx, rotation) = match (direction.x, direction.y) {
                 (1, 1) => (2093, 0.0),
                 (-1, 1) => (2093, PI / 2.0),
