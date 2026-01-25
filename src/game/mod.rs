@@ -29,6 +29,7 @@ pub(super) fn plugin(app: &mut App) {
     app.load_resource::<assets::WorldAssets>();
     app.init_resource::<map::WalkBlockedMap>();
     app.init_resource::<PlayerMoved>();
+    app.init_resource::<PosToMob>();
     app.add_systems(
         Update,
         (
@@ -47,10 +48,17 @@ pub(super) fn plugin(app: &mut App) {
         (
             map::update_walk_blocked_map,
             handle_player_move,
-            (process_spawners, process_mob_turn)
+            (
+                process_spawners,
+                update_pos_to_mob,
+                check_bullet_collision,
+                move_bullets,
+                check_bullet_collision,
+                process_mob_turn,
+                prune_dead,
+            )
                 .chain()
                 .run_if(player_moved),
-            prune_dead,
         )
             .chain(),
     );
@@ -152,50 +160,58 @@ fn process_spawners(
     }
 }
 
+#[derive(Resource, Default)]
+struct PosToMob(HashMap<IVec2, Entity>);
+
+fn update_pos_to_mob(mut pos_to_mob: ResMut<PosToMob>, mobs: Query<(Entity, &MapPos), With<Mob>>) {
+    pos_to_mob.0.clear();
+    for (entity, pos) in mobs {
+        if pos_to_mob.0.insert(pos.0, entity).is_some() {
+            warn!("Overlapping mobs at {}", pos.0);
+        }
+    }
+}
+
+fn check_bullet_collision(
+    mut commands: Commands,
+    pos_to_mob: Res<PosToMob>,
+    walk_blocked_map: Res<map::WalkBlockedMap>,
+    bullets: Query<(Entity, &MapPos, &Bullet)>,
+    mut mobs: Query<(Entity, &mut MapPos, &mut Mob), Without<Bullet>>,
+) {
+    for (entity, pos, bullet) in bullets.iter() {
+        if let Some(mob) = pos_to_mob.0.get(&pos.0) {
+            mobs.get_mut(*mob).unwrap().2.hp -= bullet.damage;
+        }
+        if pos_to_mob.0.contains_key(&pos.0) || walk_blocked_map.0.contains(&pos.0) {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+fn move_bullets(mut commands: Commands, mut bullets: Query<(Entity, &mut MapPos, &Bullet)>) {
+    for (entity, mut pos, bullet) in bullets.iter_mut() {
+        let old_pos = *pos;
+        pos.0 += bullet.direction;
+        commands.entity(entity).insert(MoveAnimation {
+            from: old_pos.to_vec3(PLAYER_Z),
+            to: pos.to_vec3(PLAYER_Z),
+            timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
+
+            ease: EaseFunction::Linear,
+            rotation: None,
+        });
+    }
+}
+
 fn process_mob_turn(
     assets: Res<WorldAssets>,
-    mut bullets: Query<(Entity, &mut MapPos, &Bullet)>,
+    pos_to_mob: Res<PosToMob>,
     mut mobs: Query<(Entity, &mut MapPos, &mut Mob), Without<Bullet>>,
     mut walk_blocked_map: ResMut<map::WalkBlockedMap>,
     mut commands: Commands,
 ) {
     let rng = &mut rand::rng();
-    // Process enemies.
-    let mut pos_to_mob = HashMap::new();
-    for (entity, pos, _mob) in mobs.iter() {
-        pos_to_mob.insert(pos.0, entity);
-    }
-
-    // Move bullets.
-    for (entity, mut pos, bullet) in bullets.iter_mut() {
-        // Check for collision.
-        if let Some(mob) = pos_to_mob.get(&pos.0) {
-            mobs.get_mut(*mob).unwrap().2.hp -= bullet.damage;
-        }
-        if pos_to_mob.contains_key(&pos.0) || walk_blocked_map.0.contains(&pos.0) {
-            commands.entity(entity).despawn();
-        } else {
-            // Move bullet and check for collision again.
-            let old_pos = *pos;
-            pos.0 += bullet.direction;
-            if let Some(mob) = pos_to_mob.get(&pos.0) {
-                mobs.get_mut(*mob).unwrap().2.hp -= bullet.damage;
-            }
-            if pos_to_mob.contains_key(&pos.0) || walk_blocked_map.0.contains(&pos.0) {
-                commands.entity(entity).despawn();
-            } else {
-                commands.entity(entity).insert(MoveAnimation {
-                    from: old_pos.to_vec3(PLAYER_Z),
-                    to: pos.to_vec3(PLAYER_Z),
-                    timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
-
-                    ease: EaseFunction::Linear,
-                    rotation: None,
-                });
-            }
-        }
-    }
-
     // Determine mob intentions.
     let mut mob_moves = HashMap::new();
     // For each enemy, target their nearest enemy
@@ -221,6 +237,7 @@ fn process_mob_turn(
             // Avoid friendlies
             .filter(|pos| {
                 pos_to_mob
+                    .0
                     .get(&IVec2::from(*pos))
                     .copied()
                     .filter(|mob| mobs.get(*mob).unwrap().2.faction == faction)
@@ -263,7 +280,7 @@ fn process_mob_turn(
         let (entity, mut pos, mob) = mobs.get_mut(entity).unwrap();
         let old_pos = *pos;
         let new_pos = MapPos(IVec2::from(dest));
-        if let Some(enemy) = pos_to_mob.get(&new_pos.0) {
+        if let Some(enemy) = pos_to_mob.0.get(&new_pos.0) {
             // attack
             mobs.get_mut(*enemy).unwrap().2.hp -= mob.strength;
         } else if mob.ranged && rng.random_bool(0.5) {
