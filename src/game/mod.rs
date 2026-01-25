@@ -49,12 +49,15 @@ pub(super) fn plugin(app: &mut App) {
             map::update_walk_blocked_map,
             handle_player_move,
             (
+                update_pos_to_mob,
                 process_spawners,
                 update_pos_to_mob,
                 check_bullet_collision,
                 move_bullets,
                 check_bullet_collision,
                 process_mob_turn,
+                update_pos_to_mob,
+                check_bullet_collision,
                 prune_dead,
                 update_pos_to_mob,
                 apply_visibility,
@@ -144,14 +147,14 @@ fn handle_player_move(
 
 fn process_spawners(
     mut commands: Commands,
-    walk_blocked_map: Res<map::WalkBlockedMap>,
     world: Single<Entity, With<GameWorld>>,
+    pos_to_mob: Res<PosToMob>,
     q_spawners: Query<(&MapPos, &MobSpawner)>,
 ) {
     let world_entity = world.into_inner();
     let rng = &mut rand::rng();
     for (pos, spawner) in q_spawners {
-        if !walk_blocked_map.contains(&pos.0) && rng.random_bool(spawner.odds) {
+        if !pos_to_mob.0.contains_key(&pos.0) && rng.random_bool(spawner.odds) {
             let spawn = spawner.spawns.choose(rng).expect("Spawner has no spawns");
             let transform = Transform::from_translation(pos.to_vec3(TILE_Z));
             let new_mob = commands
