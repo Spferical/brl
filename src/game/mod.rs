@@ -9,7 +9,7 @@ use rand::{Rng as _, seq::IndexedRandom};
 
 use crate::{
     asset_tracking::LoadResource as _,
-    game::{assets::WorldAssets, input::MoveIntent, map::MapPos},
+    game::{assets::WorldAssets, input::MoveIntent, map::MapPos, mapgen::Tile},
     screens::Screen,
 };
 
@@ -56,6 +56,8 @@ pub(super) fn plugin(app: &mut App) {
                 check_bullet_collision,
                 process_mob_turn,
                 prune_dead,
+                update_pos_to_mob,
+                apply_visibility,
             )
                 .chain()
                 .run_if(player_moved),
@@ -325,6 +327,19 @@ fn prune_dead(mut commands: Commands, q_mobs: Query<(Entity, &Mob)>) {
         if mob.hp <= 0 {
             commands.entity(entity).despawn();
         }
+    }
+}
+
+fn apply_visibility(
+    pos_to_mob: Res<PosToMob>,
+    tiles: Query<(&MapPos, &mut Visibility), With<Tile>>,
+) {
+    for (pos, mut visibility) in tiles {
+        *visibility = if pos_to_mob.0.contains_key(&pos.0) {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
     }
 }
 

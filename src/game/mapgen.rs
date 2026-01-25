@@ -15,6 +15,9 @@ enum TileKind {
     BottomSpawner,
 }
 
+#[derive(Component)]
+pub struct Tile;
+
 pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
     let rng = &mut rand::rng();
     let game_world = (
@@ -123,7 +126,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
     for (rogue_algebra::Pos { x, y }, tile_kind) in draft.into_iter() {
         let map_pos = MapPos(IVec2::new(x, y));
         let transform = Transform::from_translation(map_pos.to_vec3(TILE_Z));
-        let mut tile = commands.spawn((map_pos, transform));
+        let mut tile = commands.spawn((Tile, map_pos, transform));
         match tile_kind {
             TileKind::Floor => {
                 let sprite = assets.get_urizen_sprite(rng.random_range(1857..=1872));
