@@ -25,7 +25,7 @@ fn main_menu(
     ctx.style_mut(crate::theme::use_menu_theme);
     egui::CentralPanel::default().show(ctx, |ui| {
         ui.vertical_centered_justified(|ui| {
-            ui.label(egui::RichText::new("Untitled 0.1\n").heading());
+            ui.label(egui::RichText::new("Fleeing the Fray 2.0\n").heading());
             if ui.button("Play").clicked() {
                 if resource_handles.is_all_done() {
                     next_screen.set(Screen::Gameplay);
