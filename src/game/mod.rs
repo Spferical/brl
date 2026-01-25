@@ -70,7 +70,7 @@ pub(super) fn plugin(app: &mut App) {
 }
 
 #[derive(Component)]
-struct GameWorld;
+pub struct GameWorld;
 
 #[derive(Component)]
 struct Player;
@@ -386,6 +386,11 @@ pub fn enter(
     mapgen::gen_map(commands, assets);
 }
 
-pub fn exit(mut commands: Commands, q_camera: Single<Entity, With<Camera2d>>) {
+pub fn exit(
+    mut commands: Commands,
+    q_camera: Single<Entity, With<Camera2d>>,
+    game_world: Query<Entity, With<GameWorld>>,
+) {
+    commands.entity(game_world.single().unwrap()).despawn();
     lighting::disable_lighting(&mut commands, *q_camera);
 }
