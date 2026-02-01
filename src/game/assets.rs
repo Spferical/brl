@@ -4,6 +4,7 @@ use bevy::{
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
+use bevy_egui::{EguiContexts, EguiTextureHandle, egui};
 
 use crate::game::map::{TILE_HEIGHT, TILE_WIDTH};
 
@@ -26,6 +27,15 @@ impl WorldAssets {
         );
         player_sprite.custom_size = Some(Vec2::new(TILE_WIDTH, TILE_HEIGHT));
         player_sprite
+    }
+
+    pub(crate) fn get_urizen_egui_image(
+        &'_ self,
+        contexts: &mut EguiContexts,
+        atlas_assets: &Assets<TextureAtlasLayout>,
+        index: usize,
+    ) -> egui::Image<'_> {
+        get_egui_image_from_sprite(contexts, atlas_assets, &self.get_urizen_sprite(index))
     }
 
     pub(crate) fn get_urizen_sprite_mask(&self) -> Handle<Image> {
@@ -88,4 +98,34 @@ impl FromWorld for WorldAssets {
             urizen_layout,
         }
     }
+}
+
+pub(crate) fn get_egui_image_from_sprite(
+    contexts: &mut EguiContexts,
+    atlas_assets: &Assets<TextureAtlasLayout>,
+    sprite: &Sprite,
+) -> egui::Image<'static> {
+    let Some(ref texture_atlas) = sprite.texture_atlas else {
+        panic!("get_egui_image_from_sprite only supports sprites with atlases")
+    };
+    let layout = atlas_assets.get(texture_atlas.layout.id()).unwrap();
+    let rect: URect = layout.textures[texture_atlas.index];
+    let rect = egui::Rect::from_min_max(
+        egui::pos2(rect.min.x as f32, rect.min.y as f32),
+        egui::pos2(rect.max.x as f32, rect.max.y as f32),
+    );
+    let uv = egui::Rect::from_min_max(
+        egui::pos2(
+            rect.min.x as f32 / layout.size.x as f32,
+            rect.min.y as f32 / layout.size.y as f32,
+        ),
+        egui::pos2(
+            // need to subtract one pixel or else it'll overlap the tiles to the right/below.
+            (rect.max.x as f32 - 1f32) / layout.size.x as f32,
+            (rect.max.y as f32 - 1f32) / layout.size.y as f32,
+        ),
+    );
+    let texture_id = contexts.add_image(EguiTextureHandle::Weak(sprite.image.id()));
+    let sized_texture = egui::load::SizedTexture::new(texture_id, rect.size());
+    egui::Image::new(sized_texture).uv(uv)
 }

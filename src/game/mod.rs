@@ -4,12 +4,18 @@ use bevy::{
     color::palettes::tailwind::GRAY_500, ecs::schedule::ScheduleLabel,
     platform::collections::HashMap, prelude::*,
 };
+use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
 use bevy_lit::prelude::Lighting2dPlugin;
 use rand::{Rng as _, seq::IndexedRandom};
 
 use crate::{
     asset_tracking::LoadResource as _,
-    game::{assets::WorldAssets, input::MoveIntent, map::MapPos, mapgen::Tile},
+    game::{
+        assets::WorldAssets,
+        input::MoveIntent,
+        map::{MapPos, TILE_HEIGHT, TILE_WIDTH},
+        mapgen::Tile,
+    },
     screens::Screen,
 };
 
@@ -30,6 +36,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<map::WalkBlockedMap>();
     app.init_resource::<PlayerMoved>();
     app.init_resource::<PosToMob>();
+    app.init_resource::<NearbyMobs>();
     app.add_systems(
         Update,
         (
@@ -61,12 +68,14 @@ pub(super) fn plugin(app: &mut App) {
                 prune_dead,
                 update_pos_to_mob,
                 apply_visibility,
+                update_nearby_mobs,
             )
                 .chain()
                 .run_if(player_moved),
         )
             .chain(),
     );
+    app.add_systems(EguiPrimaryContextPass, sidebar);
 }
 
 #[derive(Component)]
@@ -96,6 +105,7 @@ struct Bullet {
 #[derive(Component, Clone, Debug)]
 struct Mob {
     hp: i32,
+    max_hp: i32,
     faction: i32,
     strength: i32,
     ranged: bool,
@@ -307,7 +317,7 @@ fn process_mob_turn(
                 .with_rotation(Quat::from_rotation_z(rotation));
             let bullet = Bullet {
                 direction,
-                damage: 5,
+                damage: 1,
             };
             commands.spawn((bullet, bullet_sprite, new_pos, transform));
         } else {
@@ -375,6 +385,60 @@ fn move_sprites(
             commands.entity(entity).try_remove::<MoveAnimation>();
         }
     }
+}
+
+#[derive(Default, Resource)]
+struct NearbyMobs {
+    mobs: Vec<(Mob, Sprite)>,
+}
+
+fn update_nearby_mobs(
+    mut nearby_mobs: ResMut<NearbyMobs>,
+    player: Query<&MapPos, With<Player>>,
+    mobs: Query<(&Mob, &Sprite)>,
+    pos_to_mob: Res<PosToMob>,
+) {
+    nearby_mobs.mobs.clear();
+    let player_pos = player.single().unwrap();
+    let maxdist = 10;
+    let reachable = |p| rogue_algebra::DIRECTIONS.map(|d| p + d);
+    for path in rogue_algebra::path::bfs_paths(&[player_pos.0.into()], maxdist, reachable) {
+        if let Some(mob) = pos_to_mob.0.get(&IVec2::from(*path.last().unwrap())) {
+            let (mob, sprite) = mobs.get(*mob).unwrap();
+            nearby_mobs.mobs.push((mob.clone(), sprite.clone()));
+        }
+    }
+}
+
+fn sidebar(
+    mut contexts: EguiContexts,
+    nearby_mobs: Res<NearbyMobs>,
+    world_assets: If<Res<WorldAssets>>,
+    atlas_assets: If<Res<Assets<TextureAtlasLayout>>>,
+) {
+    let mut mob_images = vec![];
+    for (_mob, sprite) in &nearby_mobs.mobs {
+        mob_images.push(
+            assets::get_egui_image_from_sprite(&mut contexts, &atlas_assets, sprite)
+                .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT)),
+        )
+    }
+
+    let heart = world_assets
+        .get_urizen_egui_image(&mut contexts, &atlas_assets, 7700)
+        .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
+
+    let ctx = contexts.ctx_mut().unwrap();
+    egui::SidePanel::right("sidebar").show(ctx, |ui| {
+        for (i, (mob, _sprite)) in nearby_mobs.mobs.iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.add(mob_images[i].clone());
+                for _ in 0..mob.hp {
+                    ui.add(heart.clone());
+                }
+            });
+        }
+    });
 }
 
 pub fn enter(

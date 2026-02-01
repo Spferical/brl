@@ -75,18 +75,20 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
     let mut tiles = vec![];
     let goblin_template = MobTemplate {
         mob: Mob {
-            hp: 5,
+            hp: 1,
+            max_hp: 1,
             faction: -1,
-            strength: 3,
+            strength: 1,
             ranged: false,
         },
         sprite: assets.get_urizen_sprite(976),
     };
     let orc_template = MobTemplate {
         mob: Mob {
-            hp: 10,
+            hp: 2,
+            max_hp: 2,
             faction: -1,
-            strength: 4,
+            strength: 1,
             ranged: false,
         },
         sprite: assets.get_urizen_sprite(1166),
@@ -94,27 +96,30 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
     // let arrow_sprite = assets.get_urizen_sprite(2093);
     let devil_template = MobTemplate {
         mob: Mob {
-            hp: 20,
+            hp: 3,
+            max_hp: 3,
             faction: -1,
-            strength: 5,
+            strength: 2,
             ranged: false,
         },
         sprite: assets.get_urizen_sprite(1390),
     };
     let dwarf_template = MobTemplate {
         mob: Mob {
-            hp: 20,
+            hp: 3,
+            max_hp: 3,
             faction: 1,
-            strength: 6,
+            strength: 2,
             ranged: false,
         },
         sprite: assets.get_urizen_sprite(2785),
     };
     let dwarf_ranger_template = MobTemplate {
         mob: Mob {
-            hp: 10,
+            hp: 2,
+            max_hp: 2,
             faction: 1,
-            strength: 2,
+            strength: 1,
             ranged: true,
         },
         sprite: assets.get_urizen_sprite(2835),
