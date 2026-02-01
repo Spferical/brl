@@ -429,16 +429,18 @@ fn sidebar(
         .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
 
     let ctx = contexts.ctx_mut().unwrap();
-    egui::SidePanel::right("sidebar").show(ctx, |ui| {
-        for (i, (mob, _sprite)) in nearby_mobs.mobs.iter().enumerate() {
-            ui.horizontal(|ui| {
-                ui.add(mob_images[i].clone());
-                for _ in 0..mob.hp {
-                    ui.add(heart.clone());
-                }
-            });
-        }
-    });
+    egui::SidePanel::right("sidebar")
+        .min_width(TILE_WIDTH * 6.0)
+        .show(ctx, |ui| {
+            for (i, (mob, _sprite)) in nearby_mobs.mobs.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.add(mob_images[i].clone());
+                    for _ in 0..mob.hp {
+                        ui.add(heart.clone());
+                    }
+                });
+            }
+        });
 }
 
 pub fn enter(
