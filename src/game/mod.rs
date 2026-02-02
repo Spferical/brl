@@ -430,6 +430,15 @@ fn sidebar(
     let heart = world_assets
         .get_urizen_egui_image(&mut contexts, &atlas_assets, 7700)
         .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
+    let half_heart = world_assets
+        .get_urizen_egui_image(&mut contexts, &atlas_assets, 7703)
+        .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
+    let sword = world_assets
+        .get_urizen_egui_image(&mut contexts, &atlas_assets, 1262)
+        .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
+    let half_sword = world_assets
+        .get_urizen_egui_image(&mut contexts, &atlas_assets, 1280)
+        .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
 
     let ctx = contexts.ctx_mut().unwrap();
     egui::SidePanel::right("sidebar")
@@ -438,8 +447,17 @@ fn sidebar(
             for (i, (mob, _sprite)) in nearby_mobs.mobs.iter().enumerate() {
                 ui.horizontal(|ui| {
                     ui.add(mob_images[i].clone());
-                    for _ in 0..mob.hp {
+                    for _ in 0..mob.hp / 2 {
                         ui.add(heart.clone());
+                    }
+                    if mob.hp % 2 == 1 {
+                        ui.add(half_heart.clone());
+                    }
+                    for _ in 0..mob.strength / 2 {
+                        ui.add(sword.clone());
+                    }
+                    if mob.strength % 2 == 1 {
+                        ui.add(half_sword.clone());
                     }
                 });
             }
