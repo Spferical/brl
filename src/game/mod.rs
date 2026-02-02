@@ -75,7 +75,10 @@ pub(super) fn plugin(app: &mut App) {
         )
             .chain(),
     );
-    app.add_systems(EguiPrimaryContextPass, sidebar);
+    app.add_systems(
+        EguiPrimaryContextPass,
+        sidebar.run_if(in_state(Screen::Gameplay)),
+    );
 }
 
 #[derive(Component)]
