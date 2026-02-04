@@ -151,7 +151,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             TileKind::Floor => {
                 let sprite_idx = rng
                     .random_bool(0.1)
-                    .then(|| rng.random_range(1857..=1872))
+                    .then(|| rng.random_range(1857..=1859))
                     .unwrap_or(1043);
                 let sprite = assets.get_urizen_sprite(sprite_idx);
                 tile.insert(sprite);
