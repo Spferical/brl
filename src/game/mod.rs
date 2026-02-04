@@ -110,6 +110,7 @@ struct Bullet {
 #[derive(Component, Clone, Debug)]
 struct Mob {
     hp: i32,
+    #[allow(unused)]
     max_hp: i32,
     faction: i32,
     strength: i32,
