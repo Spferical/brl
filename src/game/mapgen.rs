@@ -83,6 +83,16 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
         },
         sprite: assets.get_urizen_sprite(976),
     };
+    let kobold_template = MobTemplate {
+        mob: Mob {
+            hp: 1,
+            max_hp: 1,
+            faction: -1,
+            strength: 1,
+            ranged: true,
+        },
+        sprite: assets.get_urizen_sprite(1598),
+    };
     let orc_template = MobTemplate {
         mob: Mob {
             hp: 2,
@@ -125,7 +135,12 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
         sprite: assets.get_urizen_sprite(2835),
     };
 
-    let bottom_spawns = vec![goblin_template, orc_template, devil_template];
+    let bottom_spawns = vec![
+        goblin_template,
+        orc_template,
+        devil_template,
+        kobold_template,
+    ];
     let top_spawns = vec![dwarf_template, dwarf_ranger_template];
 
     for (rogue_algebra::Pos { x, y }, tile_kind) in draft.into_iter() {
