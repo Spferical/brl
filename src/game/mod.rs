@@ -1,8 +1,10 @@
 use std::{f32::consts::PI, time::Duration};
 
 use bevy::{
-    color::palettes::tailwind::GRAY_500, ecs::schedule::ScheduleLabel,
-    platform::collections::HashMap, prelude::*,
+    color::palettes::tailwind::GRAY_500,
+    ecs::schedule::ScheduleLabel,
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
 };
 use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
 use bevy_lit::prelude::Lighting2dPlugin;
@@ -226,7 +228,7 @@ fn process_mob_turn(
     assets: Res<WorldAssets>,
     pos_to_mob: Res<PosToMob>,
     mut mobs: Query<(Entity, &mut MapPos, &mut Mob), Without<Bullet>>,
-    mut walk_blocked_map: ResMut<map::WalkBlockedMap>,
+    walk_blocked_map: ResMut<map::WalkBlockedMap>,
     mut commands: Commands,
 ) {
     let rng = &mut rand::rng();
@@ -243,15 +245,18 @@ fn process_mob_turn(
     }
     let mut dijkstra_map_per_faction =
         HashMap::<i32, std::collections::HashMap<rogue_algebra::Pos, usize>>::new();
+    let mut claimed_moves = HashSet::new();
     let reachable = |p: rogue_algebra::Pos,
                      faction: i32,
-                     walk_blocked_map: &map::WalkBlockedMap|
+                     walk_blocked_map: &map::WalkBlockedMap,
+                     claimed_moves: &HashSet<IVec2>|
      -> Vec<rogue_algebra::Pos> {
         rogue_algebra::DIRECTIONS
             .map(|o| p + o)
             .into_iter()
             // Avoid walls
             .filter(|rogue_algebra::Pos { x, y }| !walk_blocked_map.contains(&IVec2::new(*x, *y)))
+            .filter(|rogue_algebra::Pos { x, y }| !claimed_moves.contains(&IVec2::new(*x, *y)))
             // Avoid friendlies
             .filter(|pos| {
                 pos_to_mob
@@ -270,7 +275,7 @@ fn process_mob_turn(
             .flat_map(|(_f, positions)| positions)
             .copied()
             .collect::<Vec<_>>();
-        let reachable_cb = |p| reachable(p, faction, &walk_blocked_map);
+        let reachable_cb = |p| reachable(p, faction, &walk_blocked_map, &claimed_moves);
         let maxdist = 20;
         dijkstra_map_per_faction.insert(
             faction,
@@ -281,7 +286,7 @@ fn process_mob_turn(
     for (entity, pos, mob) in mobs.iter() {
         // follow dijkstra map
         let dijkstra_map = dijkstra_map_per_faction.get(&mob.faction).unwrap();
-        let adj = reachable(pos.0.into(), mob.faction, &walk_blocked_map);
+        let adj = reachable(pos.0.into(), mob.faction, &walk_blocked_map, &claimed_moves);
         let target_move = adj
             .iter()
             .min_by_key(|p| dijkstra_map.get(p).cloned().unwrap_or(0))
@@ -289,7 +294,7 @@ fn process_mob_turn(
         if let Some(target_move) = target_move {
             // move
             mob_moves.insert(entity, target_move);
-            walk_blocked_map.insert(IVec2::from(target_move));
+            claimed_moves.insert(IVec2::from(target_move));
         }
     }
 
