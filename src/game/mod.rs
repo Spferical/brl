@@ -69,7 +69,7 @@ pub(super) fn plugin(app: &mut App) {
                 check_bullet_collision,
                 prune_dead,
                 update_pos_to_mob,
-                apply_visibility,
+                obscure_tiles,
                 update_nearby_mobs,
             )
                 .chain()
@@ -87,6 +87,7 @@ pub(super) fn plugin(app: &mut App) {
 pub struct GameWorld;
 
 #[derive(Component)]
+#[require(ObscuresTile)]
 struct Player;
 
 #[derive(Clone)]
@@ -102,12 +103,14 @@ struct MobSpawner {
 }
 
 #[derive(Component)]
+#[require(ObscuresTile)]
 struct Bullet {
     direction: IVec2,
     damage: i32,
 }
 
 #[derive(Component, Clone, Debug)]
+#[require(ObscuresTile)]
 struct Mob {
     hp: i32,
     #[allow(unused)]
@@ -352,12 +355,16 @@ fn prune_dead(mut commands: Commands, q_mobs: Query<(Entity, &Mob)>) {
     }
 }
 
-fn apply_visibility(
-    pos_to_mob: Res<PosToMob>,
+#[derive(Component, Default)]
+struct ObscuresTile;
+
+fn obscure_tiles(
+    obscures: Query<&MapPos, With<ObscuresTile>>,
     tiles: Query<(&MapPos, &mut Visibility), With<Tile>>,
 ) {
+    let obscured_positions = obscures.iter().map(|p| p.0).collect::<HashSet<IVec2>>();
     for (pos, mut visibility) in tiles {
-        *visibility = if pos_to_mob.0.contains_key(&pos.0) {
+        *visibility = if obscured_positions.contains(&pos.0) {
             Visibility::Hidden
         } else {
             Visibility::Inherited
