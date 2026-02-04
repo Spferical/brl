@@ -13,6 +13,7 @@ use rand::{Rng as _, seq::IndexedRandom};
 use crate::{
     asset_tracking::LoadResource as _,
     game::{
+        animation::MoveAnimation,
         assets::WorldAssets,
         input::MoveIntent,
         map::{MapPos, TILE_HEIGHT, TILE_WIDTH},
@@ -21,6 +22,7 @@ use crate::{
     screens::Screen,
 };
 
+mod animation;
 mod assets;
 mod camera;
 mod input;
@@ -46,7 +48,7 @@ pub(super) fn plugin(app: &mut App) {
             lighting::on_add_occluder,
             lighting::on_add_player,
             input::handle_input,
-            move_sprites,
+            animation::move_sprites,
             camera::update_camera,
         )
             .run_if(in_state(Screen::Gameplay))
@@ -402,37 +404,6 @@ fn obscure_tiles(
         } else {
             Visibility::Inherited
         };
-    }
-}
-
-#[derive(Component, Debug)]
-pub struct MoveAnimation {
-    pub from: Vec3,
-    pub to: Vec3,
-    pub timer: Timer,
-    pub ease: EaseFunction,
-    pub rotation: Option<f32>,
-}
-
-fn move_sprites(
-    mut commands: Commands,
-    mut query: Query<(Entity, &mut Transform, &mut MoveAnimation)>,
-    time: Res<Time>,
-) {
-    for (entity, mut transform, mut animation) in query.iter_mut() {
-        animation.timer.tick(time.delta());
-        let fraction = animation.timer.fraction();
-        let Vec3 { x, y, z } =
-            EasingCurve::new(animation.from, animation.to, animation.ease).sample_clamped(fraction);
-        transform.translation.x = x;
-        transform.translation.y = y;
-        transform.translation.z = z;
-        if let Some(total_rotation) = animation.rotation {
-            transform.rotation = Quat::from_rotation_z(total_rotation * fraction);
-        }
-        if animation.timer.is_finished() {
-            commands.entity(entity).try_remove::<MoveAnimation>();
-        }
     }
 }
 
