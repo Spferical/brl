@@ -29,6 +29,7 @@ mod map;
 mod mapgen;
 
 const PLAYER_Z: f32 = 10.0;
+const CORPSE_Z: f32 = 5.0;
 const TILE_Z: f32 = 0.0;
 
 pub(super) fn plugin(app: &mut App) {
@@ -90,10 +91,18 @@ pub struct GameWorld;
 #[require(ObscuresTile)]
 struct Player;
 
+#[derive(Component)]
+#[require(ObscuresTile)]
+struct Corpse;
+
+#[derive(Component)]
+struct DropsCorpse(Sprite);
+
 #[derive(Clone)]
 struct MobTemplate {
     mob: Mob,
     sprite: Sprite,
+    corpse: Sprite,
 }
 
 #[derive(Component)]
@@ -176,8 +185,15 @@ fn process_spawners(
         if !pos_to_mob.0.contains_key(&pos.0) && rng.random_bool(spawner.odds) {
             let spawn = spawner.spawns.choose(rng).expect("Spawner has no spawns");
             let transform = Transform::from_translation(pos.to_vec3(TILE_Z));
+            let drops_corpse = DropsCorpse(spawn.corpse.clone());
             let new_mob = commands
-                .spawn((spawn.sprite.clone(), spawn.mob.clone(), *pos, transform))
+                .spawn((
+                    spawn.sprite.clone(),
+                    spawn.mob.clone(),
+                    *pos,
+                    transform,
+                    drops_corpse,
+                ))
                 .id();
             commands.entity(world_entity).add_child(new_mob);
         }
@@ -347,10 +363,17 @@ fn process_mob_turn(
     }
 }
 
-fn prune_dead(mut commands: Commands, q_mobs: Query<(Entity, &Mob)>) {
-    for (entity, mob) in q_mobs {
+fn prune_dead(
+    mut commands: Commands,
+    q_mobs: Query<(Entity, &Mob, &MapPos, Option<&DropsCorpse>)>,
+) {
+    for (entity, mob, map_pos, corpse) in q_mobs {
         if mob.hp <= 0 {
             commands.entity(entity).despawn();
+            if let Some(DropsCorpse(corpse_sprite)) = corpse {
+                let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
+                commands.spawn((Corpse, (*corpse_sprite).clone(), *map_pos, transform));
+            }
         }
     }
 }

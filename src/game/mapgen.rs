@@ -82,6 +82,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             ranged: false,
         },
         sprite: assets.get_urizen_sprite(976),
+        corpse: assets.get_urizen_sprite(1025),
     };
     let kobold_template = MobTemplate {
         mob: Mob {
@@ -92,6 +93,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             ranged: true,
         },
         sprite: assets.get_urizen_sprite(1598),
+        corpse: assets.get_urizen_sprite(1643),
     };
     let orc_template = MobTemplate {
         mob: Mob {
@@ -102,6 +104,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             ranged: false,
         },
         sprite: assets.get_urizen_sprite(1166),
+        corpse: assets.get_urizen_sprite(1231),
     };
     // let arrow_sprite = assets.get_urizen_sprite(2093);
     let devil_template = MobTemplate {
@@ -113,6 +116,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             ranged: false,
         },
         sprite: assets.get_urizen_sprite(1390),
+        corpse: assets.get_urizen_sprite(1437),
     };
     let dwarf_template = MobTemplate {
         mob: Mob {
@@ -123,6 +127,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             ranged: false,
         },
         sprite: assets.get_urizen_sprite(2785),
+        corpse: assets.get_urizen_sprite(2879),
     };
     let dwarf_ranger_template = MobTemplate {
         mob: Mob {
@@ -133,6 +138,7 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
             ranged: true,
         },
         sprite: assets.get_urizen_sprite(2835),
+        corpse: assets.get_urizen_sprite(2879),
     };
 
     let bottom_spawns = vec![
@@ -149,10 +155,11 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
         let mut tile = commands.spawn((Tile, map_pos, transform));
         match tile_kind {
             TileKind::Floor => {
-                let sprite_idx = rng
-                    .random_bool(0.1)
-                    .then(|| rng.random_range(1857..=1859))
-                    .unwrap_or(1043);
+                let sprite_idx = if rng.random_bool(0.1) {
+                    rng.random_range(1857..=1859)
+                } else {
+                    1043
+                };
                 let sprite = assets.get_urizen_sprite(sprite_idx);
                 tile.insert(sprite);
             }
