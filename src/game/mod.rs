@@ -245,12 +245,14 @@ fn move_bullets(mut commands: Commands, mut bullets: Query<(Entity, &mut MapPos,
 }
 
 fn process_mob_turn(
+    world: Single<Entity, With<GameWorld>>,
     assets: Res<WorldAssets>,
     pos_to_mob: Res<PosToMob>,
     mut mobs: Query<(Entity, &mut MapPos, &mut Mob), Without<Bullet>>,
     walk_blocked_map: ResMut<map::WalkBlockedMap>,
     mut commands: Commands,
 ) {
+    let world_entity = world.into_inner();
     let rng = &mut rand::rng();
     // Determine mob intentions.
     let mut mob_moves = HashMap::new();
@@ -347,7 +349,10 @@ fn process_mob_turn(
                 direction,
                 damage: 1,
             };
-            commands.spawn((bullet, bullet_sprite, new_pos, transform));
+            let bullet_id = commands
+                .spawn((bullet, bullet_sprite, new_pos, transform))
+                .id();
+            commands.entity(world_entity).add_child(bullet_id);
         } else {
             // move
             *pos = new_pos;
@@ -365,14 +370,19 @@ fn process_mob_turn(
 
 fn prune_dead(
     mut commands: Commands,
+    world: Single<Entity, With<GameWorld>>,
     q_mobs: Query<(Entity, &Mob, &MapPos, Option<&DropsCorpse>)>,
 ) {
+    let world_entity = world.into_inner();
     for (entity, mob, map_pos, corpse) in q_mobs {
         if mob.hp <= 0 {
             commands.entity(entity).despawn();
             if let Some(DropsCorpse(corpse_sprite)) = corpse {
                 let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
-                commands.spawn((Corpse, (*corpse_sprite).clone(), *map_pos, transform));
+                let corpse_id = commands
+                    .spawn((Corpse, (*corpse_sprite).clone(), *map_pos, transform))
+                    .id();
+                commands.entity(world_entity).add_child(corpse_id);
             }
         }
     }
