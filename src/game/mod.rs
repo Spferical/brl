@@ -13,7 +13,7 @@ use rand::{Rng as _, seq::IndexedRandom};
 use crate::{
     asset_tracking::LoadResource as _,
     game::{
-        animation::MoveAnimation,
+        animation::{DamageAnimationMessage, MoveAnimation, spawn_damage_animations},
         assets::WorldAssets,
         input::MoveIntent,
         map::{MapPos, TILE_HEIGHT, TILE_WIDTH},
@@ -42,6 +42,8 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<PlayerMoved>();
     app.init_resource::<PosToMob>();
     app.init_resource::<NearbyMobs>();
+    app.init_resource::<Messages<DamageMessage>>();
+    app.add_message::<DamageAnimationMessage>();
     app.add_systems(
         Update,
         (
@@ -49,6 +51,7 @@ pub(super) fn plugin(app: &mut App) {
             lighting::on_add_player,
             input::handle_input,
             animation::process_move_animations,
+            animation::update_damage_animations,
             camera::update_camera,
         )
             .run_if(in_state(Screen::Gameplay))
@@ -61,6 +64,7 @@ pub(super) fn plugin(app: &mut App) {
             map::update_walk_blocked_map,
             handle_player_move,
             (
+                update_damage_messages,
                 update_pos_to_mob,
                 process_spawners,
                 update_pos_to_mob,
@@ -70,6 +74,8 @@ pub(super) fn plugin(app: &mut App) {
                 process_mob_turn,
                 update_pos_to_mob,
                 check_bullet_collision,
+                apply_damage,
+                spawn_damage_animations,
                 prune_dead,
                 update_pos_to_mob,
                 obscure_tiles,
@@ -214,20 +220,44 @@ fn update_pos_to_mob(mut pos_to_mob: ResMut<PosToMob>, mobs: Query<(Entity, &Map
     }
 }
 
+#[derive(Message)]
+pub struct DamageMessage {
+    entity: Entity,
+    hp: i32,
+}
+
+fn update_damage_messages(mut damage: ResMut<Messages<DamageMessage>>) {
+    damage.update();
+}
+
 fn check_bullet_collision(
     mut commands: Commands,
     pos_to_mob: Res<PosToMob>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     bullets: Query<(Entity, &MapPos, &Bullet)>,
-    mut mobs: Query<(Entity, &mut MapPos, &mut Mob), Without<Bullet>>,
+    mut damage: MessageWriter<DamageMessage>,
 ) {
     for (entity, pos, bullet) in bullets.iter() {
         if let Some(mob) = pos_to_mob.0.get(&pos.0) {
-            mobs.get_mut(*mob).unwrap().2.hp -= bullet.damage;
+            damage.write(DamageMessage {
+                entity: *mob,
+                hp: bullet.damage,
+            });
         }
         if pos_to_mob.0.contains_key(&pos.0) || walk_blocked_map.0.contains(&pos.0) {
             commands.entity(entity).despawn();
         }
+    }
+}
+
+fn apply_damage(
+    mut damage: MessageReader<DamageMessage>,
+    mut animation: MessageWriter<DamageAnimationMessage>,
+    mut mobs: Query<&mut Mob>,
+) {
+    for DamageMessage { entity, hp } in damage.read() {
+        mobs.get_mut(*entity).unwrap().hp -= hp;
+        animation.write(DamageAnimationMessage { entity: *entity });
     }
 }
 
@@ -253,6 +283,7 @@ fn process_mob_turn(
     mut mobs: Query<(Entity, &mut MapPos, &mut Mob), Without<Bullet>>,
     walk_blocked_map: ResMut<map::WalkBlockedMap>,
     mut commands: Commands,
+    mut damage: MessageWriter<DamageMessage>,
 ) {
     let world_entity = world.into_inner();
     let rng = &mut rand::rng();
@@ -329,7 +360,10 @@ fn process_mob_turn(
         let new_pos = MapPos(IVec2::from(dest));
         if let Some(enemy) = pos_to_mob.0.get(&new_pos.0) {
             // attack
-            mobs.get_mut(*enemy).unwrap().2.hp -= mob.strength;
+            damage.write(DamageMessage {
+                entity: *enemy,
+                hp: mob.strength,
+            });
         } else if mob.ranged && rng.random_bool(0.5) {
             // fire weapon
             let direction = new_pos.0 - old_pos.0;
