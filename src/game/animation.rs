@@ -9,7 +9,7 @@ pub struct MoveAnimation {
     pub rotation: Option<f32>,
 }
 
-pub fn move_sprites(
+pub fn process_move_animations(
     mut commands: Commands,
     mut query: Query<(Entity, &mut Transform, &mut MoveAnimation)>,
     time: Res<Time>,
@@ -17,11 +17,8 @@ pub fn move_sprites(
     for (entity, mut transform, mut animation) in query.iter_mut() {
         animation.timer.tick(time.delta());
         let fraction = animation.timer.fraction();
-        let Vec3 { x, y, z } =
-            EasingCurve::new(animation.from, animation.to, animation.ease).sample_clamped(fraction);
-        transform.translation.x = x;
-        transform.translation.y = y;
-        transform.translation.z = z;
+        let MoveAnimation { from, to, ease, .. } = *animation;
+        transform.translation = EasingCurve::new(from, to, ease).sample_clamped(fraction);
         if let Some(total_rotation) = animation.rotation {
             transform.rotation = Quat::from_rotation_z(total_rotation * fraction);
         }

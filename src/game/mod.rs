@@ -48,7 +48,7 @@ pub(super) fn plugin(app: &mut App) {
             lighting::on_add_occluder,
             lighting::on_add_player,
             input::handle_input,
-            animation::move_sprites,
+            animation::process_move_animations,
             camera::update_camera,
         )
             .run_if(in_state(Screen::Gameplay))
