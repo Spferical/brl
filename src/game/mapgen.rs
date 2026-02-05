@@ -1,5 +1,5 @@
 use crate::game::{
-    GameWorld, Mob, MobSpawner, MobTemplate, PLAYER_Z, Player, TILE_Z,
+    Creature, GameWorld, MobSpawner, MobTemplate, PLAYER_Z, Player, TILE_Z,
     assets::WorldAssets,
     camera::CameraFollow,
     lighting::Occluder,
@@ -32,6 +32,11 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
     let map_pos = MapPos(IVec2::new(3, MAP_HEIGHT / 2));
     let player = (
         Player,
+        Creature {
+            hp: 6,
+            max_hp: 6,
+            faction: 0,
+        },
         Name::new("Player"),
         CameraFollow,
         player_sprite,
@@ -74,69 +79,51 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
 
     let mut tiles = vec![];
     let goblin_template = MobTemplate {
-        mob: Mob {
-            hp: 1,
-            max_hp: 1,
-            faction: -1,
-            strength: 1,
-            ranged: false,
-        },
+        hp: 1,
+        faction: -1,
+        strength: 1,
+        ranged: false,
         sprite: assets.get_urizen_sprite(976),
         corpse: assets.get_urizen_sprite(1025),
     };
     let kobold_template = MobTemplate {
-        mob: Mob {
-            hp: 1,
-            max_hp: 1,
-            faction: -1,
-            strength: 1,
-            ranged: true,
-        },
+        hp: 1,
+        faction: -1,
+        strength: 1,
+        ranged: true,
         sprite: assets.get_urizen_sprite(1598),
         corpse: assets.get_urizen_sprite(1643),
     };
     let orc_template = MobTemplate {
-        mob: Mob {
-            hp: 2,
-            max_hp: 2,
-            faction: -1,
-            strength: 1,
-            ranged: false,
-        },
+        hp: 2,
+        faction: -1,
+        strength: 1,
+        ranged: false,
         sprite: assets.get_urizen_sprite(1166),
         corpse: assets.get_urizen_sprite(1231),
     };
     // let arrow_sprite = assets.get_urizen_sprite(2093);
     let devil_template = MobTemplate {
-        mob: Mob {
-            hp: 3,
-            max_hp: 3,
-            faction: -1,
-            strength: 2,
-            ranged: false,
-        },
+        hp: 3,
+        faction: -1,
+        strength: 2,
+        ranged: false,
         sprite: assets.get_urizen_sprite(1390),
         corpse: assets.get_urizen_sprite(1437),
     };
     let dwarf_template = MobTemplate {
-        mob: Mob {
-            hp: 3,
-            max_hp: 3,
-            faction: 1,
-            strength: 2,
-            ranged: false,
-        },
+        hp: 3,
+        faction: 1,
+        strength: 2,
+        ranged: false,
         sprite: assets.get_urizen_sprite(2785),
         corpse: assets.get_urizen_sprite(2879),
     };
     let dwarf_ranger_template = MobTemplate {
-        mob: Mob {
-            hp: 2,
-            max_hp: 2,
-            faction: 1,
-            strength: 1,
-            ranged: true,
-        },
+        hp: 2,
+        faction: 1,
+        strength: 1,
+        ranged: true,
         sprite: assets.get_urizen_sprite(2835),
         corpse: assets.get_urizen_sprite(2879),
     };

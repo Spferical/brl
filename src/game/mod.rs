@@ -40,7 +40,8 @@ pub(super) fn plugin(app: &mut App) {
     app.load_resource::<assets::WorldAssets>();
     app.init_resource::<map::WalkBlockedMap>();
     app.init_resource::<PlayerMoved>();
-    app.init_resource::<PosToMob>();
+    app.init_resource::<FactionMap>();
+    app.init_resource::<PosToCreature>();
     app.init_resource::<NearbyMobs>();
     app.init_resource::<Messages<DamageMessage>>();
     app.add_message::<DamageAnimationMessage>();
@@ -65,19 +66,20 @@ pub(super) fn plugin(app: &mut App) {
             handle_player_move,
             (
                 update_damage_messages,
-                update_pos_to_mob,
+                update_pos_to_creature,
                 process_spawners,
-                update_pos_to_mob,
+                update_pos_to_creature,
                 check_bullet_collision,
                 move_bullets,
                 check_bullet_collision,
+                build_faction_map,
                 process_mob_turn,
-                update_pos_to_mob,
+                update_pos_to_creature,
                 check_bullet_collision,
                 apply_damage,
                 spawn_damage_animations,
                 prune_dead,
-                update_pos_to_mob,
+                update_pos_to_creature,
                 obscure_tiles,
                 update_nearby_mobs,
             )
@@ -108,7 +110,10 @@ struct DropsCorpse(Sprite);
 
 #[derive(Clone)]
 struct MobTemplate {
-    mob: Mob,
+    hp: i32,
+    faction: i32,
+    strength: i32,
+    ranged: bool,
     sprite: Sprite,
     corpse: Sprite,
 }
@@ -126,13 +131,19 @@ struct Bullet {
     damage: i32,
 }
 
+/// Common fields between the player and mobs.
 #[derive(Component, Clone, Debug)]
-#[require(ObscuresTile)]
-struct Mob {
+struct Creature {
     hp: i32,
     #[allow(unused)]
     max_hp: i32,
     faction: i32,
+}
+
+// NPC-specific fields.
+#[derive(Component, Clone, Debug)]
+#[require(ObscuresTile)]
+struct Mob {
     strength: i32,
     ranged: bool,
 }
@@ -184,7 +195,7 @@ fn handle_player_move(
 fn process_spawners(
     mut commands: Commands,
     world: Single<Entity, With<GameWorld>>,
-    pos_to_mob: Res<PosToMob>,
+    pos_to_mob: Res<PosToCreature>,
     q_spawners: Query<(&MapPos, &MobSpawner)>,
 ) {
     let world_entity = world.into_inner();
@@ -197,7 +208,15 @@ fn process_spawners(
             let new_mob = commands
                 .spawn((
                     spawn.sprite.clone(),
-                    spawn.mob.clone(),
+                    Creature {
+                        hp: spawn.hp,
+                        max_hp: spawn.hp,
+                        faction: spawn.faction,
+                    },
+                    Mob {
+                        strength: spawn.strength,
+                        ranged: spawn.ranged,
+                    },
                     *pos,
                     transform,
                     drops_corpse,
@@ -209,12 +228,15 @@ fn process_spawners(
 }
 
 #[derive(Resource, Default)]
-struct PosToMob(HashMap<IVec2, Entity>);
+struct PosToCreature(HashMap<IVec2, Entity>);
 
-fn update_pos_to_mob(mut pos_to_mob: ResMut<PosToMob>, mobs: Query<(Entity, &MapPos), With<Mob>>) {
-    pos_to_mob.0.clear();
-    for (entity, pos) in mobs {
-        if pos_to_mob.0.insert(pos.0, entity).is_some() {
+fn update_pos_to_creature(
+    mut pos_to_creature: ResMut<PosToCreature>,
+    creatures: Query<(Entity, &MapPos), With<Creature>>,
+) {
+    pos_to_creature.0.clear();
+    for (entity, pos) in creatures {
+        if pos_to_creature.0.insert(pos.0, entity).is_some() {
             warn!("Overlapping mobs at {}", pos.0);
         }
     }
@@ -232,7 +254,7 @@ fn update_damage_messages(mut damage: ResMut<Messages<DamageMessage>>) {
 
 fn check_bullet_collision(
     mut commands: Commands,
-    pos_to_mob: Res<PosToMob>,
+    pos_to_mob: Res<PosToCreature>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     bullets: Query<(Entity, &MapPos, &Bullet)>,
     mut damage: MessageWriter<DamageMessage>,
@@ -253,10 +275,12 @@ fn check_bullet_collision(
 fn apply_damage(
     mut damage: MessageReader<DamageMessage>,
     mut animation: MessageWriter<DamageAnimationMessage>,
-    mut mobs: Query<&mut Mob>,
+    mut creature: Query<&mut Creature>,
 ) {
     for DamageMessage { entity, hp } in damage.read() {
-        mobs.get_mut(*entity).unwrap().hp -= hp;
+        if let Ok(mut creature) = creature.get_mut(*entity) {
+            creature.hp -= hp;
+        }
         animation.write(DamageAnimationMessage { entity: *entity });
     }
 }
@@ -276,12 +300,64 @@ fn move_bullets(mut commands: Commands, mut bullets: Query<(Entity, &mut MapPos,
     }
 }
 
+#[derive(Resource, Default)]
+struct FactionMap {
+    dijkstra_map_per_faction: HashMap<i32, std::collections::HashMap<rogue_algebra::Pos, usize>>,
+}
+
+fn reachable(
+    p: rogue_algebra::Pos,
+    walk_blocked_map: &map::WalkBlockedMap,
+    other_unwalkable: &HashSet<IVec2>,
+) -> Vec<rogue_algebra::Pos> {
+    rogue_algebra::DIRECTIONS
+        .map(|o| p + o)
+        .into_iter()
+        .filter(|rogue_algebra::Pos { x, y }| !walk_blocked_map.contains(&IVec2::new(*x, *y)))
+        .filter(|rogue_algebra::Pos { x, y }| !other_unwalkable.contains(&IVec2::new(*x, *y)))
+        .collect()
+}
+
+fn build_faction_map(
+    mut faction_map: ResMut<FactionMap>,
+    creatures: Query<(Entity, &mut MapPos, &mut Creature)>,
+    walk_blocked_map: ResMut<map::WalkBlockedMap>,
+) {
+    // For each enemy, target their nearest enemy
+    // Build a dijkstra map _from_ each faction, towards all enemies of that faction.
+    let mut positions_per_faction = HashMap::<i32, HashSet<IVec2>>::new();
+    for (_entity, pos, creature) in creatures.iter() {
+        positions_per_faction
+            .entry(creature.faction)
+            .or_default()
+            .insert(pos.0);
+    }
+    let mut dijkstra_map_per_faction =
+        HashMap::<i32, std::collections::HashMap<rogue_algebra::Pos, usize>>::new();
+    for (faction, friendly_positions) in positions_per_faction.iter() {
+        let enemy_positions = positions_per_faction
+            .iter()
+            .filter(|(f, _positions)| **f != *faction)
+            .flat_map(|(_f, positions)| positions)
+            .copied()
+            .map(rogue_algebra::Pos::from)
+            .collect::<Vec<_>>();
+        let reachable_cb = |p| reachable(p, &walk_blocked_map, friendly_positions);
+        let maxdist = 20;
+        dijkstra_map_per_faction.insert(
+            *faction,
+            rogue_algebra::path::build_dijkstra_map(&enemy_positions, maxdist, reachable_cb),
+        );
+    }
+    faction_map.dijkstra_map_per_faction = dijkstra_map_per_faction;
+}
+
 fn process_mob_turn(
     world: Single<Entity, With<GameWorld>>,
     assets: Res<WorldAssets>,
-    pos_to_mob: Res<PosToMob>,
-    mut mobs: Query<(Entity, &mut MapPos, &mut Mob), Without<Bullet>>,
-    walk_blocked_map: ResMut<map::WalkBlockedMap>,
+    pos_to_creature: Res<PosToCreature>,
+    faction_map: Res<FactionMap>,
+    mut mobs: Query<(Entity, &mut MapPos, &Creature, &mut Mob)>,
     mut commands: Commands,
     mut damage: MessageWriter<DamageMessage>,
 ) {
@@ -289,63 +365,20 @@ fn process_mob_turn(
     let rng = &mut rand::rng();
     // Determine mob intentions.
     let mut mob_moves = HashMap::new();
-    // For each enemy, target their nearest enemy
-    // Build a dijkstra map _from_ each faction, towards all enemies of that faction.
-    let mut positions_per_faction = HashMap::<i32, Vec<rogue_algebra::Pos>>::new();
-    for (_entity, pos, mob) in mobs.iter() {
-        positions_per_faction
-            .entry(mob.faction)
-            .or_default()
-            .push(rogue_algebra::Pos::from(pos.0));
-    }
-    let mut dijkstra_map_per_faction =
-        HashMap::<i32, std::collections::HashMap<rogue_algebra::Pos, usize>>::new();
     let mut claimed_moves = HashSet::new();
-    let reachable = |p: rogue_algebra::Pos,
-                     faction: i32,
-                     walk_blocked_map: &map::WalkBlockedMap,
-                     claimed_moves: &HashSet<IVec2>|
-     -> Vec<rogue_algebra::Pos> {
-        rogue_algebra::DIRECTIONS
-            .map(|o| p + o)
-            .into_iter()
-            // Avoid walls
-            .filter(|rogue_algebra::Pos { x, y }| !walk_blocked_map.contains(&IVec2::new(*x, *y)))
-            .filter(|rogue_algebra::Pos { x, y }| !claimed_moves.contains(&IVec2::new(*x, *y)))
-            // Avoid friendlies
-            .filter(|pos| {
-                pos_to_mob
-                    .0
-                    .get(&IVec2::from(*pos))
-                    .copied()
-                    .filter(|mob| mobs.get(*mob).unwrap().2.faction == faction)
-                    .is_none()
-            })
-            .collect()
-    };
-    for faction in positions_per_faction.keys().copied() {
-        let enemy_positions = positions_per_faction
-            .iter()
-            .filter(|(f, _positions)| **f != faction)
-            .flat_map(|(_f, positions)| positions)
-            .copied()
-            .collect::<Vec<_>>();
-        let reachable_cb = |p| reachable(p, faction, &walk_blocked_map, &claimed_moves);
-        let maxdist = 20;
-        dijkstra_map_per_faction.insert(
-            faction,
-            rogue_algebra::path::build_dijkstra_map(&enemy_positions, maxdist, reachable_cb),
-        );
-    }
-
-    for (entity, pos, mob) in mobs.iter() {
+    for (entity, pos, creature, _mob) in mobs.iter() {
         // follow dijkstra map
-        let dijkstra_map = dijkstra_map_per_faction.get(&mob.faction).unwrap();
-        let adj = reachable(pos.0.into(), mob.faction, &walk_blocked_map, &claimed_moves);
-        let target_move = adj
-            .iter()
-            .min_by_key(|p| dijkstra_map.get(p).cloned().unwrap_or(0))
-            .cloned();
+        let dijkstra_map = faction_map
+            .dijkstra_map_per_faction
+            .get(&creature.faction)
+            .unwrap();
+        let target_move = rogue_algebra::DIRECTIONS
+            .map(|o| rogue_algebra::Pos::from(pos.0) + o)
+            .into_iter()
+            .filter(|p| dijkstra_map.contains_key(p))
+            .filter(|p| !claimed_moves.contains(&IVec2::from(*p)))
+            .min_by_key(|p| dijkstra_map.get(p).cloned().unwrap_or(usize::MAX));
+
         if let Some(target_move) = target_move {
             // move
             mob_moves.insert(entity, target_move);
@@ -355,10 +388,10 @@ fn process_mob_turn(
 
     // Apply moves.
     for (entity, dest) in mob_moves.into_iter() {
-        let (entity, mut pos, mob) = mobs.get_mut(entity).unwrap();
+        let (entity, mut pos, _creature, mob) = mobs.get_mut(entity).unwrap();
         let old_pos = *pos;
         let new_pos = MapPos(IVec2::from(dest));
-        if let Some(enemy) = pos_to_mob.0.get(&new_pos.0) {
+        if let Some(enemy) = pos_to_creature.0.get(&new_pos.0) {
             // attack
             damage.write(DamageMessage {
                 entity: *enemy,
@@ -407,11 +440,11 @@ fn process_mob_turn(
 fn prune_dead(
     mut commands: Commands,
     world: Single<Entity, With<GameWorld>>,
-    q_mobs: Query<(Entity, &Mob, &MapPos, Option<&DropsCorpse>)>,
+    q_creatures: Query<(Entity, &Creature, &MapPos, Option<&DropsCorpse>), Without<Player>>,
 ) {
     let world_entity = world.into_inner();
-    for (entity, mob, map_pos, corpse) in q_mobs {
-        if mob.hp <= 0 {
+    for (entity, creature, map_pos, corpse) in q_creatures {
+        if creature.hp <= 0 {
             commands.entity(entity).despawn();
             if let Some(DropsCorpse(corpse_sprite)) = corpse {
                 let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
@@ -445,23 +478,27 @@ fn obscure_tiles(
 
 #[derive(Default, Resource)]
 struct NearbyMobs {
-    mobs: Vec<(Mob, Sprite)>,
+    mobs: Vec<(Creature, Mob, Sprite)>,
 }
 
 fn update_nearby_mobs(
     mut nearby_mobs: ResMut<NearbyMobs>,
     player: Query<&MapPos, With<Player>>,
-    mobs: Query<(&Mob, &Sprite)>,
-    pos_to_mob: Res<PosToMob>,
+    mobs: Query<(&Creature, &Mob, &Sprite)>,
+    pos_to_creature: Res<PosToCreature>,
 ) {
     nearby_mobs.mobs.clear();
     let player_pos = player.single().unwrap();
     let maxdist = 10;
     let reachable = |p| rogue_algebra::DIRECTIONS.map(|d| p + d);
     for path in rogue_algebra::path::bfs_paths(&[player_pos.0.into()], maxdist, reachable) {
-        if let Some(mob) = pos_to_mob.0.get(&IVec2::from(*path.last().unwrap())) {
-            let (mob, sprite) = mobs.get(*mob).unwrap();
-            nearby_mobs.mobs.push((mob.clone(), sprite.clone()));
+        if let Some(pos) = path.last()
+            && let Some(mob) = pos_to_creature.0.get(&IVec2::from(*pos))
+            && let Ok((creature, mob, sprite)) = mobs.get(*mob)
+        {
+            nearby_mobs
+                .mobs
+                .push((creature.clone(), mob.clone(), sprite.clone()));
         }
     }
 }
@@ -473,7 +510,7 @@ fn sidebar(
     atlas_assets: If<Res<Assets<TextureAtlasLayout>>>,
 ) {
     let mut mob_images = vec![];
-    for (_mob, sprite) in &nearby_mobs.mobs {
+    for (_creature, _mob, sprite) in &nearby_mobs.mobs {
         mob_images.push(
             assets::get_egui_image_from_sprite(&mut contexts, &atlas_assets, sprite)
                 .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT)),
@@ -497,13 +534,13 @@ fn sidebar(
     egui::SidePanel::right("sidebar")
         .min_width(TILE_WIDTH * 6.0)
         .show(ctx, |ui| {
-            for (i, (mob, _sprite)) in nearby_mobs.mobs.iter().enumerate() {
+            for (i, (creature, mob, _sprite)) in nearby_mobs.mobs.iter().enumerate() {
                 ui.horizontal(|ui| {
                     ui.add(mob_images[i].clone());
-                    for _ in 0..mob.hp / 2 {
+                    for _ in 0..creature.hp / 2 {
                         ui.add(heart.clone());
                     }
-                    if mob.hp % 2 == 1 {
+                    if creature.hp % 2 == 1 {
                         ui.add(half_heart.clone());
                     }
                     for _ in 0..mob.strength / 2 {
