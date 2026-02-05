@@ -39,11 +39,11 @@ pub(super) fn plugin(app: &mut App) {
     app.insert_resource(ClearColor(Color::from(GRAY_500)));
     app.load_resource::<assets::WorldAssets>();
     app.init_resource::<map::WalkBlockedMap>();
+    app.init_resource::<PendingDamage>();
     app.init_resource::<PlayerMoved>();
     app.init_resource::<FactionMap>();
     app.init_resource::<PosToCreature>();
     app.init_resource::<NearbyMobs>();
-    app.init_resource::<Messages<DamageMessage>>();
     app.add_message::<DamageAnimationMessage>();
     app.add_systems(
         Update,
@@ -65,21 +65,29 @@ pub(super) fn plugin(app: &mut App) {
             map::update_walk_blocked_map,
             handle_player_move,
             (
-                update_damage_messages,
+                // kill mobs from any player damage
+                apply_damage,
+                spawn_damage_animations,
+                prune_dead,
+                // environment
                 update_pos_to_creature,
                 process_spawners,
                 update_pos_to_creature,
+                // bullets
                 check_bullet_collision,
                 move_bullets,
                 check_bullet_collision,
+                // mobs get a turn
                 build_faction_map,
                 process_mob_turn,
                 update_pos_to_creature,
                 check_bullet_collision,
+                // damage
                 apply_damage,
                 spawn_damage_animations,
                 prune_dead,
                 update_pos_to_creature,
+                // end-of-turn bookkeeping
                 obscure_tiles,
                 update_nearby_mobs,
             )
@@ -140,6 +148,12 @@ struct Creature {
     faction: i32,
 }
 
+impl Creature {
+    fn is_dead(&self) -> bool {
+        self.hp <= 0
+    }
+}
+
 // NPC-specific fields.
 #[derive(Component, Clone, Debug)]
 #[require(ObscuresTile)]
@@ -161,7 +175,9 @@ fn player_moved(moved: Res<PlayerMoved>) -> bool {
 fn handle_player_move(
     mut commands: Commands,
     player: Single<(Entity, &mut MapPos, &MoveIntent), With<Player>>,
-    mut walk_blocked_map: ResMut<map::WalkBlockedMap>,
+    walk_blocked_map: Res<map::WalkBlockedMap>,
+    pos_to_creature: Res<PosToCreature>,
+    mut damage: ResMut<PendingDamage>,
     mut moved: ResMut<PlayerMoved>,
 ) {
     let (player_entity, mut pos, intent) = player.into_inner();
@@ -174,21 +190,25 @@ fn handle_player_move(
         return;
     }
 
-    // Move the player
-    pos.0 = new_pos;
-    commands
-        .entity(player_entity)
-        .remove::<MoveIntent>()
-        .insert(MoveAnimation {
-            from: old_pos.to_vec3(PLAYER_Z),
-            to: pos.to_vec3(PLAYER_Z),
-            timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
-
-            ease: EaseFunction::SineInOut,
-            rotation: None,
+    if let Some(entity) = pos_to_creature.0.get(&new_pos) {
+        damage.0.push(DamageInstance {
+            entity: *entity,
+            hp: 2,
         });
-    walk_blocked_map.remove(&old_pos.0);
-    walk_blocked_map.insert(new_pos);
+    } else {
+        pos.0 = new_pos;
+        commands
+            .entity(player_entity)
+            .remove::<MoveIntent>()
+            .insert(MoveAnimation {
+                from: old_pos.to_vec3(PLAYER_Z),
+                to: pos.to_vec3(PLAYER_Z),
+                timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
+
+                ease: EaseFunction::SineInOut,
+                rotation: None,
+            });
+    }
     moved.0 = true;
 }
 
@@ -242,26 +262,24 @@ fn update_pos_to_creature(
     }
 }
 
-#[derive(Message)]
-pub struct DamageMessage {
+pub struct DamageInstance {
     entity: Entity,
     hp: i32,
 }
 
-fn update_damage_messages(mut damage: ResMut<Messages<DamageMessage>>) {
-    damage.update();
-}
+#[derive(Resource, Default)]
+pub struct PendingDamage(Vec<DamageInstance>);
 
 fn check_bullet_collision(
     mut commands: Commands,
     pos_to_mob: Res<PosToCreature>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     bullets: Query<(Entity, &MapPos, &Bullet)>,
-    mut damage: MessageWriter<DamageMessage>,
+    mut damage: ResMut<PendingDamage>,
 ) {
     for (entity, pos, bullet) in bullets.iter() {
         if let Some(mob) = pos_to_mob.0.get(&pos.0) {
-            damage.write(DamageMessage {
+            damage.0.push(DamageInstance {
                 entity: *mob,
                 hp: bullet.damage,
             });
@@ -273,15 +291,15 @@ fn check_bullet_collision(
 }
 
 fn apply_damage(
-    mut damage: MessageReader<DamageMessage>,
+    mut damage: ResMut<PendingDamage>,
     mut animation: MessageWriter<DamageAnimationMessage>,
     mut creature: Query<&mut Creature>,
 ) {
-    for DamageMessage { entity, hp } in damage.read() {
-        if let Ok(mut creature) = creature.get_mut(*entity) {
+    for DamageInstance { entity, hp } in damage.0.drain(..) {
+        if let Ok(mut creature) = creature.get_mut(entity) {
             creature.hp -= hp;
         }
-        animation.write(DamageAnimationMessage { entity: *entity });
+        animation.write(DamageAnimationMessage { entity });
     }
 }
 
@@ -359,7 +377,7 @@ fn process_mob_turn(
     faction_map: Res<FactionMap>,
     mut mobs: Query<(Entity, &mut MapPos, &Creature, &mut Mob)>,
     mut commands: Commands,
-    mut damage: MessageWriter<DamageMessage>,
+    mut damage: ResMut<PendingDamage>,
 ) {
     let world_entity = world.into_inner();
     let rng = &mut rand::rng();
@@ -367,6 +385,9 @@ fn process_mob_turn(
     let mut mob_moves = HashMap::new();
     let mut claimed_moves = HashSet::new();
     for (entity, pos, creature, _mob) in mobs.iter() {
+        if creature.is_dead() {
+            continue;
+        }
         // follow dijkstra map
         let dijkstra_map = faction_map
             .dijkstra_map_per_faction
@@ -393,7 +414,7 @@ fn process_mob_turn(
         let new_pos = MapPos(IVec2::from(dest));
         if let Some(enemy) = pos_to_creature.0.get(&new_pos.0) {
             // attack
-            damage.write(DamageMessage {
+            damage.0.push(DamageInstance {
                 entity: *enemy,
                 hp: mob.strength,
             });
@@ -444,7 +465,7 @@ fn prune_dead(
 ) {
     let world_entity = world.into_inner();
     for (entity, creature, map_pos, corpse) in q_creatures {
-        if creature.hp <= 0 {
+        if creature.is_dead() {
             commands.entity(entity).despawn();
             if let Some(DropsCorpse(corpse_sprite)) = corpse {
                 let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
