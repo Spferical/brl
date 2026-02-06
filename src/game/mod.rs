@@ -409,7 +409,11 @@ fn process_mob_turn(
         if let Some(target_move) = target_move {
             // move
             mob_moves.insert(entity, target_move);
-            claimed_moves.insert(IVec2::from(target_move));
+            // Claim any move that is not a destination.
+            // This works because destinations are always enemies.
+            if dijkstra_map.get(&target_move) != Some(&1) {
+                claimed_moves.insert(IVec2::from(target_move));
+            }
         }
     }
 
