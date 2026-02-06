@@ -6,7 +6,7 @@ use bevy::{
     input::common_conditions::{input_just_pressed, input_toggle_active},
     prelude::*,
 };
-use bevy_egui::{EguiContexts, egui};
+use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
 use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
 use crate::screens::Screen;
@@ -17,10 +17,11 @@ pub(super) fn plugin(app: &mut App) {
 
     // Toggle the debug overlay for UI.
     app.add_systems(
-        Update,
+        EguiPrimaryContextPass,
         (
             toggle_debug_ui.run_if(input_just_pressed(TOGGLE_KEY)),
-            ui_performance.run_if(input_toggle_active(false, KeyCode::F3)),
+            ui_performance.run_if(input_toggle_active(false, TOGGLE_KEY)),
+            ui_debug.run_if(input_toggle_active(false, TOGGLE_KEY)),
         ),
     );
     app.add_plugins((
@@ -34,6 +35,20 @@ const TOGGLE_KEY: KeyCode = KeyCode::F3;
 
 fn toggle_debug_ui(mut options: ResMut<UiDebugOptions>) {
     options.toggle();
+}
+
+fn ui_debug(mut contexts: EguiContexts, mut settings: ResMut<crate::game::debug::DebugSettings>) {
+    let ctx = contexts.ctx_mut().unwrap();
+    egui::TopBottomPanel::top("debug_ui_panel")
+        .frame(
+            egui::Frame::new()
+                .fill(egui::Color32::from_black_alpha(240))
+                .inner_margin(12.0),
+        )
+        .show(ctx, |ui| {
+            crate::game::debug::ui_settings(ui, &mut settings);
+            ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
+        });
 }
 
 fn ui_performance(mut contexts: EguiContexts, diagnostics: Res<DiagnosticsStore>) {

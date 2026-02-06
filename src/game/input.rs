@@ -3,14 +3,17 @@ use bevy::prelude::*;
 use crate::game::{Player, Turn};
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MoveIntent(pub IVec2);
+pub enum PlayerIntent {
+    Move(IVec2),
+    Wait,
+}
 
 pub(crate) fn handle_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     player_entity: Single<Entity, With<Player>>,
 ) {
-    let mut intent = IVec2::ZERO;
+    let mut move_intent = IVec2::ZERO;
     for (key, dir) in [
         (KeyCode::KeyW, IVec2::new(0, 1)),
         (KeyCode::KeyA, IVec2::new(-1, 0)),
@@ -38,11 +41,18 @@ pub(crate) fn handle_input(
         (KeyCode::ArrowRight, IVec2::new(1, 0)),
     ] {
         if keyboard_input.just_pressed(key) {
-            intent += dir;
+            move_intent += dir;
         }
     }
-    if intent != IVec2::ZERO {
-        commands.entity(*player_entity).insert(MoveIntent(intent));
+    let intent = if move_intent != IVec2::ZERO {
+        Some(PlayerIntent::Move(move_intent))
+    } else if keyboard_input.any_just_pressed([KeyCode::Period, KeyCode::Space]) {
+        Some(PlayerIntent::Wait)
+    } else {
+        None
+    };
+    if let Some(intent) = intent {
+        commands.entity(*player_entity).insert(intent);
         commands.run_schedule(Turn);
     }
 }

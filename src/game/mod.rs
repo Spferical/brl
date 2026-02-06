@@ -15,7 +15,8 @@ use crate::{
     game::{
         animation::{DamageAnimationMessage, MoveAnimation, spawn_damage_animations},
         assets::WorldAssets,
-        input::MoveIntent,
+        debug::{DebugSettings, redo_faction_map},
+        input::PlayerIntent,
         map::{MapPos, TILE_HEIGHT, TILE_WIDTH},
         mapgen::Tile,
     },
@@ -25,6 +26,7 @@ use crate::{
 mod animation;
 mod assets;
 mod camera;
+pub(crate) mod debug;
 mod input;
 pub mod lighting;
 mod map;
@@ -44,6 +46,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<FactionMap>();
     app.init_resource::<PosToCreature>();
     app.init_resource::<NearbyMobs>();
+    app.init_resource::<DebugSettings>();
     app.add_message::<DamageAnimationMessage>();
     app.add_systems(
         Update,
@@ -90,6 +93,7 @@ pub(super) fn plugin(app: &mut App) {
                 // end-of-turn bookkeeping
                 obscure_tiles,
                 update_nearby_mobs,
+                redo_faction_map,
             )
                 .chain()
                 .run_if(player_moved),
@@ -174,40 +178,42 @@ fn player_moved(moved: Res<PlayerMoved>) -> bool {
 
 fn handle_player_move(
     mut commands: Commands,
-    player: Single<(Entity, &mut MapPos, &MoveIntent), With<Player>>,
+    player: Single<(Entity, &mut MapPos, &PlayerIntent), With<Player>>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     pos_to_creature: Res<PosToCreature>,
     mut damage: ResMut<PendingDamage>,
     mut moved: ResMut<PlayerMoved>,
 ) {
     let (player_entity, mut pos, intent) = player.into_inner();
-    commands.entity(player_entity).remove::<MoveIntent>();
+    commands.entity(player_entity).remove::<PlayerIntent>();
 
-    let old_pos = *pos;
-    let new_pos = pos.0 + intent.0;
-    if walk_blocked_map.contains(&new_pos) {
-        moved.0 = false;
-        return;
-    }
+    match intent {
+        PlayerIntent::Move(move_intent) => {
+            let old_pos = *pos;
+            let new_pos = pos.0 + move_intent;
+            if walk_blocked_map.contains(&new_pos) {
+                moved.0 = false;
+                return;
+            }
 
-    if let Some(entity) = pos_to_creature.0.get(&new_pos) {
-        damage.0.push(DamageInstance {
-            entity: *entity,
-            hp: 2,
-        });
-    } else {
-        pos.0 = new_pos;
-        commands
-            .entity(player_entity)
-            .remove::<MoveIntent>()
-            .insert(MoveAnimation {
-                from: old_pos.to_vec3(PLAYER_Z),
-                to: pos.to_vec3(PLAYER_Z),
-                timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
+            if let Some(entity) = pos_to_creature.0.get(&new_pos) {
+                damage.0.push(DamageInstance {
+                    entity: *entity,
+                    hp: 2,
+                });
+            } else {
+                pos.0 = new_pos;
+                commands.entity(player_entity).insert(MoveAnimation {
+                    from: old_pos.to_vec3(PLAYER_Z),
+                    to: pos.to_vec3(PLAYER_Z),
+                    timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
 
-                ease: EaseFunction::SineInOut,
-                rotation: None,
-            });
+                    ease: EaseFunction::SineInOut,
+                    rotation: None,
+                });
+            }
+        }
+        PlayerIntent::Wait => {}
     }
     moved.0 = true;
 }
@@ -319,7 +325,7 @@ fn move_bullets(mut commands: Commands, mut bullets: Query<(Entity, &mut MapPos,
 }
 
 #[derive(Resource, Default)]
-struct FactionMap {
+pub(crate) struct FactionMap {
     dijkstra_map_per_faction: HashMap<i32, std::collections::HashMap<rogue_algebra::Pos, usize>>,
 }
 
