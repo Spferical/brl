@@ -1685,7 +1685,6 @@ dependencies = [
  "bevy_egui",
  "bevy_lit",
  "getrandom",
- "once_cell",
  "rand",
  "rogue-algebra",
  "tracing",
