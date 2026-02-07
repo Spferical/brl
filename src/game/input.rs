@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::game::{ExaminePos, Player, Turn, map::MapPos};
+use crate::game::{examine::ExaminePos, Player, Turn, map::MapPos};
 
 const DIRECTION_KEYS: &[(KeyCode, IVec2)] = &[
     (KeyCode::KeyW, IVec2::new(0, 1)),

@@ -30,6 +30,7 @@ mod animation;
 mod assets;
 mod camera;
 pub(crate) mod debug;
+mod examine;
 mod input;
 pub mod lighting;
 mod map;
@@ -51,8 +52,8 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<PosToCreature>();
     app.init_resource::<NearbyMobs>();
     app.init_resource::<DebugSettings>();
-    app.init_resource::<ExaminePos>();
-    app.init_resource::<ExamineResults>();
+    app.init_resource::<examine::ExaminePos>();
+    app.init_resource::<examine::ExamineResults>();
     app.add_message::<DamageAnimationMessage>();
     app.add_systems(
         Update,
@@ -63,8 +64,8 @@ pub(super) fn plugin(app: &mut App) {
             animation::process_move_animations,
             animation::update_damage_animations,
             camera::update_camera,
-            update_examine_info,
-            highlight_examine_tile,
+            examine::update_examine_info,
+            examine::highlight_examine_tile,
         )
             .run_if(in_state(Screen::Gameplay))
             .chain(),
@@ -535,74 +536,10 @@ fn update_nearby_mobs(
     }
 }
 
-#[derive(Default, Resource)]
-struct ExaminePos {
-    pos: Option<MapPos>,
-}
-
-#[derive(Default, Resource)]
-struct ExamineResults {
-    info: Option<ExamineInfo>,
-}
-
-struct ExamineInfo {
-    pos: MapPos,
-    info: String,
-}
-
-fn update_examine_info(
-    examine_pos: Res<ExaminePos>,
-    mut examine_results: ResMut<ExamineResults>,
-    q_pos: Query<(&MapPos, Option<&Name>)>,
-) {
-    if let Some(pos) = examine_pos.pos {
-        let mut info = String::new();
-        for (entity_pos, name) in q_pos.iter() {
-            if *entity_pos == pos
-                && let Some(name) = name
-            {
-                info.push_str(name.as_str());
-                info.push('\n');
-            }
-        }
-        examine_results.info = Some(ExamineInfo { pos, info });
-    } else {
-        examine_results.info = None;
-    }
-}
-
-#[derive(Component)]
-struct ExamineHighlight;
-
-fn init_examine_highlight(world: Entity, commands: &mut Commands, assets: &WorldAssets) {
-    let highlight = commands
-        .spawn((
-            Name::new("ExamineHighlight"),
-            ExamineHighlight,
-            assets.get_urizen_sprite(7908),
-            Transform::IDENTITY,
-            Visibility::Hidden,
-        ))
-        .id();
-    commands.entity(world).add_child(highlight);
-}
-
-fn highlight_examine_tile(
-    mut examine_highlight: Single<(&mut Visibility, &mut Transform), With<ExamineHighlight>>,
-    examine_pos: Res<ExaminePos>,
-) {
-    if let Some(pos) = examine_pos.pos {
-        *examine_highlight.0 = Visibility::Inherited;
-        examine_highlight.1.translation = pos.to_vec3(HIGHLIGHT_Z);
-    } else {
-        *examine_highlight.0 = Visibility::Hidden;
-    }
-}
-
 fn sidebar(
     mut contexts: EguiContexts,
     nearby_mobs: Res<NearbyMobs>,
-    examine_results: Res<ExamineResults>,
+    examine_results: Res<examine::ExamineResults>,
     world_assets: If<Res<WorldAssets>>,
     atlas_assets: If<Res<Assets<TextureAtlasLayout>>>,
 ) {
@@ -679,7 +616,7 @@ pub fn enter(
         InheritedVisibility::VISIBLE,
     );
     let world = commands.spawn(world).id();
-    init_examine_highlight(world, &mut commands, &assets);
+    examine::init_examine_highlight(world, &mut commands, &assets);
     lighting::enable_lighting(&mut commands, *q_camera);
     mapgen::gen_map(world, commands, assets);
 }
