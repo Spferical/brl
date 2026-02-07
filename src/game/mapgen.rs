@@ -1,5 +1,5 @@
 use crate::game::{
-    Creature, MobSpawner, MobTemplate, PLAYER_Z, Player, TILE_Z,
+    Creature, DropsCorpse, Mob, MobBundle, MobSpawner, PLAYER_Z, Player, TILE_Z,
     assets::WorldAssets,
     camera::CameraFollow,
     lighting::Occluder,
@@ -71,63 +71,93 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
     }
 
     let mut tiles = vec![];
-    let goblin_template = MobTemplate {
-        hp: 1,
-        faction: -1,
-        strength: 1,
-        ranged: false,
+    let goblin = MobBundle {
+        name: Name::new("Goblin"),
+        creature: Creature {
+            hp: 1,
+            max_hp: 1,
+            faction: -1,
+        },
+        mob: Mob {
+            strength: 1,
+            ranged: false,
+        },
         sprite: assets.get_urizen_sprite(976),
-        corpse: assets.get_urizen_sprite(1025),
+        corpse: DropsCorpse(assets.get_urizen_sprite(1025)),
     };
-    let kobold_template = MobTemplate {
-        hp: 1,
-        faction: -1,
-        strength: 1,
-        ranged: true,
+    let kobold = MobBundle {
+        name: Name::new("Kobold"),
+        creature: Creature {
+            hp: 1,
+            max_hp: 1,
+            faction: -1,
+        },
+        mob: Mob {
+            strength: 1,
+            ranged: true,
+        },
         sprite: assets.get_urizen_sprite(1598),
-        corpse: assets.get_urizen_sprite(1643),
+        corpse: DropsCorpse(assets.get_urizen_sprite(1643)),
     };
-    let orc_template = MobTemplate {
-        hp: 2,
-        faction: -1,
-        strength: 1,
-        ranged: false,
+    let orc = MobBundle {
+        name: Name::new("Orc"),
+        creature: Creature {
+            hp: 2,
+            max_hp: 2,
+            faction: -1,
+        },
+        mob: Mob {
+            strength: 1,
+            ranged: false,
+        },
         sprite: assets.get_urizen_sprite(1166),
-        corpse: assets.get_urizen_sprite(1231),
+        corpse: DropsCorpse(assets.get_urizen_sprite(1231)),
     };
-    // let arrow_sprite = assets.get_urizen_sprite(2093);
-    let devil_template = MobTemplate {
-        hp: 3,
-        faction: -1,
-        strength: 2,
-        ranged: false,
+    let devil = MobBundle {
+        name: Name::new("Devil"),
+        creature: Creature {
+            hp: 3,
+            max_hp: 3,
+            faction: -1,
+        },
+        mob: Mob {
+            strength: 2,
+            ranged: false,
+        },
         sprite: assets.get_urizen_sprite(1390),
-        corpse: assets.get_urizen_sprite(1437),
+        corpse: DropsCorpse(assets.get_urizen_sprite(1437)),
     };
-    let dwarf_template = MobTemplate {
-        hp: 3,
-        faction: 1,
-        strength: 2,
-        ranged: false,
+    let dwarf = MobBundle {
+        name: Name::new("Hammerdwarf"),
+        creature: Creature {
+            hp: 3,
+            max_hp: 3,
+            faction: 1,
+        },
+        mob: Mob {
+            strength: 2,
+            ranged: false,
+        },
         sprite: assets.get_urizen_sprite(2785),
-        corpse: assets.get_urizen_sprite(2879),
+        corpse: DropsCorpse(assets.get_urizen_sprite(2879)),
     };
-    let dwarf_ranger_template = MobTemplate {
-        hp: 2,
-        faction: 1,
-        strength: 1,
-        ranged: true,
+    let dwarf_ranger = MobBundle {
+        name: Name::new("Crossbowdwarf"),
+        creature: Creature {
+            hp: 2,
+            max_hp: 2,
+            faction: 1,
+        },
+        mob: Mob {
+            strength: 1,
+            ranged: true,
+        },
         sprite: assets.get_urizen_sprite(2835),
-        corpse: assets.get_urizen_sprite(2879),
+        corpse: DropsCorpse(assets.get_urizen_sprite(2879)),
     };
 
-    let bottom_spawns = vec![
-        goblin_template,
-        orc_template,
-        devil_template,
-        kobold_template,
-    ];
-    let top_spawns = vec![dwarf_template, dwarf_ranger_template];
+    let bottom_spawns = vec![goblin, orc, devil, kobold];
+    let top_spawns = vec![dwarf, dwarf_ranger];
 
     for (rogue_algebra::Pos { x, y }, tile_kind) in draft.into_iter() {
         let map_pos = MapPos(IVec2::new(x, y));

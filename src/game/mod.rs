@@ -1,4 +1,4 @@
-use std::{f32::consts::PI, fmt::Write, time::Duration};
+use std::{f32::consts::PI, time::Duration};
 
 use bevy::{
     color::palettes::tailwind::GRAY_500,
@@ -6,7 +6,10 @@ use bevy::{
     platform::collections::{HashMap, HashSet},
     prelude::*,
 };
-use bevy_egui::{EguiContexts, EguiPrimaryContextPass, egui};
+use bevy_egui::{
+    EguiContexts, EguiPrimaryContextPass,
+    egui::{self, Margin},
+};
 use bevy_lit::prelude::Lighting2dPlugin;
 use rand::{Rng as _, seq::IndexedRandom};
 
@@ -119,22 +122,21 @@ struct Player;
 #[require(ObscuresTile)]
 struct Corpse;
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 struct DropsCorpse(Sprite);
 
-#[derive(Clone)]
-struct MobTemplate {
-    hp: i32,
-    faction: i32,
-    strength: i32,
-    ranged: bool,
+#[derive(Clone, Bundle)]
+struct MobBundle {
+    name: Name,
+    creature: Creature,
+    mob: Mob,
     sprite: Sprite,
-    corpse: Sprite,
+    corpse: DropsCorpse,
 }
 
 #[derive(Component)]
 struct MobSpawner {
-    spawns: Vec<MobTemplate>,
+    spawns: Vec<MobBundle>,
     odds: f64,
 }
 
@@ -236,24 +238,7 @@ fn process_spawners(
         if !pos_to_mob.0.contains_key(&pos.0) && rng.random_bool(spawner.odds) {
             let spawn = spawner.spawns.choose(rng).expect("Spawner has no spawns");
             let transform = Transform::from_translation(pos.to_vec3(TILE_Z));
-            let drops_corpse = DropsCorpse(spawn.corpse.clone());
-            let new_mob = commands
-                .spawn((
-                    spawn.sprite.clone(),
-                    Creature {
-                        hp: spawn.hp,
-                        max_hp: spawn.hp,
-                        faction: spawn.faction,
-                    },
-                    Mob {
-                        strength: spawn.strength,
-                        ranged: spawn.ranged,
-                    },
-                    *pos,
-                    transform,
-                    drops_corpse,
-                ))
-                .id();
+            let new_mob = commands.spawn((spawn.clone(), *pos, transform)).id();
             commands.entity(world_entity).add_child(new_mob);
         }
     }
@@ -568,22 +553,21 @@ struct ExamineInfo {
 fn update_examine_info(
     examine_pos: Res<ExaminePos>,
     mut examine_results: ResMut<ExamineResults>,
-    q_pos: Query<(Entity, &MapPos, Option<&Name>)>,
+    q_pos: Query<(&MapPos, Option<&Name>)>,
 ) {
     if let Some(pos) = examine_pos.pos {
         let mut info = String::new();
-        for (entity, entity_pos, name) in q_pos.iter() {
-            if *entity_pos == pos {
-                if let Some(name) = name {
-                    info.push_str(name.as_str());
-                    info.push('\n');
-                } else {
-                    write!(info, "{}", entity).unwrap();
-                    info.push('\n');
-                }
+        for (entity_pos, name) in q_pos.iter() {
+            if *entity_pos == pos
+                && let Some(name) = name
+            {
+                info.push_str(name.as_str());
+                info.push('\n');
             }
         }
         examine_results.info = Some(ExamineInfo { pos, info });
+    } else {
+        examine_results.info = None;
     }
 }
 
@@ -645,35 +629,38 @@ fn sidebar(
 
     let ctx = contexts.ctx_mut().unwrap();
     egui::SidePanel::right("sidebar")
-        .min_width(TILE_WIDTH * 6.0)
+        .min_width(TILE_WIDTH * 8.0)
         .show(ctx, |ui| {
             let mut examine_pos = None;
             if let Some(ref info) = examine_results.info {
-                ui.label(format!("{:?}", &info.pos));
                 ui.label(&info.info);
                 examine_pos = Some(info.pos);
             }
 
             for (i, (pos, creature, mob, _sprite)) in nearby_mobs.mobs.iter().enumerate() {
-                ui.horizontal(|ui| {
-                    if Some(*pos) == examine_pos {
-                        ui.label("*");
-                    }
-                    ui.add(mob_images[i].clone());
-                    for _ in 0..creature.hp / 2 {
-                        ui.add(heart.clone());
-                    }
-                    if creature.hp % 2 == 1 {
-                        ui.add(half_heart.clone());
-                    }
-                    if let Some(mob) = mob {
-                        for _ in 0..mob.strength / 2 {
-                            ui.add(sword.clone());
+                let highlight = Some(*pos) == examine_pos;
+                let mut frame = egui::Frame::new().inner_margin(Margin::same(4));
+                if highlight {
+                    frame = frame.fill(ui.style().visuals.code_bg_color);
+                }
+                frame.show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.add(mob_images[i].clone()).highlight();
+                        for _ in 0..creature.hp / 2 {
+                            ui.add(heart.clone());
                         }
-                        if mob.strength % 2 == 1 {
-                            ui.add(half_sword.clone());
+                        if creature.hp % 2 == 1 {
+                            ui.add(half_heart.clone());
                         }
-                    }
+                        if let Some(mob) = mob {
+                            for _ in 0..mob.strength / 2 {
+                                ui.add(sword.clone());
+                            }
+                            if mob.strength % 2 == 1 {
+                                ui.add(half_sword.clone());
+                            }
+                        }
+                    });
                 });
             }
         });

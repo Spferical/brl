@@ -86,7 +86,8 @@ pub(crate) fn handle_input(
                 *mode = KeyboardMode::Examine(pos + direction);
                 examine_pos.pos = Some(MapPos(pos + direction));
             } else if keyboard_input.any_just_pressed([KeyCode::Escape, KeyCode::KeyX]) {
-                *mode = KeyboardMode::Normal
+                *mode = KeyboardMode::Normal;
+                examine_pos.pos = None;
             }
         }
     }
