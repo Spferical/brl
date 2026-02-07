@@ -53,7 +53,7 @@ pub(super) fn plugin(app: &mut App) {
         (
             lighting::on_add_occluder,
             lighting::on_add_player,
-            input::handle_input,
+            input::handle_input.run_if(is_player_alive),
             animation::process_move_animations,
             animation::update_damage_animations,
             camera::update_camera,
@@ -69,17 +69,13 @@ pub(super) fn plugin(app: &mut App) {
             handle_player_move,
             (
                 // kill mobs from any player damage
-                apply_damage,
-                spawn_damage_animations,
-                prune_dead,
+                (apply_damage, spawn_damage_animations, prune_dead).chain(),
                 // environment
                 update_pos_to_creature,
                 process_spawners,
                 update_pos_to_creature,
                 // bullets
-                check_bullet_collision,
-                move_bullets,
-                check_bullet_collision,
+                (check_bullet_collision, move_bullets, check_bullet_collision).chain(),
                 // mobs get a turn
                 build_faction_map,
                 process_mob_turn,
@@ -94,6 +90,7 @@ pub(super) fn plugin(app: &mut App) {
                 obscure_tiles,
                 update_nearby_mobs,
                 redo_faction_map,
+                handle_player_death,
             )
                 .chain()
                 .run_if(player_moved),
@@ -156,6 +153,10 @@ impl Creature {
     fn is_dead(&self) -> bool {
         self.hp <= 0
     }
+}
+
+fn is_player_alive(player: Single<&Creature, With<Player>>) -> bool {
+    player.hp > 0
 }
 
 // NPC-specific fields.
@@ -306,6 +307,19 @@ fn apply_damage(
             creature.hp -= hp;
         }
         animation.write(DamageAnimationMessage { entity });
+    }
+}
+
+fn handle_player_death(
+    mut commands: Commands,
+    player: Single<(Entity, &Creature), With<Player>>,
+    assets: Res<WorldAssets>,
+) {
+    let (entity, creature) = *player;
+    if creature.hp <= 0 {
+        commands
+            .entity(entity)
+            .insert(assets.get_urizen_sprite(201));
     }
 }
 
@@ -509,13 +523,13 @@ fn obscure_tiles(
 
 #[derive(Default, Resource)]
 struct NearbyMobs {
-    mobs: Vec<(Creature, Mob, Sprite)>,
+    mobs: Vec<(Creature, Option<Mob>, Sprite)>,
 }
 
 fn update_nearby_mobs(
     mut nearby_mobs: ResMut<NearbyMobs>,
     player: Query<&MapPos, With<Player>>,
-    mobs: Query<(&Creature, &Mob, &Sprite)>,
+    mobs: Query<(&Creature, Option<&Mob>, &Sprite)>,
     pos_to_creature: Res<PosToCreature>,
 ) {
     nearby_mobs.mobs.clear();
@@ -529,7 +543,7 @@ fn update_nearby_mobs(
         {
             nearby_mobs
                 .mobs
-                .push((creature.clone(), mob.clone(), sprite.clone()));
+                .push((creature.clone(), mob.cloned(), sprite.clone()));
         }
     }
 }
@@ -574,11 +588,13 @@ fn sidebar(
                     if creature.hp % 2 == 1 {
                         ui.add(half_heart.clone());
                     }
-                    for _ in 0..mob.strength / 2 {
-                        ui.add(sword.clone());
-                    }
-                    if mob.strength % 2 == 1 {
-                        ui.add(half_sword.clone());
+                    if let Some(mob) = mob {
+                        for _ in 0..mob.strength / 2 {
+                            ui.add(sword.clone());
+                        }
+                        if mob.strength % 2 == 1 {
+                            ui.add(half_sword.clone());
+                        }
                     }
                 });
             }
