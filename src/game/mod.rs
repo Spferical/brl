@@ -1,4 +1,4 @@
-use std::{f32::consts::PI, time::Duration};
+use std::{f32::consts::PI, fmt::Write, time::Duration};
 
 use bevy::{
     color::palettes::tailwind::GRAY_500,
@@ -32,6 +32,7 @@ pub mod lighting;
 mod map;
 mod mapgen;
 
+const HIGHLIGHT_Z: f32 = 20.0;
 const PLAYER_Z: f32 = 10.0;
 const CORPSE_Z: f32 = 5.0;
 const TILE_Z: f32 = 0.0;
@@ -47,6 +48,8 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<PosToCreature>();
     app.init_resource::<NearbyMobs>();
     app.init_resource::<DebugSettings>();
+    app.init_resource::<ExaminePos>();
+    app.init_resource::<ExamineResults>();
     app.add_message::<DamageAnimationMessage>();
     app.add_systems(
         Update,
@@ -57,6 +60,8 @@ pub(super) fn plugin(app: &mut App) {
             animation::process_move_animations,
             animation::update_damage_animations,
             camera::update_camera,
+            update_examine_info,
+            highlight_examine_tile,
         )
             .run_if(in_state(Screen::Gameplay))
             .chain(),
@@ -520,13 +525,13 @@ fn obscure_tiles(
 
 #[derive(Default, Resource)]
 struct NearbyMobs {
-    mobs: Vec<(Creature, Option<Mob>, Sprite)>,
+    mobs: Vec<(MapPos, Creature, Option<Mob>, Sprite)>,
 }
 
 fn update_nearby_mobs(
     mut nearby_mobs: ResMut<NearbyMobs>,
     player: Query<&MapPos, With<Player>>,
-    mobs: Query<(&Creature, Option<&Mob>, &Sprite)>,
+    mobs: Query<(&MapPos, &Creature, Option<&Mob>, &Sprite)>,
     pos_to_creature: Res<PosToCreature>,
 ) {
     nearby_mobs.mobs.clear();
@@ -536,23 +541,89 @@ fn update_nearby_mobs(
     for path in rogue_algebra::path::bfs_paths(&[player_pos.0.into()], maxdist, reachable) {
         if let Some(pos) = path.last()
             && let Some(mob) = pos_to_creature.0.get(&IVec2::from(*pos))
-            && let Ok((creature, mob, sprite)) = mobs.get(*mob)
+            && let Ok((pos, creature, mob, sprite)) = mobs.get(*mob)
         {
             nearby_mobs
                 .mobs
-                .push((creature.clone(), mob.cloned(), sprite.clone()));
+                .push((*pos, creature.clone(), mob.cloned(), sprite.clone()));
         }
+    }
+}
+
+#[derive(Default, Resource)]
+struct ExaminePos {
+    pos: Option<MapPos>,
+}
+
+#[derive(Default, Resource)]
+struct ExamineResults {
+    info: Option<ExamineInfo>,
+}
+
+struct ExamineInfo {
+    pos: MapPos,
+    info: String,
+}
+
+fn update_examine_info(
+    examine_pos: Res<ExaminePos>,
+    mut examine_results: ResMut<ExamineResults>,
+    q_pos: Query<(Entity, &MapPos, Option<&Name>)>,
+) {
+    if let Some(pos) = examine_pos.pos {
+        let mut info = String::new();
+        for (entity, entity_pos, name) in q_pos.iter() {
+            if *entity_pos == pos {
+                if let Some(name) = name {
+                    info.push_str(name.as_str());
+                    info.push('\n');
+                } else {
+                    write!(info, "{}", entity).unwrap();
+                    info.push('\n');
+                }
+            }
+        }
+        examine_results.info = Some(ExamineInfo { pos, info });
+    }
+}
+
+#[derive(Component)]
+struct ExamineHighlight;
+
+fn init_examine_highlight(world: Entity, commands: &mut Commands, assets: &WorldAssets) {
+    let highlight = commands
+        .spawn((
+            Name::new("ExamineHighlight"),
+            ExamineHighlight,
+            assets.get_urizen_sprite(7908),
+            Transform::IDENTITY,
+            Visibility::Hidden,
+        ))
+        .id();
+    commands.entity(world).add_child(highlight);
+}
+
+fn highlight_examine_tile(
+    mut examine_highlight: Single<(&mut Visibility, &mut Transform), With<ExamineHighlight>>,
+    examine_pos: Res<ExaminePos>,
+) {
+    if let Some(pos) = examine_pos.pos {
+        *examine_highlight.0 = Visibility::Inherited;
+        examine_highlight.1.translation = pos.to_vec3(HIGHLIGHT_Z);
+    } else {
+        *examine_highlight.0 = Visibility::Hidden;
     }
 }
 
 fn sidebar(
     mut contexts: EguiContexts,
     nearby_mobs: Res<NearbyMobs>,
+    examine_results: Res<ExamineResults>,
     world_assets: If<Res<WorldAssets>>,
     atlas_assets: If<Res<Assets<TextureAtlasLayout>>>,
 ) {
     let mut mob_images = vec![];
-    for (_creature, _mob, sprite) in &nearby_mobs.mobs {
+    for (_pos, _creature, _mob, sprite) in &nearby_mobs.mobs {
         mob_images.push(
             assets::get_egui_image_from_sprite(&mut contexts, &atlas_assets, sprite)
                 .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT)),
@@ -576,8 +647,18 @@ fn sidebar(
     egui::SidePanel::right("sidebar")
         .min_width(TILE_WIDTH * 6.0)
         .show(ctx, |ui| {
-            for (i, (creature, mob, _sprite)) in nearby_mobs.mobs.iter().enumerate() {
+            let mut examine_pos = None;
+            if let Some(ref info) = examine_results.info {
+                ui.label(format!("{:?}", &info.pos));
+                ui.label(&info.info);
+                examine_pos = Some(info.pos);
+            }
+
+            for (i, (pos, creature, mob, _sprite)) in nearby_mobs.mobs.iter().enumerate() {
                 ui.horizontal(|ui| {
+                    if Some(*pos) == examine_pos {
+                        ui.label("*");
+                    }
                     ui.add(mob_images[i].clone());
                     for _ in 0..creature.hp / 2 {
                         ui.add(heart.clone());
@@ -603,8 +684,17 @@ pub fn enter(
     assets: Res<assets::WorldAssets>,
     q_camera: Single<Entity, With<Camera2d>>,
 ) {
+    let world = (
+        GameWorld,
+        Name::new("GameWorldRoot"),
+        Transform::IDENTITY,
+        GlobalTransform::IDENTITY,
+        InheritedVisibility::VISIBLE,
+    );
+    let world = commands.spawn(world).id();
+    init_examine_highlight(world, &mut commands, &assets);
     lighting::enable_lighting(&mut commands, *q_camera);
-    mapgen::gen_map(commands, assets);
+    mapgen::gen_map(world, commands, assets);
 }
 
 pub fn exit(

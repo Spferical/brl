@@ -1,5 +1,5 @@
 use crate::game::{
-    Creature, GameWorld, MobSpawner, MobTemplate, PLAYER_Z, Player, TILE_Z,
+    Creature, MobSpawner, MobTemplate, PLAYER_Z, Player, TILE_Z,
     assets::WorldAssets,
     camera::CameraFollow,
     lighting::Occluder,
@@ -18,15 +18,8 @@ enum TileKind {
 #[derive(Component)]
 pub struct Tile;
 
-pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
+pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAssets>) {
     let rng = &mut rand::rng();
-    let game_world = (
-        GameWorld,
-        Name::new("GameWorldRoot"),
-        Transform::IDENTITY,
-        GlobalTransform::IDENTITY,
-        InheritedVisibility::VISIBLE,
-    );
 
     let player_sprite = assets.get_urizen_sprite(104);
     let map_pos = MapPos(IVec2::new(3, MAP_HEIGHT / 2));
@@ -177,8 +170,9 @@ pub(crate) fn gen_map(mut commands: Commands, assets: Res<WorldAssets>) {
         }
         tiles.push(tile.id());
     }
+    let player = commands.spawn(player).id();
     commands
-        .spawn(game_world)
-        .with_child(player)
+        .entity(world)
+        .add_child(player)
         .add_children(&tiles);
 }
