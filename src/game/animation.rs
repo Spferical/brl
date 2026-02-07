@@ -1,6 +1,10 @@
+use std::time::Duration;
+
 use bevy::prelude::*;
 
 use crate::game::{GameWorld, assets::WorldAssets};
+
+const MAX_TICK: Duration = Duration::from_nanos(1_000_000_000 / 30);
 
 #[derive(Component, Debug)]
 pub struct MoveAnimation {
@@ -17,7 +21,7 @@ pub fn process_move_animations(
     time: Res<Time>,
 ) {
     for (entity, mut transform, mut animation) in query.iter_mut() {
-        animation.timer.tick(time.delta());
+        animation.timer.tick(time.delta().min(MAX_TICK));
         let fraction = animation.timer.fraction();
         let MoveAnimation { from, to, ease, .. } = *animation;
         transform.translation = EasingCurve::new(from, to, ease).sample_clamped(fraction);
@@ -68,7 +72,7 @@ pub fn update_damage_animations(
     time: Res<Time>,
 ) {
     for (entity, mut anim, mut sprite) in query.iter_mut() {
-        anim.0.tick(time.delta());
+        anim.0.tick(time.delta().min(MAX_TICK));
         let ease =
             EasingCurve::new(1.0, 0.0, EaseFunction::CubicOut).sample_clamped(anim.0.fraction());
         sprite.color.set_alpha(ease);
