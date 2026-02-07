@@ -90,7 +90,7 @@ pub(super) fn plugin(app: &mut App) {
                 obscure_tiles,
                 update_nearby_mobs,
                 redo_faction_map,
-                handle_player_death,
+                set_player_corpse.run_if(not(is_player_alive)),
             )
                 .chain()
                 .run_if(player_moved),
@@ -155,8 +155,8 @@ impl Creature {
     }
 }
 
-fn is_player_alive(player: Single<&Creature, With<Player>>) -> bool {
-    player.hp > 0
+fn is_player_alive(player: Single<&Creature, With<Player>>, settings: Res<DebugSettings>) -> bool {
+    settings.nohurt || player.hp > 0
 }
 
 // NPC-specific fields.
@@ -310,17 +310,14 @@ fn apply_damage(
     }
 }
 
-fn handle_player_death(
+fn set_player_corpse(
     mut commands: Commands,
-    player: Single<(Entity, &Creature), With<Player>>,
+    player: Single<Entity, With<Player>>,
     assets: Res<WorldAssets>,
 ) {
-    let (entity, creature) = *player;
-    if creature.hp <= 0 {
-        commands
-            .entity(entity)
-            .insert(assets.get_urizen_sprite(201));
-    }
+    commands
+        .entity(*player)
+        .insert(assets.get_urizen_sprite(201));
 }
 
 fn move_bullets(mut commands: Commands, mut bullets: Query<(Entity, &mut MapPos, &Bullet)>) {

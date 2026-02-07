@@ -6,6 +6,7 @@ use crate::game::{FactionMap, map::MapPos};
 #[derive(Resource, Default)]
 pub struct DebugSettings {
     show_faction_map: Option<i32>,
+    pub nohurt: bool,
 }
 
 pub fn ui_settings(ui: &mut Ui, settings: &mut DebugSettings) {
@@ -16,6 +17,7 @@ pub fn ui_settings(ui: &mut Ui, settings: &mut DebugSettings) {
         ui.radio_value(&mut settings.show_faction_map, Some(0), "0");
         ui.radio_value(&mut settings.show_faction_map, Some(1), "1");
     });
+    ui.checkbox(&mut settings.nohurt, "nohurt");
 }
 
 #[derive(Component)]
