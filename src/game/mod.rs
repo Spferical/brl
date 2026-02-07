@@ -37,6 +37,7 @@ mod map;
 mod mapgen;
 
 const HIGHLIGHT_Z: f32 = 20.0;
+const DAMAGE_Z: f32 = 15.0;
 const PLAYER_Z: f32 = 10.0;
 const CORPSE_Z: f32 = 5.0;
 const TILE_Z: f32 = 0.0;
@@ -473,6 +474,7 @@ fn process_mob_turn(
 fn prune_dead(
     mut commands: Commands,
     world: Single<Entity, With<GameWorld>>,
+    mut damage_animation: MessageWriter<DamageAnimationMessage>,
     q_creatures: Query<(Entity, &Creature, &MapPos, Option<&DropsCorpse>), Without<Player>>,
 ) {
     let world_entity = world.into_inner();
@@ -487,6 +489,7 @@ fn prune_dead(
                     .spawn((Corpse, corpse_sprite, *map_pos, transform))
                     .id();
                 commands.entity(world_entity).add_child(corpse_id);
+                damage_animation.write(DamageAnimationMessage { entity: corpse_id });
             }
         }
     }

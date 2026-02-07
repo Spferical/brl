@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use bevy::prelude::*;
 
-use crate::game::{GameWorld, assets::WorldAssets};
+use crate::game::{DAMAGE_Z, assets::WorldAssets};
 
 const MAX_TICK: Duration = Duration::from_nanos(1_000_000_000 / 30);
 
@@ -40,26 +40,22 @@ pub struct DamageAnimationMessage {
 }
 
 pub fn spawn_damage_animations(
-    world: Single<Entity, With<GameWorld>>,
     mut commands: Commands,
     mut messages: MessageReader<DamageAnimationMessage>,
-    q_transform: Query<&Transform>,
     assets: Res<WorldAssets>,
 ) {
     let sprite = assets.get_urizen_sprite(5150);
     for DamageAnimationMessage { entity } in messages.read() {
-        if let Ok(transform) = q_transform.get(*entity) {
-            let mut transform = *transform;
-            transform.translation.z += 1.0;
-            let id = commands
-                .spawn((
-                    sprite.clone(),
-                    transform,
-                    DamageAnimation(Timer::from_seconds(0.5, TimerMode::Once)),
-                ))
-                .id();
-            commands.entity(*world).add_child(id);
-        }
+        let mut transform = Transform::IDENTITY;
+        transform.translation.z = DAMAGE_Z;
+        let id = commands
+            .spawn((
+                sprite.clone(),
+                transform,
+                DamageAnimation(Timer::from_seconds(0.5, TimerMode::Once)),
+            ))
+            .id();
+        commands.entity(*entity).add_child(id);
     }
 }
 
