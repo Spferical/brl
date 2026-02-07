@@ -18,6 +18,7 @@ fn main_menu(
     resource_handles: Res<ResourceHandles>,
     mut next_screen: ResMut<NextState<Screen>>,
     mut next_menu: ResMut<NextState<Menu>>,
+    #[cfg(target_family = "wasm")] mut app_exit: MessageWriter<AppExit>,
 ) {
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
