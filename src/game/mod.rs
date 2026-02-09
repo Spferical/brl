@@ -79,7 +79,7 @@ pub(super) fn plugin(app: &mut App) {
             handle_player_move,
             (
                 // kill mobs from any player damage
-                (apply_damage, spawn_damage_animations, prune_dead).chain(),
+                (apply_damage, prune_dead).chain(),
                 // environment
                 update_pos_to_creature,
                 process_spawners,

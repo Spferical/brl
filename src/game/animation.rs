@@ -48,14 +48,16 @@ pub fn spawn_damage_animations(
     for DamageAnimationMessage { entity } in messages.read() {
         let mut transform = Transform::IDENTITY;
         transform.translation.z = DAMAGE_Z;
-        let id = commands
-            .spawn((
-                sprite.clone(),
-                transform,
-                DamageAnimation(Timer::from_seconds(0.5, TimerMode::Once)),
-            ))
-            .id();
-        commands.entity(*entity).add_child(id);
+        if commands.get_entity(*entity).is_ok() {
+            let id = commands
+                .spawn((
+                    sprite.clone(),
+                    transform,
+                    DamageAnimation(Timer::from_seconds(0.5, TimerMode::Once)),
+                ))
+                .id();
+            commands.entity(*entity).add_child(id);
+        }
     }
 }
 
