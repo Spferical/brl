@@ -4,7 +4,10 @@ use bevy::{
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
-use bevy_egui::{EguiContexts, EguiTextureHandle, egui};
+use bevy_egui::{
+    EguiContexts, EguiTextureHandle,
+    egui::{self, Color32},
+};
 
 use crate::game::map::{TILE_HEIGHT, TILE_WIDTH};
 
@@ -18,15 +21,28 @@ pub struct WorldAssets {
 
 impl WorldAssets {
     pub(crate) fn get_urizen_sprite(&self, index: usize) -> Sprite {
-        let mut player_sprite = Sprite::from_atlas_image(
+        let mut sprite = Sprite::from_atlas_image(
             self.urizen.clone(),
             TextureAtlas {
                 layout: self.urizen_layout.clone(),
                 index,
             },
         );
-        player_sprite.custom_size = Some(Vec2::new(TILE_WIDTH, TILE_HEIGHT));
-        player_sprite
+        sprite.custom_size = Some(Vec2::new(TILE_WIDTH, TILE_HEIGHT));
+        sprite
+    }
+
+    pub(crate) fn get_urizen_colored_sprite(&self, index: usize, color: Color) -> Sprite {
+        let mut sprite = Sprite::from_atlas_image(
+            self.urizen_mask.clone(),
+            TextureAtlas {
+                layout: self.urizen_layout.clone(),
+                index,
+            },
+        );
+        sprite.custom_size = Some(Vec2::new(TILE_WIDTH, TILE_HEIGHT));
+        sprite.color = color;
+        sprite
     }
 
     pub(crate) fn get_urizen_egui_image(
@@ -127,5 +143,8 @@ pub(crate) fn get_egui_image_from_sprite(
     );
     let texture_id = contexts.add_image(EguiTextureHandle::Weak(sprite.image.id()));
     let sized_texture = egui::load::SizedTexture::new(texture_id, rect.size());
-    egui::Image::new(sized_texture).uv(uv)
+    let [r, g, b, a] = sprite.color.to_srgba().to_u8_array();
+    egui::Image::new(sized_texture)
+        .uv(uv)
+        .tint(Color32::from_rgba_unmultiplied(r, g, b, a))
 }
