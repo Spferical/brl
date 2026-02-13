@@ -8,7 +8,7 @@ use bevy::{
 };
 use bevy_egui::{
     EguiContexts, EguiPrimaryContextPass,
-    egui::{self, Margin},
+    egui::{self, Margin, RichText},
 };
 use bevy_lit::prelude::Lighting2dPlugin;
 use rand::{Rng as _, seq::IndexedRandom};
@@ -19,7 +19,7 @@ use crate::{
         animation::{DamageAnimationMessage, MoveAnimation, spawn_damage_animations},
         assets::WorldAssets,
         debug::{DebugSettings, redo_faction_map},
-        input::PlayerIntent,
+        input::{InputMode, PlayerIntent},
         map::{MapPos, TILE_HEIGHT, TILE_WIDTH},
         mapgen::Tile,
     },
@@ -55,6 +55,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<DebugSettings>();
     app.init_resource::<examine::ExaminePos>();
     app.init_resource::<examine::ExamineResults>();
+    app.init_resource::<input::InputMode>();
     app.add_message::<DamageAnimationMessage>();
     app.add_systems(
         Update,
@@ -545,6 +546,7 @@ fn sidebar(
     examine_results: Res<examine::ExamineResults>,
     world_assets: If<Res<WorldAssets>>,
     atlas_assets: If<Res<Assets<TextureAtlasLayout>>>,
+    input_mode: Res<InputMode>,
 ) {
     let mut mob_images = vec![];
     for (_pos, _creature, _mob, sprite) in &nearby_mobs.mobs {
@@ -571,38 +573,59 @@ fn sidebar(
     egui::SidePanel::right("sidebar")
         .min_width(TILE_WIDTH * 8.0)
         .show(ctx, |ui| {
-            let mut examine_pos = None;
-            if let Some(ref info) = examine_results.info {
-                ui.label(&info.info);
-                examine_pos = Some(info.pos);
-            }
+            let examine_pos = examine_results.info.as_ref().map(|i| i.pos);
 
-            for (i, (pos, creature, mob, _sprite)) in nearby_mobs.mobs.iter().enumerate() {
-                let highlight = Some(*pos) == examine_pos;
-                let mut frame = egui::Frame::new().inner_margin(Margin::same(4));
-                if highlight {
-                    frame = frame.fill(ui.style().visuals.code_bg_color);
-                }
-                frame.show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.add(mob_images[i].clone()).highlight();
-                        for _ in 0..creature.hp / 2 {
-                            ui.add(heart.clone());
-                        }
-                        if creature.hp % 2 == 1 {
-                            ui.add(half_heart.clone());
-                        }
-                        if let Some(mob) = mob {
-                            for _ in 0..mob.strength / 2 {
-                                ui.add(sword.clone());
+            ui.group(|ui| {
+                ui.set_min_height(400.0);
+
+                for (i, (pos, creature, mob, _sprite)) in nearby_mobs.mobs.iter().enumerate() {
+                    let highlight = Some(*pos) == examine_pos;
+                    let mut frame = egui::Frame::new().inner_margin(Margin::same(4));
+                    if highlight {
+                        frame = frame.fill(ui.style().visuals.code_bg_color);
+                    }
+                    frame.show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            ui.add(mob_images[i].clone()).highlight();
+                            for _ in 0..creature.hp / 2 {
+                                ui.add(heart.clone());
                             }
-                            if mob.strength % 2 == 1 {
-                                ui.add(half_sword.clone());
+                            if creature.hp % 2 == 1 {
+                                ui.add(half_heart.clone());
                             }
-                        }
+                            if let Some(mob) = mob {
+                                for _ in 0..mob.strength / 2 {
+                                    ui.add(sword.clone());
+                                }
+                                if mob.strength % 2 == 1 {
+                                    ui.add(half_sword.clone());
+                                }
+                            }
+                        });
                     });
-                });
-            }
+                }
+                if let Some(ref info) = examine_results.info {
+                    ui.label(&info.info);
+                }
+            });
+
+            ui.add_space(20.0);
+
+            ui.group(|ui| {
+                match *input_mode {
+                    InputMode::Normal => {
+                        ui.label("move: arrow keys");
+                        ui.label("move: hjklyubn");
+                        ui.label("examine: x");
+                    }
+                    InputMode::Examine(_) => {
+                        ui.label(RichText::new("EXAMINING"));
+                        ui.label("move: arrow keys");
+                        ui.label("move: hjklyubn");
+                        ui.label("exit: x");
+                    }
+                };
+            });
         });
 }
 

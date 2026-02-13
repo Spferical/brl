@@ -49,8 +49,8 @@ pub enum PlayerIntent {
     Wait,
 }
 
-#[derive(Default)]
-pub(crate) enum KeyboardMode {
+#[derive(Resource, Default)]
+pub(crate) enum InputMode {
     #[default]
     Normal,
     Examine(IVec2),
@@ -60,17 +60,17 @@ pub(crate) fn handle_input(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     player: Single<(Entity, &MapPos), With<Player>>,
-    mut mode: Local<KeyboardMode>,
+    mut mode: ResMut<InputMode>,
     mut examine_pos: ResMut<ExaminePos>,
 ) {
     match *mode {
-        KeyboardMode::Normal => {
+        InputMode::Normal => {
             let intent = if let Some(direction) = check_direction_keys(&keyboard_input) {
                 Some(PlayerIntent::Move(direction))
             } else if keyboard_input.any_just_pressed([KeyCode::Period, KeyCode::Space]) {
                 Some(PlayerIntent::Wait)
             } else if keyboard_input.just_pressed(KeyCode::KeyX) {
-                *mode = KeyboardMode::Examine(player.1.0);
+                *mode = InputMode::Examine(player.1.0);
                 examine_pos.pos = Some(*player.1);
                 None
             } else {
@@ -81,12 +81,12 @@ pub(crate) fn handle_input(
                 commands.run_schedule(Turn);
             }
         }
-        KeyboardMode::Examine(pos) => {
+        InputMode::Examine(pos) => {
             if let Some(direction) = check_direction_keys(&keyboard_input) {
-                *mode = KeyboardMode::Examine(pos + direction);
+                *mode = InputMode::Examine(pos + direction);
                 examine_pos.pos = Some(MapPos(pos + direction));
             } else if keyboard_input.any_just_pressed([KeyCode::Escape, KeyCode::KeyX]) {
-                *mode = KeyboardMode::Normal;
+                *mode = InputMode::Normal;
                 examine_pos.pos = None;
             }
         }
