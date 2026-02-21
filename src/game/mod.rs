@@ -11,7 +11,10 @@ use bevy_egui::{
     egui::{self, Margin, RichText},
 };
 use bevy_lit::prelude::Lighting2dPlugin;
-use rand::{Rng as _, seq::IndexedRandom};
+use rand::{
+    Rng as _,
+    seq::{IndexedRandom, SliceRandom as _},
+};
 
 use crate::{
     asset_tracking::LoadResource as _,
@@ -403,7 +406,10 @@ fn process_mob_turn(
             .dijkstra_map_per_faction
             .get(&creature.faction)
             .unwrap();
-        let target_move = rogue_algebra::DIRECTIONS
+
+        let mut directions = rogue_algebra::DIRECTIONS;
+        directions.shuffle(rng);
+        let target_move = directions
             .map(|o| rogue_algebra::Pos::from(pos.0) + o)
             .into_iter()
             .filter(|p| dijkstra_map.contains_key(p))
