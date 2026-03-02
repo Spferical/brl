@@ -14,12 +14,28 @@ use crate::game::map::{TILE_HEIGHT, TILE_WIDTH};
 #[derive(Resource, Asset, Clone, Reflect)]
 #[reflect(Resource)]
 pub struct WorldAssets {
+    pub font: Handle<Font>,
     urizen: Handle<Image>,
     urizen_mask: Handle<Image>,
     urizen_layout: Handle<TextureAtlasLayout>,
+    solid_mask: Handle<Image>,
 }
 
+pub type AsciiSprite = (Text2d, TextFont, TextColor);
+
 impl WorldAssets {
+    pub(crate) fn get_ascii_sprite(&self, c: char, color: Color) -> AsciiSprite {
+        (
+            Text2d::new(c.to_string()),
+            TextFont {
+                font: self.font.clone(),
+                font_size: TILE_HEIGHT,
+                ..default()
+            },
+            TextColor(color),
+        )
+    }
+
     pub(crate) fn get_urizen_sprite(&self, index: usize) -> Sprite {
         let mut sprite = Sprite::from_atlas_image(
             self.urizen.clone(),
@@ -29,19 +45,6 @@ impl WorldAssets {
             },
         );
         sprite.custom_size = Some(Vec2::new(TILE_WIDTH, TILE_HEIGHT));
-        sprite
-    }
-
-    pub(crate) fn get_urizen_colored_sprite(&self, index: usize, color: Color) -> Sprite {
-        let mut sprite = Sprite::from_atlas_image(
-            self.urizen_mask.clone(),
-            TextureAtlas {
-                layout: self.urizen_layout.clone(),
-                index,
-            },
-        );
-        sprite.custom_size = Some(Vec2::new(TILE_WIDTH, TILE_HEIGHT));
-        sprite.color = color;
         sprite
     }
 
@@ -60,6 +63,10 @@ impl WorldAssets {
 
     pub(crate) fn get_urizen_layout(&self) -> Handle<TextureAtlasLayout> {
         self.urizen_layout.clone()
+    }
+
+    pub(crate) fn get_solid_mask(&self) -> Handle<Image> {
+        self.solid_mask.clone()
     }
 }
 
@@ -100,6 +107,19 @@ impl FromWorld for WorldAssets {
         let urizen = images.add(image);
         let urizen_mask = images.add(mask_image);
 
+        let solid_mask_image = Image::new(
+            Extent3d {
+                width: 1,
+                height: 1,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            vec![255, 255, 255, 255],
+            TextureFormat::Rgba8Unorm,
+            RenderAssetUsages::default(),
+        );
+        let solid_mask = images.add(solid_mask_image);
+
         let mut tals = world.resource_mut::<Assets<TextureAtlasLayout>>();
         let urizen_layout = tals.add(TextureAtlasLayout::from_grid(
             UVec2::splat(12),
@@ -108,10 +128,17 @@ impl FromWorld for WorldAssets {
             Some(UVec2::splat(1)),
             Some(UVec2::splat(1)),
         ));
+        
+        let font_bytes = include_bytes!("../../assets/PressStart2P/PressStart2P-Regular.ttf");
+        let font_asset = Font::try_from_bytes(font_bytes.to_vec()).unwrap();
+        let font = world.resource_mut::<Assets<Font>>().add(font_asset);
+
         Self {
+            font,
             urizen,
             urizen_mask,
             urizen_layout,
+            solid_mask,
         }
     }
 }

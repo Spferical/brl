@@ -44,7 +44,7 @@ pub fn spawn_damage_animations(
     mut messages: MessageReader<DamageAnimationMessage>,
     assets: Res<WorldAssets>,
 ) {
-    let sprite = assets.get_urizen_sprite(5150);
+    let sprite = assets.get_ascii_sprite('!', Color::srgb(1.0, 0.0, 0.0));
     for DamageAnimationMessage { entity } in messages.read() {
         let mut transform = Transform::IDENTITY;
         transform.translation.z = DAMAGE_Z;
@@ -66,14 +66,14 @@ pub struct DamageAnimation(pub Timer);
 
 pub fn update_damage_animations(
     mut commands: Commands,
-    mut query: Query<(Entity, &mut DamageAnimation, &mut Sprite)>,
+    mut query: Query<(Entity, &mut DamageAnimation, &mut TextColor)>,
     time: Res<Time>,
 ) {
-    for (entity, mut anim, mut sprite) in query.iter_mut() {
+    for (entity, mut anim, mut color) in query.iter_mut() {
         anim.0.tick(time.delta().min(MAX_TICK));
         let ease =
             EasingCurve::new(1.0, 0.0, EaseFunction::CubicOut).sample_clamped(anim.0.fraction());
-        sprite.color.set_alpha(ease);
+        color.0.set_alpha(ease);
         if anim.0.is_finished() {
             commands.entity(entity).despawn();
         }

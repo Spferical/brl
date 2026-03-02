@@ -21,7 +21,7 @@ pub struct Tile;
 pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAssets>) {
     let rng = &mut rand::rng();
 
-    let player_sprite = assets.get_urizen_sprite(104);
+    let player_sprite = assets.get_ascii_sprite('@', Color::WHITE);
     let map_pos = MapPos(IVec2::new(3, MAP_HEIGHT / 2));
     let player = (
         Player,
@@ -82,8 +82,8 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             strength: 1,
             ranged: false,
         },
-        sprite: assets.get_urizen_sprite(976),
-        corpse: DropsCorpse(assets.get_urizen_sprite(1025)),
+        sprite: assets.get_ascii_sprite('g', Color::srgb(0.2, 0.8, 0.2)),
+        corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.2, 0.8, 0.2))),
     };
     let kobold = MobBundle {
         name: Name::new("Kobold"),
@@ -96,8 +96,8 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             strength: 1,
             ranged: true,
         },
-        sprite: assets.get_urizen_sprite(1598),
-        corpse: DropsCorpse(assets.get_urizen_sprite(1643)),
+        sprite: assets.get_ascii_sprite('k', Color::srgb(0.6, 0.4, 0.2)),
+        corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.6, 0.4, 0.2))),
     };
     let orc = MobBundle {
         name: Name::new("Orc"),
@@ -110,8 +110,8 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             strength: 1,
             ranged: false,
         },
-        sprite: assets.get_urizen_sprite(1166),
-        corpse: DropsCorpse(assets.get_urizen_sprite(1231)),
+        sprite: assets.get_ascii_sprite('o', Color::srgb(0.1, 0.5, 0.1)),
+        corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.1, 0.5, 0.1))),
     };
     let devil = MobBundle {
         name: Name::new("Devil"),
@@ -124,8 +124,8 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             strength: 2,
             ranged: false,
         },
-        sprite: assets.get_urizen_sprite(1390),
-        corpse: DropsCorpse(assets.get_urizen_sprite(1437)),
+        sprite: assets.get_ascii_sprite('D', Color::srgb(0.8, 0.1, 0.1)),
+        corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.1, 0.1))),
     };
     let dwarf = MobBundle {
         name: Name::new("Hammerdwarf"),
@@ -138,9 +138,9 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             strength: 2,
             ranged: false,
         },
-        sprite: assets.get_urizen_colored_sprite(2785, Color::srgb(0.659, 0.173, 0.918)),
+        sprite: assets.get_ascii_sprite('d', Color::srgb(0.659, 0.173, 0.918)),
         corpse: DropsCorpse(
-            assets.get_urizen_colored_sprite(2879, Color::srgb(0.659, 0.173, 0.918)),
+            assets.get_ascii_sprite('%', Color::srgb(0.659, 0.173, 0.918)),
         ),
     };
     let dwarf_ranger = MobBundle {
@@ -154,9 +154,9 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             strength: 1,
             ranged: true,
         },
-        sprite: assets.get_urizen_colored_sprite(2835, Color::srgb(0.478, 0.710, 0.286)),
+        sprite: assets.get_ascii_sprite('d', Color::srgb(0.478, 0.710, 0.286)),
         corpse: DropsCorpse(
-            assets.get_urizen_colored_sprite(2879, Color::lch(0.679, 0.581, 0.1254)),
+            assets.get_ascii_sprite('%', Color::lch(0.679, 0.581, 0.1254)),
         ),
     };
 
@@ -169,20 +169,19 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
         let mut tile = commands.spawn((Tile, map_pos, transform));
         match tile_kind {
             TileKind::Floor => {
-                let sprite_idx = if rng.random_bool(0.1) {
-                    rng.random_range(1857..=1859)
+                let sprite = if rng.random_bool(0.1) {
+                    assets.get_ascii_sprite(' ', Color::srgb(0.4, 0.4, 0.4))
                 } else {
-                    1043
+                    assets.get_ascii_sprite(' ', Color::srgb(0.3, 0.3, 0.3))
                 };
-                let sprite = assets.get_urizen_sprite(sprite_idx);
                 tile.insert(sprite);
             }
             TileKind::Wall => {
-                let sprite = assets.get_urizen_sprite(rng.random_range(0..=1));
+                let sprite = assets.get_ascii_sprite('#', Color::srgb(0.6, 0.6, 0.6));
                 tile.insert((sprite, map::BlocksMovement, Occluder));
             }
             TileKind::TopSpawner => {
-                let sprite = assets.get_urizen_sprite(207);
+                let sprite = assets.get_ascii_sprite('O', Color::srgb(0.5, 0.5, 0.5));
                 tile.insert((
                     sprite,
                     MobSpawner {
@@ -192,7 +191,7 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
                 ));
             }
             TileKind::BottomSpawner => {
-                let sprite = assets.get_urizen_sprite(207);
+                let sprite = assets.get_ascii_sprite('O', Color::srgb(0.5, 0.5, 0.5));
                 tile.insert((
                     sprite,
                     MobSpawner {

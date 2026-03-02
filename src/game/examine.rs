@@ -49,7 +49,7 @@ pub(crate) fn init_examine_highlight(world: Entity, commands: &mut Commands, ass
         .spawn((
             Name::new("ExamineHighlight"),
             ExamineHighlight,
-            assets.get_urizen_sprite(7908),
+            assets.get_ascii_sprite('X', Color::srgb(1.0, 1.0, 0.0)),
             Transform::IDENTITY,
             Visibility::Hidden,
         ))

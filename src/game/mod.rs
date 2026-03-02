@@ -129,14 +129,14 @@ struct Player;
 struct Corpse;
 
 #[derive(Component, Clone)]
-struct DropsCorpse(Sprite);
+struct DropsCorpse(assets::AsciiSprite);
 
 #[derive(Clone, Bundle)]
 struct MobBundle {
     name: Name,
     creature: Creature,
     mob: Mob,
-    sprite: Sprite,
+    sprite: assets::AsciiSprite,
     corpse: DropsCorpse,
 }
 
@@ -313,7 +313,7 @@ fn set_player_corpse(
 ) {
     commands
         .entity(*player)
-        .insert(assets.get_urizen_sprite(201));
+        .insert(assets.get_ascii_sprite('%', bevy::color::palettes::css::DARK_RED.into()));
 }
 
 fn move_bullets(mut commands: Commands, mut bullets: Query<(Entity, &mut MapPos, &Bullet)>) {
@@ -441,7 +441,7 @@ fn process_mob_turn(
         } else if mob.ranged && rng.random_bool(0.5) {
             // fire weapon
             let direction = new_pos.0 - old_pos.0;
-            let (sprite_idx, rotation) = match (direction.x, direction.y) {
+            let (_, rotation) = match (direction.x, direction.y) {
                 (1, 1) => (2093, 0.0),
                 (-1, 1) => (2093, PI / 2.0),
                 (-1, -1) => (2093, PI),
@@ -452,7 +452,7 @@ fn process_mob_turn(
                 (1, 0) => (2094, PI * 1.5),
                 _ => panic!("Unexpected bullet direction: {direction:?}"),
             };
-            let bullet_sprite = assets.get_urizen_sprite(sprite_idx);
+            let bullet_sprite = assets.get_ascii_sprite('^', Color::WHITE);
             let transform = Transform::from_translation(new_pos.to_vec3(PLAYER_Z))
                 .with_rotation(Quat::from_rotation_z(rotation));
             let bullet = Bullet {
@@ -491,7 +491,7 @@ fn prune_dead(
             if let Some(DropsCorpse(corpse_sprite)) = corpse {
                 let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
                 let mut corpse_sprite = (*corpse_sprite).clone();
-                corpse_sprite.color = corpse_sprite.color.darker(0.75);
+                corpse_sprite.2.0 = corpse_sprite.2.0.darker(0.75);
                 let corpse_id = commands
                     .spawn((Corpse, corpse_sprite, *map_pos, transform))
                     .id();
@@ -521,13 +521,13 @@ fn obscure_tiles(
 
 #[derive(Default, Resource)]
 struct NearbyMobs {
-    mobs: Vec<(MapPos, Creature, Option<Mob>, Sprite)>,
+    mobs: Vec<(MapPos, Creature, Option<Mob>, String, Color)>,
 }
 
 fn update_nearby_mobs(
     mut nearby_mobs: ResMut<NearbyMobs>,
     player: Query<&MapPos, With<Player>>,
-    mobs: Query<(&MapPos, &Creature, Option<&Mob>, &Sprite)>,
+    mobs: Query<(&MapPos, &Creature, Option<&Mob>, &Text2d, &TextColor)>,
     pos_to_creature: Res<PosToCreature>,
 ) {
     nearby_mobs.mobs.clear();
@@ -537,11 +537,11 @@ fn update_nearby_mobs(
     for path in rogue_algebra::path::bfs_paths(&[player_pos.0.into()], maxdist, reachable) {
         if let Some(pos) = path.last()
             && let Some(mob) = pos_to_creature.0.get(&IVec2::from(*pos))
-            && let Ok((pos, creature, mob, sprite)) = mobs.get(*mob)
+            && let Ok((pos, creature, mob, text, color)) = mobs.get(*mob)
         {
             nearby_mobs
                 .mobs
-                .push((*pos, creature.clone(), mob.cloned(), sprite.clone()));
+                .push((*pos, creature.clone(), mob.cloned(), text.0.clone(), color.0));
         }
     }
 }
@@ -554,14 +554,6 @@ fn sidebar(
     atlas_assets: If<Res<Assets<TextureAtlasLayout>>>,
     input_mode: Res<InputMode>,
 ) {
-    let mut mob_images = vec![];
-    for (_pos, _creature, _mob, sprite) in &nearby_mobs.mobs {
-        mob_images.push(
-            assets::get_egui_image_from_sprite(&mut contexts, &atlas_assets, sprite)
-                .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT)),
-        )
-    }
-
     let heart = world_assets
         .get_urizen_egui_image(&mut contexts, &atlas_assets, 7700)
         .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
@@ -584,7 +576,7 @@ fn sidebar(
             ui.group(|ui| {
                 ui.set_min_height(400.0);
 
-                for (i, (pos, creature, mob, _sprite)) in nearby_mobs.mobs.iter().enumerate() {
+                for (pos, creature, mob, text, color) in nearby_mobs.mobs.iter() {
                     let highlight = Some(*pos) == examine_pos;
                     let mut frame = egui::Frame::new().inner_margin(Margin::same(4));
                     if highlight {
@@ -592,7 +584,9 @@ fn sidebar(
                     }
                     frame.show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            ui.add(mob_images[i].clone()).highlight();
+                            let [r, g, b, a] = color.to_srgba().to_u8_array();
+                            let c32 = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
+                            ui.label(RichText::new(text).size(TILE_HEIGHT).color(c32).background_color(if highlight { ui.style().visuals.code_bg_color } else { egui::Color32::TRANSPARENT }));
                             for _ in 0..creature.hp / 2 {
                                 ui.add(heart.clone());
                             }
