@@ -1,7 +1,5 @@
 use bevy::{platform::collections::HashSet, prelude::*};
 
-pub(crate) const MAP_WIDTH: i32 = 500;
-pub(crate) const MAP_HEIGHT: i32 = 16;
 pub(crate) const TILE_WIDTH: f32 = 24.0;
 pub(crate) const TILE_HEIGHT: f32 = 24.0;
 
