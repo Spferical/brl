@@ -13,6 +13,7 @@ pub struct MoveAnimation {
     pub timer: Timer,
     pub ease: EaseFunction,
     pub rotation: Option<f32>,
+    pub sway: Option<f32>,
 }
 
 pub fn process_move_animations(
@@ -25,9 +26,16 @@ pub fn process_move_animations(
         let fraction = animation.timer.fraction();
         let MoveAnimation { from, to, ease, .. } = *animation;
         transform.translation = EasingCurve::new(from, to, ease).sample_clamped(fraction);
+
+        let mut rotation = 0.0;
         if let Some(total_rotation) = animation.rotation {
-            transform.rotation = Quat::from_rotation_z(total_rotation * fraction);
+            rotation += total_rotation * fraction;
         }
+        if let Some(sway_angle) = animation.sway {
+            rotation += (fraction * std::f32::consts::PI).sin() * sway_angle;
+        }
+        transform.rotation = Quat::from_rotation_z(rotation);
+
         if animation.timer.is_finished() {
             commands.entity(entity).try_remove::<MoveAnimation>();
         }

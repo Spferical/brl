@@ -8,13 +8,72 @@ use bevy::{
 };
 use bevy_egui::{
     EguiContexts, EguiPrimaryContextPass,
-    egui::{self, Margin, RichText},
+    egui::{self, Align, FontSelection, Margin, RichText, WidgetText, text::LayoutJob},
 };
 use bevy_lit::prelude::Lighting2dPlugin;
 use rand::{
     Rng as _,
     seq::{IndexedRandom, SliceRandom as _},
 };
+
+pub fn apply_brainrot_ui(
+    text: impl Into<WidgetText>,
+    brainrot: i32,
+    style: &egui::Style,
+) -> WidgetText {
+    let text = text.into();
+    let p = ((brainrot as f32 - 60.0) / 30.0).clamp(0.0, 1.0);
+    if p <= 0.0 {
+        return text;
+    }
+
+    let job = text.into_layout_job(style, FontSelection::Default, Align::LEFT);
+
+    let mut new_job = LayoutJob::default();
+    new_job.halign = job.halign;
+    new_job.justify = job.justify;
+    new_job.first_row_min_height = job.first_row_min_height;
+    new_job.wrap = job.wrap.clone();
+
+    for section in &job.sections {
+        let section_text = &job.text[section.byte_range.clone()];
+
+        let mut current_text = String::new();
+        let mut current_format = section.format.clone();
+
+        for (i, c) in section_text.chars().enumerate() {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            use std::hash::{Hash, Hasher};
+            i.hash(&mut hasher);
+            c.hash(&mut hasher);
+            let hash = hasher.finish();
+            let random_val = (hash % 1000) as f32 / 1000.0;
+
+            let mut target_format = section.format.clone();
+            if random_val < p {
+                target_format.font_id.family = egui::FontFamily::Name("comic_relief".into());
+            }
+
+            // If the format changed and we have accumulated text, append it
+            if target_format.font_id.family != current_format.font_id.family
+                && !current_text.is_empty()
+            {
+                new_job.append(&current_text, 0.0, current_format.clone());
+                current_text.clear();
+            }
+
+            current_format = target_format;
+            current_text.push(c);
+        }
+
+        // Append the remaining text
+        if !current_text.is_empty() {
+            new_job.append(&current_text, 0.0, current_format);
+        }
+    }
+
+    WidgetText::LayoutJob(new_job.into())
+}
 
 use crate::{
     asset_tracking::LoadResource as _,
@@ -61,6 +120,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<examine::ExamineResults>();
     app.init_resource::<input::InputMode>();
     app.init_resource::<phone::PhoneState>();
+    app.init_resource::<TurnCounter>();
     app.init_state::<phone::PhoneScreen>();
     app.add_message::<DamageAnimationMessage>();
     app.add_systems(
@@ -84,6 +144,7 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Turn,
         (
+            increment_turn_counter,
             map::update_walk_blocked_map,
             handle_player_move,
             (
@@ -117,9 +178,65 @@ pub(super) fn plugin(app: &mut App) {
             .chain(),
     );
     app.add_systems(
+        Update,
+        apply_brainrot_to_world_text.run_if(in_state(Screen::Gameplay)),
+    );
+    app.add_systems(
         EguiPrimaryContextPass,
         (sidebar, left_sidebar, phone::draw_phone).run_if(in_state(Screen::Gameplay)),
     );
+}
+
+fn apply_brainrot_to_world_text(
+    mut q_text: Query<
+        (
+            Entity,
+            &mut TextColor,
+            &mut Transform,
+            &Text2d,
+            &assets::BaseColor,
+        ),
+        Without<MoveAnimation>,
+    >,
+    player: Query<&Player>,
+) {
+    let Some(player) = player.iter().next() else {
+        return;
+    };
+    let p = ((player.brainrot as f32 - 60.0) / 30.0).clamp(0.0, 1.0);
+
+    for (entity, mut text_color, mut transform, text, base_color) in q_text.iter_mut() {
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        use std::hash::{Hash, Hasher};
+        entity.hash(&mut hasher);
+        text.0.hash(&mut hasher);
+        let hash = hasher.finish();
+
+        let random_val = (hash % 1000) as f32 / 1000.0;
+
+        if random_val < p {
+            // Glitch effect: Color and Rotation shift
+            let glitch_colors = [
+                Color::srgb(0.0, 1.0, 0.0), // Neon Green
+                Color::srgb(1.0, 0.0, 1.0), // Magenta
+                Color::srgb(0.0, 1.0, 1.0), // Cyan
+                Color::srgb(1.0, 1.0, 0.0), // Yellow
+            ];
+            let color_idx = (hash % glitch_colors.len() as u64) as usize;
+
+            // Subtle color: Mix base color with glitch color based on p
+            // Use a small intensity so it stays close to base color at low p
+            let intensity = p * 0.5;
+            text_color.0 = base_color.0.mix(&glitch_colors[color_idx], intensity);
+
+            let rotation_jitter = ((hash % 10) as f32 - 5.0).to_radians() * p;
+            transform.rotation = Quat::from_rotation_z(rotation_jitter);
+        } else {
+            // Restore
+            text_color.0 = base_color.0;
+            transform.rotation = Quat::IDENTITY;
+        }
+    }
 }
 
 #[derive(Component)]
@@ -202,17 +319,33 @@ fn player_moved(moved: Res<PlayerMoved>) -> bool {
     moved.0
 }
 
+#[derive(Resource, Default)]
+struct TurnCounter(u64);
+
+fn increment_turn_counter(mut counter: ResMut<TurnCounter>) {
+    counter.0 += 1;
+}
+
 fn handle_player_move(
     mut commands: Commands,
-    player: Single<(Entity, &mut MapPos, &PlayerIntent), With<Player>>,
+    player: Single<(Entity, &mut MapPos, &PlayerIntent, &Player), With<Player>>,
     stairs: Query<(&MapPos, &Stairs), Without<Player>>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     pos_to_creature: Res<PosToCreature>,
+    turn_counter: Res<TurnCounter>,
     mut damage: ResMut<PendingDamage>,
     mut moved: ResMut<PlayerMoved>,
 ) {
-    let (player_entity, mut pos, intent) = player.into_inner();
+    let (player_entity, mut pos, intent, player_stats) = player.into_inner();
     commands.entity(player_entity).remove::<PlayerIntent>();
+
+    let p = ((player_stats.brainrot as f32 - 60.0) / 30.0).clamp(0.0, 1.0);
+    let sway_direction = if turn_counter.0 % 2 == 0 { 1.0 } else { -1.0 };
+    let sway = if p > 0.0 {
+        Some(p * 0.2 * sway_direction)
+    } else {
+        None
+    };
 
     match intent {
         PlayerIntent::Move(move_intent) => {
@@ -237,6 +370,7 @@ fn handle_player_move(
 
                     ease: EaseFunction::SineInOut,
                     rotation: None,
+                    sway,
                 });
             }
         }
@@ -254,6 +388,7 @@ fn handle_player_move(
 
                         ease: EaseFunction::SineInOut,
                         rotation: None,
+                        sway,
                     });
 
                     moved.0 = true;
@@ -363,6 +498,7 @@ fn move_bullets(mut commands: Commands, mut bullets: Query<(Entity, &mut MapPos,
 
             ease: EaseFunction::Linear,
             rotation: None,
+            sway: None,
         });
     }
 }
@@ -509,6 +645,7 @@ fn process_mob_turn(
 
                 ease: EaseFunction::SineInOut,
                 rotation: None,
+                sway: None,
             });
         }
     }
@@ -586,6 +723,7 @@ fn update_nearby_mobs(
 
 fn sidebar(
     mut contexts: EguiContexts,
+    player: Single<&Player>,
     nearby_mobs: Res<NearbyMobs>,
     examine_results: Res<examine::ExamineResults>,
     world_assets: If<Res<WorldAssets>>,
@@ -624,7 +762,7 @@ fn sidebar(
                         ui.horizontal(|ui| {
                             let [r, g, b, a] = color.to_srgba().to_u8_array();
                             let c32 = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
-                            ui.label(
+                            ui.label(apply_brainrot_ui(
                                 RichText::new(text)
                                     .size(TILE_HEIGHT)
                                     .color(c32)
@@ -633,7 +771,9 @@ fn sidebar(
                                     } else {
                                         egui::Color32::TRANSPARENT
                                     }),
-                            );
+                                player.brainrot,
+                                ui.style(),
+                            ));
                             for _ in 0..creature.hp / 2 {
                                 ui.add(heart.clone());
                             }
@@ -652,7 +792,7 @@ fn sidebar(
                     });
                 }
                 if let Some(ref info) = examine_results.info {
-                    ui.label(&info.info);
+                    ui.label(apply_brainrot_ui(&info.info, player.brainrot, ui.style()));
                 }
             });
 
@@ -661,15 +801,35 @@ fn sidebar(
             ui.group(|ui| {
                 match *input_mode {
                     InputMode::Normal => {
-                        ui.label("move: arrow keys");
-                        ui.label("move: hjklyubn");
-                        ui.label("examine: x");
+                        ui.label(apply_brainrot_ui(
+                            "move: arrow keys",
+                            player.brainrot,
+                            ui.style(),
+                        ));
+                        ui.label(apply_brainrot_ui(
+                            "move: hjklyubn",
+                            player.brainrot,
+                            ui.style(),
+                        ));
+                        ui.label(apply_brainrot_ui("examine: x", player.brainrot, ui.style()));
                     }
                     InputMode::Examine(_) => {
-                        ui.label(RichText::new("EXAMINING"));
-                        ui.label("move: arrow keys");
-                        ui.label("move: hjklyubn");
-                        ui.label("exit: x");
+                        ui.label(apply_brainrot_ui(
+                            RichText::new("EXAMINING"),
+                            player.brainrot,
+                            ui.style(),
+                        ));
+                        ui.label(apply_brainrot_ui(
+                            "move: arrow keys",
+                            player.brainrot,
+                            ui.style(),
+                        ));
+                        ui.label(apply_brainrot_ui(
+                            "move: hjklyubn",
+                            player.brainrot,
+                            ui.style(),
+                        ));
+                        ui.label(apply_brainrot_ui("exit: x", player.brainrot, ui.style()));
                     }
                 };
             });
@@ -684,7 +844,11 @@ fn left_sidebar(mut contexts: EguiContexts, player: Single<(&Creature, &Player)>
         .show(ctx, |ui| {
             ui.add_space(20.0);
 
-            ui.label(RichText::new("PLAYER").size(24.0).strong());
+            ui.label(apply_brainrot_ui(
+                RichText::new("PLAYER").size(24.0).strong(),
+                player_stats.brainrot,
+                ui.style(),
+            ));
             ui.add_space(10.0);
 
             let stats = [
@@ -697,7 +861,7 @@ fn left_sidebar(mut contexts: EguiContexts, player: Single<(&Creature, &Player)>
             ];
 
             for (name, value, max, invert_colors) in stats {
-                ui.label(name);
+                ui.label(apply_brainrot_ui(name, player_stats.brainrot, ui.style()));
                 let ratio = (value as f32 / max as f32).clamp(0.0, 1.0);
                 let bar_size = egui::vec2(180.0, 20.0);
 
@@ -748,18 +912,34 @@ fn left_sidebar(mut contexts: EguiContexts, player: Single<(&Creature, &Player)>
 
                 // Overlay text in white
                 let text = format!("{}/{}", value, max);
-                ui.painter().text(
-                    rect.center(),
-                    egui::Align2::CENTER_CENTER,
-                    text,
-                    egui::FontId::proportional(14.0),
+                let text_job = apply_brainrot_ui(text, player_stats.brainrot, ui.style())
+                    .into_layout_job(
+                        ui.style(),
+                        egui::FontSelection::FontId(egui::FontId::proportional(14.0)),
+                        egui::Align::Center,
+                    );
+
+                // We need to modify text color in the layout job because apply_brainrot_ui uses default
+                let mut text_job = (*text_job).clone();
+                for section in &mut text_job.sections {
+                    section.format.color = egui::Color32::WHITE;
+                }
+
+                let galley = ui.painter().layout_job(text_job);
+                ui.painter().galley(
+                    rect.center() - galley.size() / 2.0,
+                    galley,
                     egui::Color32::WHITE,
                 );
 
                 ui.add_space(10.0);
             }
 
-            ui.label("Signal");
+            ui.label(apply_brainrot_ui(
+                "Signal",
+                player_stats.brainrot,
+                ui.style(),
+            ));
             let signal_max = 5;
             let signal_val = player_stats.signal.clamp(0, signal_max);
             let bar_width = 10.0;
@@ -786,7 +966,11 @@ fn left_sidebar(mut contexts: EguiContexts, player: Single<(&Creature, &Player)>
             }
             ui.add_space(10.0);
 
-            ui.label(format!("$$$: {}", player_stats.money));
+            ui.label(apply_brainrot_ui(
+                format!("$$$: {}", player_stats.money),
+                player_stats.brainrot,
+                ui.style(),
+            ));
         });
 }
 

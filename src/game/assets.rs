@@ -21,6 +21,8 @@ pub struct PhoneAppIcons {
 #[reflect(Resource)]
 pub struct WorldAssets {
     pub font: Handle<Font>,
+    pub comic_relief: Handle<Font>,
+    pub comic_relief_bold: Handle<Font>,
     urizen: Handle<Image>,
     urizen_mask: Handle<Image>,
     urizen_layout: Handle<TextureAtlasLayout>,
@@ -29,7 +31,10 @@ pub struct WorldAssets {
     pub phone_app_icons: PhoneAppIcons,
 }
 
-pub type AsciiSprite = (Text2d, TextFont, TextColor);
+#[derive(Component, Clone, Copy, Reflect)]
+pub struct BaseColor(pub Color);
+
+pub type AsciiSprite = (Text2d, TextFont, TextColor, BaseColor);
 
 impl WorldAssets {
     pub(crate) fn get_ascii_sprite(&self, c: char, color: Color) -> AsciiSprite {
@@ -41,6 +46,7 @@ impl WorldAssets {
                 ..default()
             },
             TextColor(color),
+            BaseColor(color),
         )
     }
 
@@ -141,6 +147,19 @@ impl FromWorld for WorldAssets {
         let font_asset = Font::try_from_bytes(font_bytes.to_vec()).unwrap();
         let font = world.resource_mut::<Assets<Font>>().add(font_asset);
 
+        let comic_relief_bytes =
+            include_bytes!("../../assets/Comic_Relief/ComicRelief-Regular.ttf");
+        let comic_relief_asset = Font::try_from_bytes(comic_relief_bytes.to_vec()).unwrap();
+        let comic_relief = world.resource_mut::<Assets<Font>>().add(comic_relief_asset);
+
+        let comic_relief_bold_bytes =
+            include_bytes!("../../assets/Comic_Relief/ComicRelief-Bold.ttf");
+        let comic_relief_bold_asset =
+            Font::try_from_bytes(comic_relief_bold_bytes.to_vec()).unwrap();
+        let comic_relief_bold = world
+            .resource_mut::<Assets<Font>>()
+            .add(comic_relief_bold_asset);
+
         let phone_image = Image::from_buffer(
             include_bytes!("../../assets/mobile_app/phone.png"),
             ImageType::Extension("png"),
@@ -176,6 +195,8 @@ impl FromWorld for WorldAssets {
 
         Self {
             font,
+            comic_relief,
+            comic_relief_bold,
             urizen,
             urizen_mask,
             urizen_layout,

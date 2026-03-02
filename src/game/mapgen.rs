@@ -312,7 +312,7 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
     let player_pos = MapPos(IVec2::from(level_1_draft.start));
     let player = (
         Player {
-            brainrot: 20,
+            brainrot: 85,
             hunger: 100,
             money: 0,
             rizz: 10,

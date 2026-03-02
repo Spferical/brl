@@ -5,6 +5,7 @@ use bevy_egui::{
 };
 
 use crate::game::assets::WorldAssets;
+use crate::game::{Player, apply_brainrot_ui};
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PhoneScreen {
@@ -97,6 +98,7 @@ pub fn update_phone(
 
 pub fn draw_phone(
     mut contexts: EguiContexts,
+    player: Single<&Player>,
     mut phone_state: ResMut<PhoneState>,
     assets: Res<WorldAssets>,
     current_screen: Res<State<PhoneScreen>>,
@@ -252,14 +254,28 @@ pub fn draw_phone(
                     );
                     ui.painter().add(icon_mesh);
 
-                    ui.painter().text(
-                        egui::pos2(
-                            base_icon_rect.center().x,
-                            base_icon_rect.bottom() + 8.0 * scale_y,
-                        ),
-                        egui::Align2::CENTER_TOP,
-                        name,
-                        egui::FontId::proportional(22.0 * scale_y),
+                    let text_job = apply_brainrot_ui(*name, player.brainrot, ui.style())
+                        .into_layout_job(
+                            ui.style(),
+                            egui::FontSelection::FontId(egui::FontId::proportional(22.0 * scale_y)),
+                            egui::Align::Center,
+                        );
+
+                    let mut text_job = (*text_job).clone();
+                    for section in &mut text_job.sections {
+                        section.format.color =
+                            Color32::from_rgba_unmultiplied(255, 255, 255, home_alpha);
+                    }
+
+                    let galley = ui.painter().layout_job(text_job);
+                    let text_pos = egui::pos2(
+                        base_icon_rect.center().x,
+                        base_icon_rect.bottom() + 8.0 * scale_y,
+                    );
+
+                    ui.painter().galley(
+                        egui::pos2(text_pos.x - galley.size().x / 2.0, text_pos.y),
+                        galley,
                         Color32::from_rgba_unmultiplied(255, 255, 255, home_alpha),
                     );
                 }
@@ -289,14 +305,27 @@ pub fn draw_phone(
                     );
                     ui.painter().add(app_mesh);
 
-                    ui.painter().text(
-                        egui::pos2(
-                            large_icon_rect.center().x,
-                            large_icon_rect.bottom() + 16.0 * scale_y,
-                        ),
-                        egui::Align2::CENTER_TOP,
-                        name,
-                        egui::FontId::proportional(40.0 * scale_y),
+                    let text_job = apply_brainrot_ui(name, player.brainrot, ui.style())
+                        .into_layout_job(
+                            ui.style(),
+                            egui::FontSelection::FontId(egui::FontId::proportional(40.0 * scale_y)),
+                            egui::Align::Center,
+                        );
+
+                    let mut text_job = (*text_job).clone();
+                    for section in &mut text_job.sections {
+                        section.format.color = Color32::from_rgba_unmultiplied(0, 0, 0, app_alpha);
+                    }
+
+                    let galley = ui.painter().layout_job(text_job);
+                    let text_pos = egui::pos2(
+                        large_icon_rect.center().x,
+                        large_icon_rect.bottom() + 16.0 * scale_y,
+                    );
+
+                    ui.painter().galley(
+                        egui::pos2(text_pos.x - galley.size().x / 2.0, text_pos.y),
+                        galley,
                         Color32::from_rgba_unmultiplied(0, 0, 0, app_alpha),
                     );
                 }
