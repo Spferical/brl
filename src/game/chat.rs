@@ -6,10 +6,25 @@ use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 use rand::{Rng, seq::IndexedRandom};
 
-#[derive(Resource, Default)]
+use std::collections::VecDeque;
+
+#[derive(Resource)]
 pub struct ChatHistory {
     pub messages: Vec<ChatMessage>,
+    pub queue: VecDeque<ChatMessage>,
     pub spawn_timer: Timer,
+    pub pop_timer: Timer,
+}
+
+impl Default for ChatHistory {
+    fn default() -> Self {
+        Self {
+            messages: Vec::new(),
+            queue: VecDeque::new(),
+            spawn_timer: Timer::from_seconds(1.0, TimerMode::Once),
+            pop_timer: Timer::from_seconds(0.1, TimerMode::Repeating),
+        }
+    }
 }
 
 pub struct ChatMessage {
@@ -86,6 +101,7 @@ pub fn update_chat(
 ) {
     if !phone_state.is_streaming {
         chat.messages.clear();
+        chat.queue.clear();
         return;
     }
 
@@ -98,45 +114,62 @@ pub fn update_chat(
 
     let mut rng = rand::rng();
 
+    // Event-based messages go to queue
     for event in damage_events.read() {
         if event.entity == player_entity {
-            add_message(&mut chat, &mut rng, DAMAGE_MESSAGES);
+            queue_message(&mut chat, &mut rng, DAMAGE_MESSAGES);
         } else {
-            add_message(&mut chat, &mut rng, ATTACK_MESSAGES);
+            queue_message(&mut chat, &mut rng, ATTACK_MESSAGES);
         }
     }
 
+    // Generic background messages go to queue
     chat.spawn_timer.tick(time.delta());
     if chat.spawn_timer.is_finished() {
-        // Reset timer with some randomness
         chat.spawn_timer
             .set_duration(std::time::Duration::from_secs_f32(
                 rng.random_range(0.5..2.0),
             ));
         chat.spawn_timer.reset();
 
-        // More viewers = More messages
-        // Base chance + viewer-dependent boost
         let spawn_chance = (phone_state.viewers as f32 * 0.01).min(0.8);
         if rng.random_bool(spawn_chance as f64 + 0.1) {
-            add_message(&mut chat, &mut rng, GENERIC_MESSAGES);
+            queue_message(&mut chat, &mut rng, GENERIC_MESSAGES);
+        }
+    }
+
+    // Pop from queue to visible messages over time
+    chat.pop_timer.tick(time.delta());
+    if chat.pop_timer.just_finished() && !chat.queue.is_empty() {
+        if let Some(msg) = chat.queue.pop_front() {
+            chat.messages.push(msg);
+            if chat.messages.len() > MAX_CHAT_MESSAGES {
+                chat.messages.remove(0);
+            }
+
+            // Adjust pop speed based on queue size (clear backlog faster)
+            let next_delay = if chat.queue.len() > 10 {
+                0.05
+            } else if chat.queue.len() > 5 {
+                0.15
+            } else {
+                0.3
+            };
+            chat.pop_timer
+                .set_duration(std::time::Duration::from_secs_f32(next_delay));
         }
     }
 }
 
-fn add_message(chat: &mut ChatHistory, rng: &mut impl Rng, pool: &[&str]) {
+fn queue_message(chat: &mut ChatHistory, rng: &mut impl Rng, pool: &[&str]) {
     let username = USERNAMES.choose(rng).unwrap().to_string();
     let text = pool.choose(rng).unwrap().to_string();
 
-    chat.messages.push(ChatMessage {
+    chat.queue.push_back(ChatMessage {
         username,
         text,
         timer: Timer::from_seconds(MESSAGE_LIFETIME, TimerMode::Once),
     });
-
-    if chat.messages.len() > MAX_CHAT_MESSAGES {
-        chat.messages.remove(0);
-    }
 }
 
 pub fn draw_chat(
