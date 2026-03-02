@@ -15,7 +15,7 @@ pub fn update_streaming_turn(
 ) {
     if phone_state.is_streaming {
         // 1 brainrot every 30 turns
-        if turn_counter.0 % 30 == 0 {
+        if turn_counter.0.is_multiple_of(30) {
             player.brainrot += 1;
         }
 
@@ -210,24 +210,25 @@ pub fn update_chat(
 
     // Pop from queue to visible messages over time
     chat.pop_timer.tick(time.delta());
-    if chat.pop_timer.just_finished() && !chat.queue.is_empty() {
-        if let Some(msg) = chat.queue.pop_front() {
-            chat.messages.push(msg);
-            if chat.messages.len() > MAX_CHAT_MESSAGES {
-                chat.messages.remove(0);
-            }
-
-            // Adjust pop speed based on queue size (clear backlog faster)
-            let next_delay = if chat.queue.len() > 10 {
-                0.05
-            } else if chat.queue.len() > 5 {
-                0.15
-            } else {
-                0.3
-            };
-            chat.pop_timer
-                .set_duration(std::time::Duration::from_secs_f32(next_delay));
+    if chat.pop_timer.just_finished()
+        && !chat.queue.is_empty()
+        && let Some(msg) = chat.queue.pop_front()
+    {
+        chat.messages.push(msg);
+        if chat.messages.len() > MAX_CHAT_MESSAGES {
+            chat.messages.remove(0);
         }
+
+        // Adjust pop speed based on queue size (clear backlog faster)
+        let next_delay = if chat.queue.len() > 10 {
+            0.05
+        } else if chat.queue.len() > 5 {
+            0.15
+        } else {
+            0.3
+        };
+        chat.pop_timer
+            .set_duration(std::time::Duration::from_secs_f32(next_delay));
     }
 }
 

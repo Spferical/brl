@@ -28,7 +28,7 @@ pub fn apply_brainrot_ui(
 
     let job = text.into_layout_job(style, font_selection, align);
     if p <= 0.0 {
-        return WidgetText::LayoutJob(job.into());
+        return WidgetText::LayoutJob(job);
     }
 
     let mut new_job = LayoutJob::default();
@@ -365,7 +365,11 @@ fn handle_player_move(
     commands.entity(player_entity).remove::<PlayerIntent>();
 
     let p = ((player_stats.brainrot as f32 - 60.0) / 30.0).clamp(0.0, 1.0);
-    let sway_direction = if turn_counter.0 % 2 == 0 { 1.0 } else { -1.0 };
+    let sway_direction = if turn_counter.0.is_multiple_of(2) {
+        1.0
+    } else {
+        -1.0
+    };
     let sway = if p > 0.0 {
         Some(p * 0.2 * sway_direction)
     } else {
