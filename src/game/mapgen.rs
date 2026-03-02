@@ -140,6 +140,7 @@ fn draft_level_mapgen_rs(
 }
 
 pub(crate) fn spawn_level(
+    name: String,
     rng: &mut impl rand::Rng,
     world: Entity,
     commands: &mut Commands,
@@ -147,6 +148,16 @@ pub(crate) fn spawn_level(
     draft: &LevelDraft,
     offset: rogue_algebra::Offset,
 ) {
+    let level_entity = commands
+        .spawn((
+            Name::new(name),
+            Transform::IDENTITY,
+            GlobalTransform::IDENTITY,
+            InheritedVisibility::VISIBLE,
+        ))
+        .id();
+    commands.entity(world).add_child(level_entity);
+
     let mut tiles = vec![];
     for (&pos, &tile_kind) in draft.tiles.iter() {
         let pos = pos + offset;
@@ -172,6 +183,7 @@ pub(crate) fn spawn_level(
         }
         tiles.push(tile.id());
     }
+    commands.entity(level_entity).add_children(&tiles);
 
     for (&pos, &mob_kind) in draft.mobs.iter() {
         let pos = pos + offset;
@@ -194,7 +206,7 @@ pub(crate) fn spawn_level(
         let map_pos = MapPos(IVec2::from(pos));
         let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
         let new_mob = commands.spawn((bundle, map_pos, transform)).id();
-        commands.entity(world).add_child(new_mob);
+        commands.entity(level_entity).add_child(new_mob);
     }
 }
 
@@ -211,6 +223,7 @@ pub(crate) fn spawn_stairs(
     commands.entity(world).with_children(|parent| {
         parent.spawn((
             Tile,
+            Name::new("Up Stairs"),
             up_pos,
             Transform::from_translation(up_pos.to_vec3(TILE_Z)),
             Stairs {
@@ -220,6 +233,7 @@ pub(crate) fn spawn_stairs(
         ));
         parent.spawn((
             Tile,
+            Name::new("Down Stairs"),
             down_pos,
             Transform::from_translation(down_pos.to_vec3(TILE_Z)),
             Stairs {
@@ -267,6 +281,7 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
     .sprinkle_mobs(rng, 8);
 
     spawn_level(
+        "Level 1".into(),
         rng,
         world,
         &mut commands,
@@ -276,6 +291,7 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
     );
     let level_2_offset = rogue_algebra::NORTH * 1000;
     spawn_level(
+        "Level 2".into(),
         rng,
         world,
         &mut commands,
