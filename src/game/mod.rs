@@ -125,7 +125,7 @@ pub(super) fn plugin(app: &mut App) {
 #[derive(Component)]
 pub struct GameWorld;
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 #[require(ObscuresTile)]
 pub struct Player {
     pub brainrot: i32,
