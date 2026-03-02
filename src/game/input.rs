@@ -67,7 +67,7 @@ pub(crate) fn handle_input(
         InputMode::Normal => {
             let intent = if let Some(direction) = check_direction_keys(&keyboard_input) {
                 Some(PlayerIntent::Move(direction))
-            } else if keyboard_input.any_just_pressed([KeyCode::Period, KeyCode::Space]) {
+            } else if keyboard_input.just_pressed(KeyCode::Period) {
                 Some(PlayerIntent::Wait)
             } else if keyboard_input.just_pressed(KeyCode::KeyX) {
                 *mode = InputMode::Examine(player.1.0);

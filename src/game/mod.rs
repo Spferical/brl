@@ -38,6 +38,7 @@ mod input;
 pub mod lighting;
 mod map;
 mod mapgen;
+mod phone;
 
 const HIGHLIGHT_Z: f32 = 20.0;
 const DAMAGE_Z: f32 = 15.0;
@@ -59,13 +60,16 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<examine::ExaminePos>();
     app.init_resource::<examine::ExamineResults>();
     app.init_resource::<input::InputMode>();
+    app.init_resource::<phone::PhoneState>();
     app.add_message::<DamageAnimationMessage>();
     app.add_systems(
         Update,
         (
             lighting::on_add_occluder,
             lighting::on_add_player,
-            input::handle_input.run_if(is_player_alive),
+            input::handle_input.run_if(is_player_alive.and(phone::is_phone_closed)),
+            phone::toggle_phone,
+            phone::update_phone,
             animation::process_move_animations,
             animation::update_damage_animations,
             camera::update_camera,
@@ -113,7 +117,7 @@ pub(super) fn plugin(app: &mut App) {
     );
     app.add_systems(
         EguiPrimaryContextPass,
-        (sidebar, left_sidebar).run_if(in_state(Screen::Gameplay)),
+        (sidebar, left_sidebar, phone::draw_phone).run_if(in_state(Screen::Gameplay)),
     );
 }
 

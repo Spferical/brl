@@ -11,6 +11,12 @@ use bevy_egui::{
 
 use crate::game::map::{TILE_HEIGHT, TILE_WIDTH};
 
+#[derive(Clone, Reflect)]
+pub struct PhoneAppIcons {
+    pub crawlr: Handle<Image>,
+    pub dungeon_dash: Handle<Image>,
+}
+
 #[derive(Resource, Asset, Clone, Reflect)]
 #[reflect(Resource)]
 pub struct WorldAssets {
@@ -19,6 +25,8 @@ pub struct WorldAssets {
     urizen_mask: Handle<Image>,
     urizen_layout: Handle<TextureAtlasLayout>,
     solid_mask: Handle<Image>,
+    pub phone: Handle<Image>,
+    pub phone_app_icons: PhoneAppIcons,
 }
 
 pub type AsciiSprite = (Text2d, TextFont, TextColor);
@@ -133,12 +141,47 @@ impl FromWorld for WorldAssets {
         let font_asset = Font::try_from_bytes(font_bytes.to_vec()).unwrap();
         let font = world.resource_mut::<Assets<Font>>().add(font_asset);
 
+        let phone_image = Image::from_buffer(
+            include_bytes!("../../assets/mobile_app/phone.png"),
+            ImageType::Extension("png"),
+            CompressedImageFormats::NONE,
+            true,
+            ImageSampler::Default,
+            RenderAssetUsages::default(),
+        ).unwrap();
+        let crawlr_image = Image::from_buffer(
+            include_bytes!("../../assets/mobile_app/crawlr.png"),
+            ImageType::Extension("png"),
+            CompressedImageFormats::NONE,
+            true,
+            ImageSampler::Default,
+            RenderAssetUsages::default(),
+        ).unwrap();
+        let dungeon_dash_image = Image::from_buffer(
+            include_bytes!("../../assets/mobile_app/dungeon_dash.png"),
+            ImageType::Extension("png"),
+            CompressedImageFormats::NONE,
+            true,
+            ImageSampler::Default,
+            RenderAssetUsages::default(),
+        ).unwrap();
+
+        let mut images = world.resource_mut::<Assets<Image>>();
+        let phone = images.add(phone_image);
+        let crawlr = images.add(crawlr_image);
+        let dungeon_dash = images.add(dungeon_dash_image);
+
         Self {
             font,
             urizen,
             urizen_mask,
             urizen_layout,
             solid_mask,
+            phone,
+            phone_app_icons: PhoneAppIcons {
+                crawlr,
+                dungeon_dash,
+            },
         }
     }
 }
