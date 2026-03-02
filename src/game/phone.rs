@@ -95,7 +95,7 @@ pub fn draw_phone(
     let phone_size = egui::vec2(final_width, final_height);
 
     let center_x = screen_rect.center().x;
-    
+
     let offscreen_y = screen_rect.max.y + final_height * 0.5;
     let onscreen_y = screen_rect.center().y;
 

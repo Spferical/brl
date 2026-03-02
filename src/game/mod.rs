@@ -493,10 +493,8 @@ fn prune_dead(
             commands.entity(entity).despawn();
             if let Some(DropsCorpse(corpse_sprite)) = corpse {
                 let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
-                let mut corpse_sprite = (*corpse_sprite).clone();
-                corpse_sprite.2.0 = corpse_sprite.2.0.darker(0.75);
                 let corpse_id = commands
-                    .spawn((Corpse, corpse_sprite, *map_pos, transform))
+                    .spawn((Corpse, corpse_sprite.clone(), *map_pos, transform))
                     .id();
                 commands.entity(world_entity).add_child(corpse_id);
                 damage_animation.write(DamageAnimationMessage { entity: corpse_id });

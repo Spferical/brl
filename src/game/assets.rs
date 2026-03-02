@@ -148,7 +148,8 @@ impl FromWorld for WorldAssets {
             true,
             ImageSampler::Default,
             RenderAssetUsages::default(),
-        ).unwrap();
+        )
+        .unwrap();
         let crawlr_image = Image::from_buffer(
             include_bytes!("../../assets/mobile_app/crawlr.png"),
             ImageType::Extension("png"),
@@ -156,7 +157,8 @@ impl FromWorld for WorldAssets {
             true,
             ImageSampler::Default,
             RenderAssetUsages::default(),
-        ).unwrap();
+        )
+        .unwrap();
         let dungeon_dash_image = Image::from_buffer(
             include_bytes!("../../assets/mobile_app/dungeon_dash.png"),
             ImageType::Extension("png"),
@@ -164,7 +166,8 @@ impl FromWorld for WorldAssets {
             true,
             ImageSampler::Default,
             RenderAssetUsages::default(),
-        ).unwrap();
+        )
+        .unwrap();
 
         let mut images = world.resource_mut::<Assets<Image>>();
         let phone = images.add(phone_image);

@@ -214,7 +214,7 @@ pub(crate) fn spawn_level(
                     ranged: false,
                 },
                 sprite: assets.get_ascii_sprite('g', Color::srgb(0.2, 0.8, 0.2)),
-                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.2, 0.8, 0.2))),
+                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
             },
         };
         let map_pos = MapPos(IVec2::from(*pos));
