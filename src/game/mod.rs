@@ -157,7 +157,7 @@ pub(super) fn plugin(app: &mut App) {
                 (
                     increment_turn_counter,
                     chat::update_streaming_turn,
-                    tick_hunger,
+                    tick_meters,
                 )
                     .chain(),
                 // kill mobs from any player damage
@@ -341,13 +341,20 @@ fn increment_turn_counter(mut counter: ResMut<TurnCounter>) {
     counter.0 += 1;
 }
 
-fn tick_hunger(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut Creature)>) {
+fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut Creature)>) {
     let (mut player, mut creature) = player.into_inner();
     if turn_counter.0.is_multiple_of(10) {
         if player.hunger >= 100 {
             creature.hp -= 1;
         }
-        player.hunger = (player.hunger + 1).min(100);
+        player.hunger += 1;
+        player.hunger = player.hunger.clamp(0, 100);
+
+        if player.boredom >= 100 {
+            creature.hp -= 1;
+        }
+        player.boredom += 1;
+        player.boredom = player.boredom.clamp(0, 100);
     }
 }
 
