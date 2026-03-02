@@ -241,6 +241,7 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             mapgen::XStart::LEFT,
             mapgen::YStart::CENTER,
         ))
+        .with(mapgen::CullUnreachable::new())
         .with(mapgen::DistantExit::new());
     let level_1_draft = draft_level_mapgen_rs(
         mapgen_builder,
@@ -256,6 +257,7 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             mapgen::XStart::LEFT,
             mapgen::YStart::CENTER,
         ))
+        .with(mapgen::CullUnreachable::new())
         .with(mapgen::DistantExit::new());
     let level_2_draft = draft_level_mapgen_rs(
         mapgen_builder,
