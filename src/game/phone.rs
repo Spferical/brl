@@ -10,6 +10,7 @@ use crate::game::assets::WorldAssets;
 pub struct PhoneState {
     pub is_open: bool,
     pub slide_progress: f32,
+    pub click_progress: [f32; 2],
 }
 
 pub fn is_phone_closed(phone_state: Res<PhoneState>) -> bool {
@@ -33,6 +34,8 @@ pub fn update_phone(
     let target = if phone_state.is_open { 1.0 } else { 0.0 };
     let speed = 4.0 * time.delta_secs();
 
+    let mut needs_repaint = false;
+
     let old_progress = phone_state.slide_progress;
     if phone_state.slide_progress < target {
         phone_state.slide_progress = (phone_state.slide_progress + speed).min(target);
@@ -40,9 +43,22 @@ pub fn update_phone(
         phone_state.slide_progress = (phone_state.slide_progress - speed).max(target);
     }
 
-    if old_progress != phone_state.slide_progress
-        && let Ok(ctx) = contexts.ctx_mut()
-    {
+    if old_progress != phone_state.slide_progress {
+        needs_repaint = true;
+    }
+
+    let click_speed = 3.0 * time.delta_secs();
+    for click_p in phone_state.click_progress.iter_mut() {
+        if *click_p > 0.0 {
+            *click_p += click_speed;
+            if *click_p >= 1.0 {
+                *click_p = 0.0;
+            }
+            needs_repaint = true;
+        }
+    }
+
+    if needs_repaint && let Ok(ctx) = contexts.ctx_mut() {
         ctx.request_repaint();
     }
 }
@@ -57,6 +73,10 @@ pub fn draw_phone(
     }
 
     let texture_id = contexts.add_image(EguiTextureHandle::Weak(assets.phone.id()));
+    let crawlr_id = contexts.add_image(EguiTextureHandle::Weak(assets.phone_app_icons.crawlr.id()));
+    let dungeon_dash_id = contexts.add_image(EguiTextureHandle::Weak(
+        assets.phone_app_icons.dungeon_dash.id(),
+    ));
     let ctx = contexts.ctx_mut().unwrap();
 
     let eased_progress = EasingCurve::new(0.0, 1.0, EaseFunction::CubicInOut)
@@ -116,5 +136,88 @@ pub fn draw_phone(
                 Color32::WHITE,
             );
             ui.painter().add(mesh);
+
+            let scale_x = final_width / phone_img_width;
+            let scale_y = final_height / phone_img_height;
+
+            let screen_rect = egui::Rect::from_min_max(
+                rect.min + egui::vec2(163.0 * scale_x, 236.0 * scale_y),
+                rect.min + egui::vec2(774.0 * scale_x, 1293.0 * scale_y),
+            );
+
+            let screen_width = screen_rect.width();
+            let icon_size = 150.0 * scale_x;
+            let spacing = (screen_width - 3.0 * icon_size) / 4.0;
+
+            let icons = [(crawlr_id, "Crawlr"), (dungeon_dash_id, "Dungeon Dash")];
+
+            for (i, (icon_id, name)) in icons.into_iter().enumerate() {
+                let row = i / 3;
+                let col = i % 3;
+
+                let x = screen_rect.min.x + spacing + (icon_size + spacing) * col as f32;
+                let y = screen_rect.min.y + spacing + (icon_size + spacing) * row as f32;
+
+                let base_icon_rect =
+                    egui::Rect::from_min_size(egui::pos2(x, y), egui::vec2(icon_size, icon_size));
+
+                let response = ui.interact(
+                    base_icon_rect,
+                    ui.id().with("app_icon").with(i),
+                    egui::Sense::click(),
+                );
+
+                let hover_t = ui.ctx().animate_bool_with_time(
+                    ui.id().with("hover").with(i),
+                    response.hovered(),
+                    0.1,
+                );
+                let hover_scale = 1.0 + hover_t * 0.1;
+
+                if response.clicked() {
+                    phone_state.click_progress[i] = 0.01;
+                }
+
+                let click_p = phone_state.click_progress[i];
+                let click_scale = if click_p > 0.0 {
+                    1.0 - (click_p * std::f32::consts::PI * 2.0).sin() * 0.15
+                } else {
+                    1.0
+                };
+
+                let total_scale = hover_scale * click_scale;
+
+                let scaled_size = icon_size * total_scale;
+                let offset = (scaled_size - icon_size) / 2.0;
+                let icon_rect = egui::Rect::from_min_size(
+                    egui::pos2(x - offset, y - offset),
+                    egui::vec2(scaled_size, scaled_size),
+                );
+
+                ui.painter().circle_stroke(
+                    icon_rect.center(),
+                    icon_rect.width() / 2.0,
+                    egui::Stroke::new(2.0, Color32::WHITE),
+                );
+
+                let mut icon_mesh = egui::Mesh::with_texture(icon_id);
+                icon_mesh.add_rect_with_uv(
+                    icon_rect,
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    Color32::WHITE,
+                );
+                ui.painter().add(icon_mesh);
+
+                ui.painter().text(
+                    egui::pos2(
+                        base_icon_rect.center().x,
+                        base_icon_rect.bottom() + 8.0 * scale_y,
+                    ),
+                    egui::Align2::CENTER_TOP,
+                    name,
+                    egui::FontId::proportional(30.0 * scale_y),
+                    Color32::WHITE,
+                );
+            }
         });
 }
