@@ -35,7 +35,7 @@ impl Plugin for AppPlugin {
                 .set(ImagePlugin::default_nearest())
                 .set(WindowPlugin {
                     primary_window: Window {
-                        title: "Fleeing the Fray".to_string(),
+                        title: "BrainrotRL".to_string(),
                         fit_canvas_to_parent: true,
                         ..default()
                     }
