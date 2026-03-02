@@ -278,7 +278,7 @@ pub fn draw_phone(
                     let mut text_job = (*text_job).clone();
                     for section in &mut text_job.sections {
                         section.format.color =
-                            Color32::from_rgba_unmultiplied(255, 255, 255, home_alpha);
+                            Color32::from_rgba_unmultiplied(50, 50, 50, home_alpha);
                     }
 
                     let galley = ui.painter().layout_job(text_job);
