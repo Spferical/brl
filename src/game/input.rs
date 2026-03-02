@@ -70,7 +70,7 @@ pub(crate) fn handle_input(
                 Some(PlayerIntent::Move(direction))
             } else if keyboard_input.just_pressed(KeyCode::Period) {
                 Some(PlayerIntent::Wait)
-            } else if keyboard_input.any_just_pressed([KeyCode::Comma, KeyCode::Space]) {
+            } else if keyboard_input.any_just_pressed([KeyCode::Comma, KeyCode::Enter]) {
                 Some(PlayerIntent::UseStairs)
             } else if keyboard_input.just_pressed(KeyCode::KeyX) {
                 *mode = InputMode::Examine(player.1.0);
