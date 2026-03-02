@@ -836,7 +836,34 @@ fn sidebar(
         });
 }
 
-fn left_sidebar(mut contexts: EguiContexts, player: Single<(&Creature, &Player)>) {
+fn stat_label(ui: &mut egui::Ui, name: &str, brainrot: i32, is_bad: bool, time: f32) {
+    if !is_bad {
+        ui.label(apply_brainrot_ui(name, brainrot, ui.style()));
+        return;
+    }
+
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        for (i, c) in name.chars().enumerate() {
+            let phase = i as f32 * 0.5;
+            let t = time * 10.0 - phase;
+            let jump = (t.sin() * 5.0).max(0.0);
+
+            ui.vertical(|ui| {
+                ui.spacing_mut().item_spacing.y = 0.0;
+                ui.add_space(5.0 - jump);
+                ui.label(apply_brainrot_ui(c.to_string(), brainrot, ui.style()));
+                ui.add_space(jump);
+            });
+        }
+    });
+}
+
+fn left_sidebar(
+    mut contexts: EguiContexts,
+    player: Single<(&Creature, &Player)>,
+    time: Res<Time>,
+) {
     let (creature, player_stats) = player.into_inner();
     let ctx = contexts.ctx_mut().unwrap();
     egui::SidePanel::left("left_sidebar")
@@ -861,8 +888,20 @@ fn left_sidebar(mut contexts: EguiContexts, player: Single<(&Creature, &Player)>
             ];
 
             for (name, value, max, invert_colors) in stats {
-                ui.label(apply_brainrot_ui(name, player_stats.brainrot, ui.style()));
                 let ratio = (value as f32 / max as f32).clamp(0.0, 1.0);
+                let is_bad = if !invert_colors {
+                    ratio <= 0.25
+                } else {
+                    ratio >= 0.75
+                };
+
+                stat_label(
+                    ui,
+                    name,
+                    player_stats.brainrot,
+                    is_bad,
+                    time.elapsed_secs(),
+                );
                 let bar_size = egui::vec2(180.0, 20.0);
 
                 let (rect, _response) = ui.allocate_exact_size(bar_size, egui::Sense::hover());
