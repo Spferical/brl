@@ -128,7 +128,7 @@ impl FromWorld for WorldAssets {
             Some(UVec2::splat(1)),
             Some(UVec2::splat(1)),
         ));
-        
+
         let font_bytes = include_bytes!("../../assets/PressStart2P/PressStart2P-Regular.ttf");
         let font_asset = Font::try_from_bytes(font_bytes.to_vec()).unwrap();
         let font = world.resource_mut::<Assets<Font>>().add(font_asset);

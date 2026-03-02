@@ -96,9 +96,7 @@ pub(super) fn on_add_occluder(
 
         commands.entity(entity).insert((
             Mesh2d(mesh_handle.clone()),
-            LightOccluder2d {
-                occluder_mask,
-            },
+            LightOccluder2d { occluder_mask },
         ));
     }
 }

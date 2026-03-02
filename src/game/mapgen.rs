@@ -139,9 +139,7 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             ranged: false,
         },
         sprite: assets.get_ascii_sprite('d', Color::srgb(0.659, 0.173, 0.918)),
-        corpse: DropsCorpse(
-            assets.get_ascii_sprite('%', Color::srgb(0.659, 0.173, 0.918)),
-        ),
+        corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.659, 0.173, 0.918))),
     };
     let dwarf_ranger = MobBundle {
         name: Name::new("Crossbowdwarf"),
@@ -155,9 +153,7 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             ranged: true,
         },
         sprite: assets.get_ascii_sprite('d', Color::srgb(0.478, 0.710, 0.286)),
-        corpse: DropsCorpse(
-            assets.get_ascii_sprite('%', Color::lch(0.679, 0.581, 0.1254)),
-        ),
+        corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::lch(0.679, 0.581, 0.1254))),
     };
 
     let bottom_spawns = vec![goblin, orc, devil, kobold];

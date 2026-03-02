@@ -113,7 +113,7 @@ pub(super) fn plugin(app: &mut App) {
     );
     app.add_systems(
         EguiPrimaryContextPass,
-        sidebar.run_if(in_state(Screen::Gameplay)),
+        (sidebar, left_sidebar).run_if(in_state(Screen::Gameplay)),
     );
 }
 
@@ -157,7 +157,6 @@ struct Bullet {
 #[derive(Component, Clone, Debug)]
 struct Creature {
     hp: i32,
-    #[allow(unused)]
     max_hp: i32,
     faction: i32,
 }
@@ -527,7 +526,7 @@ struct NearbyMobs {
 fn update_nearby_mobs(
     mut nearby_mobs: ResMut<NearbyMobs>,
     player: Query<&MapPos, With<Player>>,
-    mobs: Query<(&MapPos, &Creature, Option<&Mob>, &Text2d, &TextColor)>,
+    mobs: Query<(&MapPos, &Creature, Option<&Mob>, &Text2d, &TextColor), Without<Player>>,
     pos_to_creature: Res<PosToCreature>,
 ) {
     nearby_mobs.mobs.clear();
@@ -539,9 +538,13 @@ fn update_nearby_mobs(
             && let Some(mob) = pos_to_creature.0.get(&IVec2::from(*pos))
             && let Ok((pos, creature, mob, text, color)) = mobs.get(*mob)
         {
-            nearby_mobs
-                .mobs
-                .push((*pos, creature.clone(), mob.cloned(), text.0.clone(), color.0));
+            nearby_mobs.mobs.push((
+                *pos,
+                creature.clone(),
+                mob.cloned(),
+                text.0.clone(),
+                color.0,
+            ));
         }
     }
 }
@@ -586,7 +589,16 @@ fn sidebar(
                         ui.horizontal(|ui| {
                             let [r, g, b, a] = color.to_srgba().to_u8_array();
                             let c32 = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
-                            ui.label(RichText::new(text).size(TILE_HEIGHT).color(c32).background_color(if highlight { ui.style().visuals.code_bg_color } else { egui::Color32::TRANSPARENT }));
+                            ui.label(
+                                RichText::new(text)
+                                    .size(TILE_HEIGHT)
+                                    .color(c32)
+                                    .background_color(if highlight {
+                                        ui.style().visuals.code_bg_color
+                                    } else {
+                                        egui::Color32::TRANSPARENT
+                                    }),
+                            );
                             for _ in 0..creature.hp / 2 {
                                 ui.add(heart.clone());
                             }
@@ -626,6 +638,72 @@ fn sidebar(
                     }
                 };
             });
+        });
+}
+
+fn left_sidebar(mut contexts: EguiContexts, player: Single<&Creature, With<Player>>) {
+    let ctx = contexts.ctx_mut().unwrap();
+    egui::SidePanel::left("left_sidebar")
+        .min_width(200.0)
+        .show(ctx, |ui| {
+            ui.add_space(20.0);
+
+            ui.label(RichText::new("PLAYER").size(24.0).strong());
+            ui.add_space(10.0);
+
+            let stats = [("Health", player.hp, player.max_hp)];
+
+            for (name, value, max) in stats {
+                ui.label(name);
+                let ratio = (value as f32 / max as f32).clamp(0.0, 1.0);
+                let bar_size = egui::vec2(180.0, 20.0);
+
+                let (rect, _response) = ui.allocate_exact_size(bar_size, egui::Sense::hover());
+
+                // Background
+                ui.painter().rect_filled(
+                    rect,
+                    3.0,
+                    egui::Color32::from_rgba_premultiplied(50, 50, 50, 180),
+                );
+
+                // Add fill (for "filled" part of stat)
+                if ratio > 0.0 {
+                    let fill_rect = egui::Rect::from_min_max(
+                        rect.min,
+                        egui::pos2(rect.min.x + rect.width() * ratio, rect.max.y),
+                    );
+
+                    let color = if ratio > 0.5 {
+                        egui::Color32::from_rgb(0, 150, 0)
+                    } else if ratio > 0.25 {
+                        egui::Color32::from_rgb(180, 150, 0)
+                    } else {
+                        egui::Color32::from_rgb(150, 0, 0)
+                    };
+                    ui.painter().rect_filled(fill_rect, 3.0, color);
+                }
+
+                // White border around the bar
+                ui.painter().rect_stroke(
+                    rect,
+                    3.0,
+                    egui::Stroke::new(1.0, egui::Color32::GRAY),
+                    egui::StrokeKind::Middle,
+                );
+
+                // Overlay text in white
+                let text = format!("{}/{}", value, max);
+                ui.painter().text(
+                    rect.center(),
+                    egui::Align2::CENTER_CENTER,
+                    text,
+                    egui::FontId::proportional(14.0),
+                    egui::Color32::WHITE,
+                );
+
+                ui.add_space(10.0);
+            }
         });
 }
 
