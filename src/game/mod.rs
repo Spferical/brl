@@ -61,6 +61,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<examine::ExamineResults>();
     app.init_resource::<input::InputMode>();
     app.init_resource::<phone::PhoneState>();
+    app.init_state::<phone::PhoneScreen>();
     app.add_message::<DamageAnimationMessage>();
     app.add_systems(
         Update,
