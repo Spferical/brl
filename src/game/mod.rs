@@ -127,7 +127,15 @@ pub struct GameWorld;
 
 #[derive(Component)]
 #[require(ObscuresTile)]
-struct Player;
+pub struct Player {
+    pub brainrot: i32,
+    pub hunger: i32,
+    pub money: i32,
+    pub rizz: i32,
+    pub strength: i32,
+    pub boredom: i32,
+    pub signal: i32,
+}
 
 #[derive(Component)]
 #[require(ObscuresTile)]
@@ -644,7 +652,8 @@ fn sidebar(
         });
 }
 
-fn left_sidebar(mut contexts: EguiContexts, player: Single<&Creature, With<Player>>) {
+fn left_sidebar(mut contexts: EguiContexts, player: Single<(&Creature, &Player)>) {
+    let (creature, player_stats) = player.into_inner();
     let ctx = contexts.ctx_mut().unwrap();
     egui::SidePanel::left("left_sidebar")
         .min_width(200.0)
@@ -654,9 +663,16 @@ fn left_sidebar(mut contexts: EguiContexts, player: Single<&Creature, With<Playe
             ui.label(RichText::new("PLAYER").size(24.0).strong());
             ui.add_space(10.0);
 
-            let stats = [("Health", player.hp, player.max_hp)];
+            let stats = [
+                ("Health", creature.hp, creature.max_hp, false),
+                ("Brainrot", player_stats.brainrot, 100, true),
+                ("Hunger", player_stats.hunger, 100, false),
+                ("Rizz", player_stats.rizz, 100, false),
+                ("Strength", player_stats.strength, 100, false),
+                ("Boredom", player_stats.boredom, 100, true),
+            ];
 
-            for (name, value, max) in stats {
+            for (name, value, max, invert_colors) in stats {
                 ui.label(name);
                 let ratio = (value as f32 / max as f32).clamp(0.0, 1.0);
                 let bar_size = egui::vec2(180.0, 20.0);
@@ -677,12 +693,23 @@ fn left_sidebar(mut contexts: EguiContexts, player: Single<&Creature, With<Playe
                         egui::pos2(rect.min.x + rect.width() * ratio, rect.max.y),
                     );
 
-                    let color = if ratio > 0.5 {
-                        egui::Color32::from_rgb(0, 150, 0)
-                    } else if ratio > 0.25 {
-                        egui::Color32::from_rgb(180, 150, 0)
+                    let color = if !invert_colors {
+                        if ratio > 0.5 {
+                            egui::Color32::from_rgb(0, 150, 0)
+                        } else if ratio > 0.25 {
+                            egui::Color32::from_rgb(180, 150, 0)
+                        } else {
+                            egui::Color32::from_rgb(150, 0, 0)
+                        }
                     } else {
-                        egui::Color32::from_rgb(150, 0, 0)
+                        // High is bad
+                        if ratio < 0.5 {
+                            egui::Color32::from_rgb(0, 150, 0)
+                        } else if ratio < 0.75 {
+                            egui::Color32::from_rgb(180, 150, 0)
+                        } else {
+                            egui::Color32::from_rgb(150, 0, 0)
+                        }
                     };
                     ui.painter().rect_filled(fill_rect, 3.0, color);
                 }
@@ -707,6 +734,32 @@ fn left_sidebar(mut contexts: EguiContexts, player: Single<&Creature, With<Playe
 
                 ui.add_space(10.0);
             }
+
+            ui.label("Signal");
+            let signal_max = 5;
+            let signal_val = player_stats.signal.clamp(0, signal_max);
+            let bar_width = 10.0;
+            let bar_spacing = 4.0;
+            let max_bar_height = 20.0;
+            let total_width = (bar_width + bar_spacing) * signal_max as f32;
+            let (rect, _) = ui.allocate_exact_size(egui::vec2(total_width, max_bar_height), egui::Sense::hover());
+            for i in 0..signal_max {
+                let height = max_bar_height * ((i + 1) as f32 / signal_max as f32);
+                let x_offset = i as f32 * (bar_width + bar_spacing);
+                let bar_rect = egui::Rect::from_min_max(
+                    egui::pos2(rect.min.x + x_offset, rect.max.y - height),
+                    egui::pos2(rect.min.x + x_offset + bar_width, rect.max.y),
+                );
+                let color = if i < signal_val {
+                    egui::Color32::WHITE
+                } else {
+                    egui::Color32::from_rgba_premultiplied(100, 100, 100, 100)
+                };
+                ui.painter().rect_filled(bar_rect, 1.0, color);
+            }
+            ui.add_space(10.0);
+
+            ui.label(format!("$$$: {}", player_stats.money));
         });
 }
 

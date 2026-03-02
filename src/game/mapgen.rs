@@ -181,7 +181,15 @@ pub(crate) fn spawn_level(
     let player_sprite = assets.get_ascii_sprite('@', Color::WHITE);
     let player_pos = MapPos(IVec2::from(draft.start));
     let player = (
-        Player,
+        Player {
+            brainrot: 20,
+            hunger: 100,
+            money: 0,
+            rizz: 10,
+            strength: 10,
+            boredom: 30,
+            signal: 5,
+        },
         Creature {
             hp: 6,
             max_hp: 6,
