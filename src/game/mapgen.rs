@@ -313,7 +313,7 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
     let player = (
         Player {
             brainrot: 85,
-            hunger: 100,
+            hunger: 0,
             money: 0,
             rizz: 10,
             strength: 10,

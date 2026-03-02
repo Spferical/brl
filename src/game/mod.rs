@@ -151,11 +151,15 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Turn,
         (
-            increment_turn_counter,
-            chat::update_streaming_turn,
             map::update_walk_blocked_map,
             handle_player_move,
             (
+                (
+                    increment_turn_counter,
+                    chat::update_streaming_turn,
+                    tick_hunger,
+                )
+                    .chain(),
                 // kill mobs from any player damage
                 (apply_damage, prune_dead).chain(),
                 // environment
@@ -337,9 +341,19 @@ fn increment_turn_counter(mut counter: ResMut<TurnCounter>) {
     counter.0 += 1;
 }
 
+fn tick_hunger(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut Creature)>) {
+    let (mut player, mut creature) = player.into_inner();
+    if turn_counter.0.is_multiple_of(10) {
+        if player.hunger >= 100 {
+            creature.hp -= 1;
+        }
+        player.hunger = (player.hunger + 1).min(100);
+    }
+}
+
 fn handle_player_move(
     mut commands: Commands,
-    player: Single<(Entity, &mut MapPos, &PlayerIntent, &Player), With<Player>>,
+    player: Single<(Entity, &mut MapPos, &PlayerIntent, &Player)>,
     stairs: Query<(&MapPos, &Stairs), Without<Player>>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     pos_to_creature: Res<PosToCreature>,
@@ -943,7 +957,7 @@ fn left_sidebar(
             let stats = [
                 ("Health", creature.hp, creature.max_hp, false),
                 ("Brainrot", player_stats.brainrot, 100, true),
-                ("Hunger", player_stats.hunger, 100, false),
+                ("Hunger", player_stats.hunger, 100, true),
                 ("Rizz", player_stats.rizz, 100, false),
                 ("Strength", player_stats.strength, 100, false),
                 ("Boredom", player_stats.boredom, 100, true),

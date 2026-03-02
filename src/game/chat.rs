@@ -1,7 +1,7 @@
 use crate::game::animation::DamageAnimationMessage;
 use crate::game::apply_brainrot_ui;
 use crate::game::phone::{self, PhoneState};
-use crate::game::{Player, Turn, TurnCounter};
+use crate::game::{Player, TurnCounter};
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 use rand::{Rng, seq::IndexedRandom};
