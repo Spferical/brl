@@ -15,6 +15,7 @@ use crate::game::map::{TILE_HEIGHT, TILE_WIDTH};
 pub struct PhoneAppIcons {
     pub crawlr: Handle<Image>,
     pub dungeon_dash: Handle<Image>,
+    pub underground_tv: Handle<Image>,
 }
 
 #[derive(Resource, Asset, Clone, Reflect)]
@@ -187,11 +188,21 @@ impl FromWorld for WorldAssets {
             RenderAssetUsages::default(),
         )
         .unwrap();
+        let underground_tv_image = Image::from_buffer(
+            include_bytes!("../../assets/mobile_app/underground_tv.png"),
+            ImageType::Extension("png"),
+            CompressedImageFormats::NONE,
+            true,
+            ImageSampler::Default,
+            RenderAssetUsages::default(),
+        )
+        .unwrap();
 
         let mut images = world.resource_mut::<Assets<Image>>();
         let phone = images.add(phone_image);
         let crawlr = images.add(crawlr_image);
         let dungeon_dash = images.add(dungeon_dash_image);
+        let underground_tv = images.add(underground_tv_image);
 
         Self {
             font,
@@ -205,6 +216,7 @@ impl FromWorld for WorldAssets {
             phone_app_icons: PhoneAppIcons {
                 crawlr,
                 dungeon_dash,
+                underground_tv,
             },
         }
     }

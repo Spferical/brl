@@ -16,6 +16,7 @@ mapgen = "0.6.0"
 rand = "0.9"
 rand_8 = {package = "rand", version = "0.8"}
 rogue-algebra = { version = "0.1.0", path = "rogue-algebra", features=["bevy17"] }
+textwrap = "0.16.2"
 # Compile out low-severity logs to improve performance.
 # Remove these features if you want to profile your game with tracy.
 # (see <https://github.com/bevyengine/bevy/blob/main/docs/profiling.md#tracy-profiler>)

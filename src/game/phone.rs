@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_egui::{
     EguiContexts, EguiTextureHandle,
-    egui::{self, Color32},
+    egui::{self, Color32, RichText},
 };
 
 use crate::game::assets::WorldAssets;
@@ -18,7 +18,7 @@ pub enum PhoneScreen {
 pub struct PhoneState {
     pub is_open: bool,
     pub slide_progress: f32,
-    pub click_progress: [f32; 2],
+    pub click_progress: [f32; 3],
     pub app_open_progress: f32,
     pub last_opened_app: Option<usize>,
 }
@@ -113,6 +113,9 @@ pub fn draw_phone(
     let dungeon_dash_id = contexts.add_image(EguiTextureHandle::Weak(
         assets.phone_app_icons.dungeon_dash.id(),
     ));
+    let underground_tv_id = contexts.add_image(EguiTextureHandle::Weak(
+        assets.phone_app_icons.underground_tv.id(),
+    ));
     let ctx = contexts.ctx_mut().unwrap();
 
     let eased_progress = EasingCurve::new(0.0, 1.0, EaseFunction::CubicInOut)
@@ -185,13 +188,17 @@ pub fn draw_phone(
             let icon_size = 150.0 * scale_x;
             let spacing = (screen_width - 3.0 * icon_size) / 4.0;
 
-            let icons = [(crawlr_id, "Crawlr"), (dungeon_dash_id, "Dungeon Dash")];
+            let icons = [
+                (crawlr_id, "Crawlr", "Crawlr"),
+                (dungeon_dash_id, "Dungeon Dash", "DungeonDash"),
+                (underground_tv_id, "Underground TV", "UndergroundTV"),
+            ];
 
             // Draw Home Screen (Apps)
             if phone_state.app_open_progress < 1.0 {
                 let home_alpha = (255.0 * (1.0 - phone_state.app_open_progress)) as u8;
 
-                for (i, (icon_id, name)) in icons.iter().enumerate() {
+                for (i, (icon_id, display_name, _)) in icons.iter().enumerate() {
                     let row = i / 3;
                     let col = i % 3;
 
@@ -254,12 +261,19 @@ pub fn draw_phone(
                     );
                     ui.painter().add(icon_mesh);
 
-                    let text_job = apply_brainrot_ui(*name, player.brainrot, ui.style())
-                        .into_layout_job(
-                            ui.style(),
-                            egui::FontSelection::FontId(egui::FontId::proportional(22.0 * scale_y)),
-                            egui::Align::Center,
-                        );
+                    let wrapped_name = textwrap::fill(display_name, 15);
+                    let text_job = apply_brainrot_ui(
+                        RichText::new(wrapped_name).size(25.0 * scale_x),
+                        player.brainrot,
+                        ui.style(),
+                        egui::FontSelection::Default,
+                        egui::Align::Center,
+                    )
+                    .into_layout_job(
+                        ui.style(),
+                        egui::FontSelection::Default,
+                        egui::Align::Center,
+                    );
 
                     let mut text_job = (*text_job).clone();
                     for section in &mut text_job.sections {
@@ -291,7 +305,7 @@ pub fn draw_phone(
                 );
 
                 if let Some(i) = phone_state.last_opened_app {
-                    let (icon_id, name) = icons[i];
+                    let (icon_id, _, splash_name) = icons[i];
                     let large_icon_size = icon_size * 2.0;
                     let large_icon_rect = egui::Rect::from_center_size(
                         phone_screen_rect.center(),
@@ -305,12 +319,18 @@ pub fn draw_phone(
                     );
                     ui.painter().add(app_mesh);
 
-                    let text_job = apply_brainrot_ui(name, player.brainrot, ui.style())
-                        .into_layout_job(
-                            ui.style(),
-                            egui::FontSelection::FontId(egui::FontId::proportional(40.0 * scale_y)),
-                            egui::Align::Center,
-                        );
+                    let text_job = apply_brainrot_ui(
+                        splash_name,
+                        player.brainrot,
+                        ui.style(),
+                        egui::FontSelection::FontId(egui::FontId::proportional(32.0 * scale_y)),
+                        egui::Align::Center,
+                    )
+                    .into_layout_job(
+                        ui.style(),
+                        egui::FontSelection::FontId(egui::FontId::proportional(32.0 * scale_y)),
+                        egui::Align::Center,
+                    );
 
                     let mut text_job = (*text_job).clone();
                     for section in &mut text_job.sections {

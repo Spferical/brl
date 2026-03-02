@@ -20,14 +20,16 @@ pub fn apply_brainrot_ui(
     text: impl Into<WidgetText>,
     brainrot: i32,
     style: &egui::Style,
+    font_selection: FontSelection,
+    align: Align,
 ) -> WidgetText {
     let text = text.into();
     let p = ((brainrot as f32 - 60.0) / 30.0).clamp(0.0, 1.0);
-    if p <= 0.0 {
-        return text;
-    }
 
-    let job = text.into_layout_job(style, FontSelection::Default, Align::LEFT);
+    let job = text.into_layout_job(style, font_selection, align);
+    if p <= 0.0 {
+        return WidgetText::LayoutJob(job.into());
+    }
 
     let mut new_job = LayoutJob::default();
     new_job.halign = job.halign;
@@ -773,6 +775,8 @@ fn sidebar(
                                     }),
                                 player.brainrot,
                                 ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
                             ));
                             for _ in 0..creature.hp / 2 {
                                 ui.add(heart.clone());
@@ -792,7 +796,13 @@ fn sidebar(
                     });
                 }
                 if let Some(ref info) = examine_results.info {
-                    ui.label(apply_brainrot_ui(&info.info, player.brainrot, ui.style()));
+                    ui.label(apply_brainrot_ui(
+                        &info.info,
+                        player.brainrot,
+                        ui.style(),
+                        FontSelection::Default,
+                        Align::LEFT,
+                    ));
                 }
             });
 
@@ -805,31 +815,53 @@ fn sidebar(
                             "move: arrow keys",
                             player.brainrot,
                             ui.style(),
+                            FontSelection::Default,
+                            Align::LEFT,
                         ));
                         ui.label(apply_brainrot_ui(
                             "move: hjklyubn",
                             player.brainrot,
                             ui.style(),
+                            FontSelection::Default,
+                            Align::LEFT,
                         ));
-                        ui.label(apply_brainrot_ui("examine: x", player.brainrot, ui.style()));
+                        ui.label(apply_brainrot_ui(
+                            "examine: x",
+                            player.brainrot,
+                            ui.style(),
+                            FontSelection::Default,
+                            Align::LEFT,
+                        ));
                     }
                     InputMode::Examine(_) => {
                         ui.label(apply_brainrot_ui(
                             RichText::new("EXAMINING"),
                             player.brainrot,
                             ui.style(),
+                            FontSelection::Default,
+                            Align::LEFT,
                         ));
                         ui.label(apply_brainrot_ui(
                             "move: arrow keys",
                             player.brainrot,
                             ui.style(),
+                            FontSelection::Default,
+                            Align::LEFT,
                         ));
                         ui.label(apply_brainrot_ui(
                             "move: hjklyubn",
                             player.brainrot,
                             ui.style(),
+                            FontSelection::Default,
+                            Align::LEFT,
                         ));
-                        ui.label(apply_brainrot_ui("exit: x", player.brainrot, ui.style()));
+                        ui.label(apply_brainrot_ui(
+                            "exit: x",
+                            player.brainrot,
+                            ui.style(),
+                            FontSelection::Default,
+                            Align::LEFT,
+                        ));
                     }
                 };
             });
@@ -838,7 +870,13 @@ fn sidebar(
 
 fn stat_label(ui: &mut egui::Ui, name: &str, brainrot: i32, is_bad: bool, time: f32) {
     if !is_bad {
-        ui.label(apply_brainrot_ui(name, brainrot, ui.style()));
+        ui.label(apply_brainrot_ui(
+            name,
+            brainrot,
+            ui.style(),
+            FontSelection::Default,
+            Align::LEFT,
+        ));
         return;
     }
 
@@ -852,18 +890,20 @@ fn stat_label(ui: &mut egui::Ui, name: &str, brainrot: i32, is_bad: bool, time: 
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing.y = 0.0;
                 ui.add_space(5.0 - jump);
-                ui.label(apply_brainrot_ui(c.to_string(), brainrot, ui.style()));
+                ui.label(apply_brainrot_ui(
+                    c.to_string(),
+                    brainrot,
+                    ui.style(),
+                    FontSelection::Default,
+                    Align::LEFT,
+                ));
                 ui.add_space(jump);
             });
         }
     });
 }
 
-fn left_sidebar(
-    mut contexts: EguiContexts,
-    player: Single<(&Creature, &Player)>,
-    time: Res<Time>,
-) {
+fn left_sidebar(mut contexts: EguiContexts, player: Single<(&Creature, &Player)>, time: Res<Time>) {
     let (creature, player_stats) = player.into_inner();
     let ctx = contexts.ctx_mut().unwrap();
     egui::SidePanel::left("left_sidebar")
@@ -875,6 +915,8 @@ fn left_sidebar(
                 RichText::new("PLAYER").size(24.0).strong(),
                 player_stats.brainrot,
                 ui.style(),
+                FontSelection::Default,
+                Align::LEFT,
             ));
             ui.add_space(10.0);
 
@@ -895,13 +937,7 @@ fn left_sidebar(
                     ratio >= 0.75
                 };
 
-                stat_label(
-                    ui,
-                    name,
-                    player_stats.brainrot,
-                    is_bad,
-                    time.elapsed_secs(),
-                );
+                stat_label(ui, name, player_stats.brainrot, is_bad, time.elapsed_secs());
                 let bar_size = egui::vec2(180.0, 20.0);
 
                 let (rect, _response) = ui.allocate_exact_size(bar_size, egui::Sense::hover());
@@ -951,12 +987,18 @@ fn left_sidebar(
 
                 // Overlay text in white
                 let text = format!("{}/{}", value, max);
-                let text_job = apply_brainrot_ui(text, player_stats.brainrot, ui.style())
-                    .into_layout_job(
-                        ui.style(),
-                        egui::FontSelection::FontId(egui::FontId::proportional(14.0)),
-                        egui::Align::Center,
-                    );
+                let text_job = apply_brainrot_ui(
+                    text,
+                    player_stats.brainrot,
+                    ui.style(),
+                    egui::FontSelection::FontId(egui::FontId::proportional(14.0)),
+                    egui::Align::Center,
+                )
+                .into_layout_job(
+                    ui.style(),
+                    egui::FontSelection::FontId(egui::FontId::proportional(14.0)),
+                    egui::Align::Center,
+                );
 
                 // We need to modify text color in the layout job because apply_brainrot_ui uses default
                 let mut text_job = (*text_job).clone();
@@ -978,6 +1020,8 @@ fn left_sidebar(
                 "Signal",
                 player_stats.brainrot,
                 ui.style(),
+                FontSelection::Default,
+                Align::LEFT,
             ));
             let signal_max = 5;
             let signal_val = player_stats.signal.clamp(0, signal_max);
@@ -1009,6 +1053,8 @@ fn left_sidebar(
                 format!("$$$: {}", player_stats.money),
                 player_stats.brainrot,
                 ui.style(),
+                FontSelection::Default,
+                Align::LEFT,
             ));
         });
 }
