@@ -93,6 +93,7 @@ use crate::{
 mod animation;
 mod assets;
 mod camera;
+mod chat;
 pub(crate) mod debug;
 mod examine;
 mod input;
@@ -122,6 +123,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<examine::ExamineResults>();
     app.init_resource::<input::InputMode>();
     app.init_resource::<phone::PhoneState>();
+    app.init_resource::<chat::ChatHistory>();
     app.init_resource::<TurnCounter>();
     app.init_state::<phone::PhoneScreen>();
     app.add_message::<DamageAnimationMessage>();
@@ -133,6 +135,7 @@ pub(super) fn plugin(app: &mut App) {
             input::handle_input.run_if(is_player_alive.and(phone::is_phone_closed)),
             phone::toggle_phone,
             phone::update_phone,
+            chat::update_chat,
             animation::process_move_animations,
             animation::update_damage_animations,
             camera::update_camera,
@@ -185,7 +188,8 @@ pub(super) fn plugin(app: &mut App) {
     );
     app.add_systems(
         EguiPrimaryContextPass,
-        (sidebar, left_sidebar, phone::draw_phone).run_if(in_state(Screen::Gameplay)),
+        (sidebar, left_sidebar, phone::draw_phone, chat::draw_chat)
+            .run_if(in_state(Screen::Gameplay)),
     );
 }
 
