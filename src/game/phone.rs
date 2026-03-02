@@ -24,11 +24,41 @@ pub struct PhoneState {
     pub is_streaming: bool,
     pub app_launch_progress: f32,
     pub subscribers: i32,
-    pub viewers: i32,
+    pub viewers: i32,            // True count, updated on Turn
+    pub viewers_displayed: f32,  // For UI animation
+    pub viewers_fractional: f32, // For precise turn-based growth
+    pub subscribers_fractional: f32,
 }
 
 pub fn is_phone_closed(phone_state: Res<PhoneState>) -> bool {
     !phone_state.is_open && phone_state.slide_progress == 0.0
+}
+
+pub fn update_streaming_stats(time: Res<Time>, mut phone_state: ResMut<PhoneState>) {
+    if !phone_state.is_streaming {
+        phone_state.viewers = 0;
+        phone_state.viewers_displayed = 0.0;
+        return;
+    }
+
+    // Animate viewers_displayed towards viewers
+    let target = phone_state.viewers as f32;
+    let diff = target - phone_state.viewers_displayed;
+
+    if diff.abs() > 0.1 {
+        // Speed is proportional to the diff to ensure it roughly takes 1s
+        // but has a minimum speed so it doesn't crawl at the end
+        let speed = (diff.abs() / 1.0).max(10.0);
+        let move_amt = speed * time.delta_secs();
+
+        if diff > 0.0 {
+            phone_state.viewers_displayed = (phone_state.viewers_displayed + move_amt).min(target);
+        } else {
+            phone_state.viewers_displayed = (phone_state.viewers_displayed - move_amt).max(target);
+        }
+    } else {
+        phone_state.viewers_displayed = target;
+    }
 }
 
 pub fn toggle_phone(
@@ -374,6 +404,13 @@ pub fn draw_phone(
                         );
                         if button_res.clicked() {
                             phone_state.is_streaming = !phone_state.is_streaming;
+                            if phone_state.is_streaming {
+                                phone_state.viewers = phone_state.subscribers;
+                                phone_state.viewers_displayed = phone_state.subscribers as f32;
+                            } else {
+                                phone_state.viewers = 0;
+                                phone_state.viewers_displayed = 0.0;
+                            }
                         }
 
                         // If still fading in, also show splash icons fading out?

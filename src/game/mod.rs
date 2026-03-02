@@ -135,6 +135,8 @@ pub(super) fn plugin(app: &mut App) {
             input::handle_input.run_if(is_player_alive.and(phone::is_phone_closed)),
             phone::toggle_phone,
             phone::update_phone,
+            phone::update_streaming_stats,
+            chat::update_money_timer,
             chat::update_chat,
             animation::process_move_animations,
             animation::update_damage_animations,
@@ -150,6 +152,7 @@ pub(super) fn plugin(app: &mut App) {
         Turn,
         (
             increment_turn_counter,
+            chat::update_streaming_turn,
             map::update_walk_blocked_map,
             handle_player_move,
             (
@@ -258,6 +261,8 @@ pub struct Player {
     pub strength: i32,
     pub boredom: i32,
     pub signal: i32,
+    pub money_gain_timer: f32,
+    pub last_gain_amount: i32,
 }
 
 #[derive(Component)]
@@ -316,7 +321,7 @@ struct Mob {
 }
 
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash, Default)]
-struct Turn;
+pub(crate) struct Turn;
 
 #[derive(Resource, Default)]
 struct PlayerMoved(bool);
@@ -326,7 +331,7 @@ fn player_moved(moved: Res<PlayerMoved>) -> bool {
 }
 
 #[derive(Resource, Default)]
-struct TurnCounter(u64);
+pub(crate) struct TurnCounter(pub u64);
 
 fn increment_turn_counter(mut counter: ResMut<TurnCounter>) {
     counter.0 += 1;
@@ -662,11 +667,17 @@ fn prune_dead(
     world: Single<Entity, With<GameWorld>>,
     mut damage_animation: MessageWriter<DamageAnimationMessage>,
     q_creatures: Query<(Entity, &Creature, &MapPos, Option<&DropsCorpse>), Without<Player>>,
+    mut player: Single<&mut Player>,
+    phone_state: Res<phone::PhoneState>,
 ) {
     let world_entity = world.into_inner();
+    let player = player.as_mut();
     for (entity, creature, map_pos, corpse) in q_creatures {
         if creature.is_dead() {
             commands.entity(entity).despawn();
+
+            chat::handle_payout(player, &phone_state);
+
             if let Some(DropsCorpse(corpse_sprite)) = corpse {
                 let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
                 let corpse_id = commands
@@ -1058,13 +1069,28 @@ fn left_sidebar(
             }
             ui.add_space(10.0);
 
-            ui.label(apply_brainrot_ui(
-                format!("$$$: {}", player_stats.money),
-                player_stats.brainrot,
-                ui.style(),
-                FontSelection::Default,
-                Align::LEFT,
-            ));
+            ui.horizontal(|ui| {
+                ui.label(apply_brainrot_ui(
+                    format!("$$$: {}", player_stats.money),
+                    player_stats.brainrot,
+                    ui.style(),
+                    FontSelection::Default,
+                    Align::LEFT,
+                ));
+
+                if player_stats.money_gain_timer > 0.0 {
+                    let alpha = (player_stats.money_gain_timer / 2.0).min(1.0);
+                    let color =
+                        egui::Color32::from_rgba_unmultiplied(0, 255, 0, (255.0 * alpha) as u8);
+                    ui.label(apply_brainrot_ui(
+                        RichText::new(format!(" +${}", player_stats.last_gain_amount)).color(color),
+                        player_stats.brainrot,
+                        ui.style(),
+                        FontSelection::Default,
+                        Align::LEFT,
+                    ));
+                }
+            });
 
             ui.separator();
             ui.label(apply_brainrot_ui(
@@ -1077,7 +1103,7 @@ fn left_sidebar(
 
             if phone_state.is_streaming {
                 ui.label(apply_brainrot_ui(
-                    format!("Viewers: {}", phone_state.viewers),
+                    format!("Viewers: {}", phone_state.viewers_displayed as i32),
                     player_stats.brainrot,
                     ui.style(),
                     FontSelection::Default,

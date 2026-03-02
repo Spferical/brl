@@ -1,12 +1,72 @@
-use crate::game::Player;
 use crate::game::animation::DamageAnimationMessage;
 use crate::game::apply_brainrot_ui;
-use crate::game::phone::PhoneState;
+use crate::game::phone::{self, PhoneState};
+use crate::game::{Player, Turn, TurnCounter};
 use bevy::prelude::*;
 use bevy_egui::{EguiContexts, egui};
 use rand::{Rng, seq::IndexedRandom};
 
 use std::collections::VecDeque;
+
+pub fn update_streaming_turn(
+    mut player: Single<&mut Player>,
+    mut phone_state: ResMut<phone::PhoneState>,
+    turn_counter: Res<TurnCounter>,
+) {
+    if phone_state.is_streaming {
+        // 1 brainrot every 30 turns
+        if turn_counter.0 % 30 == 0 {
+            player.brainrot += 1;
+        }
+
+        // Viewers growth per turn: a * e^(b * rizz)
+        // b = ln(50)/40 = 0.0978 (50x increase from 10 to 50 rizz)
+        // a = 100 / e^(100*b) = 0.00566 (100/turn at 100 rizz)
+        let rizz = player.rizz as f32;
+        let mut gain = 0.00566 * (0.0978 * rizz).exp();
+
+        // Taper after 2000 viewers
+        if phone_state.viewers > 2000 {
+            let overflow = (phone_state.viewers - 2000) as f32;
+            // 1 / n^2
+            let factor = 2000.0 / (2000.0 + overflow);
+            gain *= factor * factor;
+        }
+
+        phone_state.viewers_fractional += gain;
+        if phone_state.viewers_fractional >= 1.0 {
+            let i_gain = phone_state.viewers_fractional.floor();
+            phone_state.viewers += i_gain as i32;
+            phone_state.viewers_fractional -= i_gain;
+        }
+
+        // Sub growth: sublinear to viewers
+        // 10% of sqrt(viewers) per turn
+        let sub_growth = (phone_state.viewers as f32).sqrt() * 0.1;
+        phone_state.subscribers_fractional += sub_growth;
+        if phone_state.subscribers_fractional >= 1.0 {
+            let gain = phone_state.subscribers_fractional.floor();
+            phone_state.subscribers += gain as i32;
+            phone_state.subscribers_fractional -= gain;
+        }
+    }
+
+    // Sub decay: half-life 50 turns
+    // new = old * 0.5 ^ (1 / 50)
+    // 0.5 ^ (1 / 50) approx 0.98623.
+    let decay_factor = 0.98623;
+    let old_subs = phone_state.subscribers as f32 + phone_state.subscribers_fractional;
+    let new_subs = old_subs * decay_factor;
+
+    phone_state.subscribers = new_subs.floor() as i32;
+    phone_state.subscribers_fractional = new_subs.fract();
+}
+
+pub fn update_money_timer(time: Res<Time>, mut player: Single<&mut Player>) {
+    if player.money_gain_timer > 0.0 {
+        player.money_gain_timer -= time.delta_secs();
+    }
+}
 
 #[derive(Resource)]
 pub struct ChatHistory {
@@ -91,6 +151,16 @@ const DAMAGE_MESSAGES: &[&str] = &[
     "gg",
     "ggwp",
 ];
+
+pub fn handle_payout(player: &mut Player, phone_state: &PhoneState) {
+    if phone_state.is_streaming && phone_state.subscribers > 0 {
+        // $1 per 100 subscribers (min $1 if streaming)
+        let payout = (phone_state.subscribers / 100).max(1);
+        player.money += payout;
+        player.last_gain_amount = payout;
+        player.money_gain_timer = 2.0; // Show for 2 seconds
+    }
+}
 
 pub fn update_chat(
     time: Res<Time>,
