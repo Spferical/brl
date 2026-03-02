@@ -47,6 +47,7 @@ fn check_direction_keys(keyboard_input: &ButtonInput<KeyCode>) -> Option<IVec2> 
 pub enum PlayerIntent {
     Move(IVec2),
     Wait,
+    UseStairs,
 }
 
 #[derive(Resource, Default)]
@@ -69,6 +70,8 @@ pub(crate) fn handle_input(
                 Some(PlayerIntent::Move(direction))
             } else if keyboard_input.just_pressed(KeyCode::Period) {
                 Some(PlayerIntent::Wait)
+            } else if keyboard_input.any_just_pressed([KeyCode::Comma, KeyCode::Space]) {
+                Some(PlayerIntent::UseStairs)
             } else if keyboard_input.just_pressed(KeyCode::KeyX) {
                 *mode = InputMode::Examine(player.1.0);
                 examine_pos.pos = Some(*player.1);

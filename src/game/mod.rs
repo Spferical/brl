@@ -24,7 +24,7 @@ use crate::{
         debug::{DebugSettings, redo_faction_map},
         input::{InputMode, PlayerIntent},
         map::{MapPos, TILE_HEIGHT, TILE_WIDTH},
-        mapgen::Tile,
+        mapgen::{Stairs, Tile},
     },
     screens::Screen,
 };
@@ -205,6 +205,7 @@ fn player_moved(moved: Res<PlayerMoved>) -> bool {
 fn handle_player_move(
     mut commands: Commands,
     player: Single<(Entity, &mut MapPos, &PlayerIntent), With<Player>>,
+    stairs: Query<(&MapPos, &Stairs), Without<Player>>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     pos_to_creature: Res<PosToCreature>,
     mut damage: ResMut<PendingDamage>,
@@ -240,6 +241,29 @@ fn handle_player_move(
             }
         }
         PlayerIntent::Wait => {}
+        PlayerIntent::UseStairs => {
+            moved.0 = false;
+            for (stairs_pos, Stairs { destination }) in stairs {
+                if *stairs_pos == *pos {
+                    let old_pos = *pos;
+                    *pos = *destination;
+                    commands.entity(player_entity).insert(MoveAnimation {
+                        from: old_pos.to_vec3(PLAYER_Z),
+                        to: pos.to_vec3(PLAYER_Z),
+                        timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
+
+                        ease: EaseFunction::SineInOut,
+                        rotation: None,
+                    });
+
+                    moved.0 = true;
+                    break;
+                }
+            }
+            if !moved.0 {
+                return;
+            }
+        }
     }
     moved.0 = true;
 }
@@ -742,7 +766,10 @@ fn left_sidebar(mut contexts: EguiContexts, player: Single<(&Creature, &Player)>
             let bar_spacing = 4.0;
             let max_bar_height = 20.0;
             let total_width = (bar_width + bar_spacing) * signal_max as f32;
-            let (rect, _) = ui.allocate_exact_size(egui::vec2(total_width, max_bar_height), egui::Sense::hover());
+            let (rect, _) = ui.allocate_exact_size(
+                egui::vec2(total_width, max_bar_height),
+                egui::Sense::hover(),
+            );
             for i in 0..signal_max {
                 let height = max_bar_height * ((i + 1) as f32 / signal_max as f32);
                 let x_offset = i as f32 * (bar_width + bar_spacing);

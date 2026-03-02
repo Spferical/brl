@@ -23,6 +23,11 @@ enum MobKind {
 #[derive(Component)]
 pub struct Tile;
 
+#[derive(Component)]
+pub struct Stairs {
+    pub(crate) destination: MapPos,
+}
+
 pub struct LevelDraft {
     start: rogue_algebra::Pos,
     #[allow(unused)]
@@ -67,7 +72,7 @@ impl LevelDraft {
     }
 }
 
-fn gen_level_mapgen_rs(
+fn draft_level_mapgen_rs(
     mut builder: mapgen::MapBuilder,
     rng: &mut rand_8::rngs::StdRng,
 ) -> LevelDraft {
@@ -98,13 +103,6 @@ fn gen_level_mapgen_rs(
     };
     assert!(buf.is_walkable(start.x, start.y));
 
-    for y in 0..buf.height {
-        for x in 0..buf.width {
-            print!("{}", if buf.is_walkable(x, y) { '.' } else { '#' });
-        }
-        println!();
-    }
-
     // Mapgen assumes diagonal movement, which we don't have.
     // So, roll our own unreachable culling and exit detection.
     let dijkstra_map = rogue_algebra::path::build_dijkstra_map(&[start_pos], usize::MAX, |p| {
@@ -123,18 +121,12 @@ fn gen_level_mapgen_rs(
     }
     for y in 0..buf.height {
         for x in 0..buf.width {
-            print!(
-                "{}",
-                if *tiles
-                    .get(&Pos::new(x as i32, y as i32))
-                    .unwrap_or(&TileKind::Wall)
-                    == TileKind::Floor
-                {
-                    '.'
-                } else {
-                    '#'
-                }
-            );
+            let c = match tiles.get(&Pos::new(x as i32, y as i32)) {
+                Some(TileKind::Floor) => '.',
+                Some(TileKind::Wall) => '#',
+                None => ' ',
+            };
+            print!("{c}");
         }
         println!();
     }
@@ -150,13 +142,15 @@ fn gen_level_mapgen_rs(
 pub(crate) fn spawn_level(
     rng: &mut impl rand::Rng,
     world: Entity,
-    mut commands: Commands,
-    assets: Res<WorldAssets>,
+    commands: &mut Commands,
+    assets: &WorldAssets,
     draft: &LevelDraft,
+    offset: rogue_algebra::Offset,
 ) {
     let mut tiles = vec![];
-    for (&rogue_algebra::Pos { x, y }, &tile_kind) in draft.tiles.iter() {
-        let map_pos = MapPos(IVec2::new(x, y));
+    for (&pos, &tile_kind) in draft.tiles.iter() {
+        let pos = pos + offset;
+        let map_pos = MapPos(IVec2::from(pos));
         let transform = Transform::from_translation(map_pos.to_vec3(TILE_Z));
         let mut tile = commands.spawn((Tile, map_pos, transform));
         match tile_kind {
@@ -178,8 +172,126 @@ pub(crate) fn spawn_level(
         }
         tiles.push(tile.id());
     }
+
+    for (&pos, &mob_kind) in draft.mobs.iter() {
+        let pos = pos + offset;
+        let bundle = match mob_kind {
+            MobKind::GiantFrog => MobBundle {
+                name: Name::new("Goblin"),
+                creature: Creature {
+                    hp: 1,
+                    max_hp: 1,
+                    faction: -1,
+                },
+                mob: Mob {
+                    strength: 1,
+                    ranged: false,
+                },
+                sprite: assets.get_ascii_sprite('g', Color::srgb(0.2, 0.8, 0.2)),
+                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+            },
+        };
+        let map_pos = MapPos(IVec2::from(pos));
+        let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
+        let new_mob = commands.spawn((bundle, map_pos, transform)).id();
+        commands.entity(world).add_child(new_mob);
+    }
+}
+
+pub(crate) fn spawn_stairs(
+    world: Entity,
+    commands: &mut Commands,
+    assets: &WorldAssets,
+    up_pos: rogue_algebra::Pos,
+    down_pos: rogue_algebra::Pos,
+) {
+    let up_pos = MapPos(IVec2::from(up_pos));
+    let down_pos = MapPos(IVec2::from(down_pos));
+    let color = Color::srgb(0.4, 0.4, 0.4);
+    commands.entity(world).with_children(|parent| {
+        parent.spawn((
+            Tile,
+            up_pos,
+            Transform::from_translation(up_pos.to_vec3(TILE_Z)),
+            Stairs {
+                destination: down_pos,
+            },
+            assets.get_ascii_sprite('<', color),
+        ));
+        parent.spawn((
+            Tile,
+            down_pos,
+            Transform::from_translation(down_pos.to_vec3(TILE_Z)),
+            Stairs {
+                destination: up_pos,
+            },
+            assets.get_ascii_sprite('>', color),
+        ));
+    });
+}
+
+pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAssets>) {
+    let rng = &mut rand::rng();
+
+    let mut mapgen_builder = mapgen::MapBuilder::new(80, 50);
+    mapgen_builder
+        .with(mapgen::SimpleRooms::new())
+        .with(mapgen::NearestCorridors::new())
+        .with(mapgen::AreaStartingPosition::new(
+            mapgen::XStart::LEFT,
+            mapgen::YStart::CENTER,
+        ))
+        .with(mapgen::DistantExit::new());
+    let level_1_draft = draft_level_mapgen_rs(
+        mapgen_builder,
+        &mut rand_8::rngs::StdRng::from_seed(rng.random()),
+    )
+    .with_walls()
+    .sprinkle_mobs(rng, 8);
+
+    let mut mapgen_builder = mapgen::MapBuilder::new(80, 50);
+    mapgen_builder
+        .with(mapgen::DrunkardsWalk::open_halls())
+        .with(mapgen::AreaStartingPosition::new(
+            mapgen::XStart::LEFT,
+            mapgen::YStart::CENTER,
+        ))
+        .with(mapgen::DistantExit::new());
+    let level_2_draft = draft_level_mapgen_rs(
+        mapgen_builder,
+        &mut rand_8::rngs::StdRng::from_seed(rng.random()),
+    )
+    .with_walls()
+    .sprinkle_mobs(rng, 8);
+
+    spawn_level(
+        rng,
+        world,
+        &mut commands,
+        &assets,
+        &level_1_draft,
+        rogue_algebra::Offset::ZERO,
+    );
+    let level_2_offset = rogue_algebra::NORTH * 1000;
+    spawn_level(
+        rng,
+        world,
+        &mut commands,
+        &assets,
+        &level_2_draft,
+        level_2_offset,
+    );
+
+    spawn_stairs(
+        world,
+        &mut commands,
+        &assets,
+        level_2_draft.start + level_2_offset,
+        level_1_draft.start,
+    );
+
     let player_sprite = assets.get_ascii_sprite('@', Color::WHITE);
-    let player_pos = MapPos(IVec2::from(draft.start));
+    let player_pos = MapPos(IVec2::from(level_1_draft.start));
     let player = (
         Player {
             brainrot: 20,
@@ -203,52 +315,5 @@ pub(crate) fn spawn_level(
     );
 
     let player = commands.spawn(player).id();
-    commands
-        .entity(world)
-        .add_child(player)
-        .add_children(&tiles);
-
-    for (pos, &mob_kind) in draft.mobs.iter() {
-        let bundle = match mob_kind {
-            MobKind::GiantFrog => MobBundle {
-                name: Name::new("Goblin"),
-                creature: Creature {
-                    hp: 1,
-                    max_hp: 1,
-                    faction: -1,
-                },
-                mob: Mob {
-                    strength: 1,
-                    ranged: false,
-                },
-                sprite: assets.get_ascii_sprite('g', Color::srgb(0.2, 0.8, 0.2)),
-                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
-            },
-        };
-        let map_pos = MapPos(IVec2::from(*pos));
-        let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
-        let new_mob = commands.spawn((bundle, map_pos, transform)).id();
-        commands.entity(world).add_child(new_mob);
-    }
-}
-
-pub(crate) fn gen_map(world: Entity, commands: Commands, assets: Res<WorldAssets>) {
-    let rng = &mut rand::rng();
-
-    let mut mapgen_builder = mapgen::MapBuilder::new(80, 50);
-    mapgen_builder
-        .with(mapgen::SimpleRooms::new())
-        .with(mapgen::NearestCorridors::new())
-        .with(mapgen::AreaStartingPosition::new(
-            mapgen::XStart::LEFT,
-            mapgen::YStart::CENTER,
-        ))
-        .with(mapgen::DistantExit::new());
-    let draft = gen_level_mapgen_rs(
-        mapgen_builder,
-        &mut rand_8::rngs::StdRng::from_seed(rng.random()),
-    )
-    .with_walls()
-    .sprinkle_mobs(rng, 8);
-    spawn_level(rng, world, commands, assets, &draft);
+    commands.entity(world).add_child(player);
 }
