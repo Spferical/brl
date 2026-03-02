@@ -903,7 +903,12 @@ fn stat_label(ui: &mut egui::Ui, name: &str, brainrot: i32, is_bad: bool, time: 
     });
 }
 
-fn left_sidebar(mut contexts: EguiContexts, player: Single<(&Creature, &Player)>, time: Res<Time>) {
+fn left_sidebar(
+    mut contexts: EguiContexts,
+    player: Single<(&Creature, &Player)>,
+    time: Res<Time>,
+    phone_state: Res<crate::game::phone::PhoneState>,
+) {
     let (creature, player_stats) = player.into_inner();
     let ctx = contexts.ctx_mut().unwrap();
     egui::SidePanel::left("left_sidebar")
@@ -1056,6 +1061,25 @@ fn left_sidebar(mut contexts: EguiContexts, player: Single<(&Creature, &Player)>
                 FontSelection::Default,
                 Align::LEFT,
             ));
+
+            ui.separator();
+            ui.label(apply_brainrot_ui(
+                format!("Subscribers: {}", phone_state.subscribers),
+                player_stats.brainrot,
+                ui.style(),
+                FontSelection::Default,
+                Align::LEFT,
+            ));
+
+            if phone_state.is_streaming {
+                ui.label(apply_brainrot_ui(
+                    format!("Viewers: {}", phone_state.viewers),
+                    player_stats.brainrot,
+                    ui.style(),
+                    FontSelection::Default,
+                    Align::LEFT,
+                ));
+            }
         });
 }
 

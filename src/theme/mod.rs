@@ -20,6 +20,12 @@ fn setup_egui_fonts(mut contexts: EguiContexts, mut done: Local<bool>) {
         Ok(ctx) => {
             let mut fonts = egui::FontDefinitions::default();
             fonts.font_data.insert(
+                "press_start_2p".to_owned(),
+                std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
+                    "../../assets/PressStart2P/PressStart2P-Regular.ttf"
+                ))),
+            );
+            fonts.font_data.insert(
                 "comic_regular".to_owned(),
                 std::sync::Arc::new(egui::FontData::from_static(include_bytes!(
                     "../../assets/Comic_Relief/ComicRelief-Regular.ttf"
@@ -40,6 +46,11 @@ fn setup_egui_fonts(mut contexts: EguiContexts, mut done: Local<bool>) {
             fonts.families.insert(
                 egui::FontFamily::Name("comic_relief".into()),
                 comic_fallbacks,
+            );
+
+            fonts.families.insert(
+                egui::FontFamily::Name("press_start".into()),
+                vec!["press_start_2p".to_owned()],
             );
 
             ctx.set_fonts(fonts);

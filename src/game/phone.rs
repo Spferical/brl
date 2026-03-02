@@ -21,6 +21,10 @@ pub struct PhoneState {
     pub click_progress: [f32; 3],
     pub app_open_progress: f32,
     pub last_opened_app: Option<usize>,
+    pub is_streaming: bool,
+    pub app_launch_progress: f32,
+    pub subscribers: i32,
+    pub viewers: i32,
 }
 
 pub fn is_phone_closed(phone_state: Res<PhoneState>) -> bool {
@@ -91,6 +95,19 @@ pub fn update_phone(
         needs_repaint = true;
     }
 
+    if phone_state.app_open_progress == 1.0 && matches!(*current_screen.get(), PhoneScreen::App(_))
+    {
+        let old_launch_progress = phone_state.app_launch_progress;
+        // 500ms delay + 500ms fade = 1s
+        phone_state.app_launch_progress =
+            (phone_state.app_launch_progress + time.delta_secs()).min(1.0);
+        if old_launch_progress != phone_state.app_launch_progress {
+            needs_repaint = true;
+        }
+    } else {
+        phone_state.app_launch_progress = 0.0;
+    }
+
     if needs_repaint && let Ok(ctx) = contexts.ctx_mut() {
         ctx.request_repaint();
     }
@@ -104,10 +121,6 @@ pub fn draw_phone(
     current_screen: Res<State<PhoneScreen>>,
     mut next_screen: ResMut<NextState<PhoneScreen>>,
 ) {
-    if phone_state.slide_progress <= 0.0 {
-        return;
-    }
-
     let texture_id = contexts.add_image(EguiTextureHandle::Weak(assets.phone.id()));
     let crawlr_id = contexts.add_image(EguiTextureHandle::Weak(assets.phone_app_icons.crawlr.id()));
     let dungeon_dash_id = contexts.add_image(EguiTextureHandle::Weak(
@@ -116,7 +129,35 @@ pub fn draw_phone(
     let underground_tv_id = contexts.add_image(EguiTextureHandle::Weak(
         assets.phone_app_icons.underground_tv.id(),
     ));
-    let ctx = contexts.ctx_mut().unwrap();
+
+    let Ok(ctx) = contexts.ctx_mut() else {
+        return;
+    };
+
+    if phone_state.is_streaming {
+        egui::Area::new(egui::Id::new("streaming_indicator"))
+            .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 20.0))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(20.0, 20.0), egui::Sense::hover());
+                    ui.painter().circle_filled(rect.center(), 8.0, Color32::RED);
+                    ui.label(
+                        RichText::new("Streaming...")
+                            .color(Color32::RED)
+                            .font(egui::FontId::new(
+                                20.0,
+                                egui::FontFamily::Name("press_start".into()),
+                            ))
+                            .strong(),
+                    );
+                });
+            });
+    }
+
+    if phone_state.slide_progress <= 0.0 {
+        return;
+    }
 
     let eased_progress = EasingCurve::new(0.0, 1.0, EaseFunction::CubicInOut)
         .sample_clamped(phone_state.slide_progress);
@@ -305,49 +346,102 @@ pub fn draw_phone(
                 );
 
                 if let Some(i) = phone_state.last_opened_app {
-                    let (icon_id, _, splash_name) = icons[i];
-                    let large_icon_size = icon_size * 2.0;
-                    let large_icon_rect = egui::Rect::from_center_size(
-                        phone_screen_rect.center(),
-                        egui::vec2(large_icon_size, large_icon_size),
-                    );
-                    let mut app_mesh = egui::Mesh::with_texture(icon_id);
-                    app_mesh.add_rect_with_uv(
-                        large_icon_rect,
-                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                        Color32::from_rgba_unmultiplied(255, 255, 255, app_alpha),
-                    );
-                    ui.painter().add(app_mesh);
+                    if i == 2 && phone_state.app_launch_progress > 0.5 {
+                        let content_alpha = (phone_state.app_launch_progress - 0.5) / 0.5;
+                        let alpha_byte = (255.0 * content_alpha) as u8;
 
-                    let text_job = apply_brainrot_ui(
-                        splash_name,
-                        player.brainrot,
-                        ui.style(),
-                        egui::FontSelection::FontId(egui::FontId::proportional(32.0 * scale_y)),
-                        egui::Align::Center,
-                    )
-                    .into_layout_job(
-                        ui.style(),
-                        egui::FontSelection::FontId(egui::FontId::proportional(32.0 * scale_y)),
-                        egui::Align::Center,
-                    );
+                        let mut child_ui = ui.new_child(
+                            egui::UiBuilder::new()
+                                .max_rect(phone_screen_rect)
+                                .layout(egui::Layout::top_down(egui::Align::Center)),
+                        );
+                        child_ui.add_space(phone_screen_rect.height() * 0.4);
 
-                    let mut text_job = (*text_job).clone();
-                    for section in &mut text_job.sections {
-                        section.format.color = Color32::from_rgba_unmultiplied(0, 0, 0, app_alpha);
+                        let button_text = if phone_state.is_streaming {
+                            "Stop Streaming"
+                        } else {
+                            "Start Streaming"
+                        };
+
+                        let button_res = child_ui.add(
+                            egui::Button::new(
+                                RichText::new(button_text)
+                                    .size(64.0 * scale_x)
+                                    .color(Color32::BLACK),
+                            )
+                            .stroke(egui::Stroke::new(2.0, Color32::BLACK))
+                            .fill(Color32::from_rgba_unmultiplied(200, 200, 200, alpha_byte)),
+                        );
+                        if button_res.clicked() {
+                            phone_state.is_streaming = !phone_state.is_streaming;
+                        }
+
+                        // If still fading in, also show splash icons fading out?
+                        // For now let's just show icons if content_alpha < 1.0 (but that would look like sudden swap then fade)
+                        // Actually, let's keep splash icons until delay is over.
                     }
 
-                    let galley = ui.painter().layout_job(text_job);
-                    let text_pos = egui::pos2(
-                        large_icon_rect.center().x,
-                        large_icon_rect.bottom() + 16.0 * scale_y,
-                    );
+                    // Draw splash screen (icon and name) if not fully faded in.
+                    // For app 2, icons only show during splash (open_progress < 1) or launch delay (launch_progress < 0.5)
+                    let should_draw_splash_icons = if i == 2 {
+                        phone_state.app_launch_progress < 0.75 // overlapping fade out? No, just keep simple for now.
+                    } else {
+                        phone_state.app_launch_progress < 0.5
+                    };
 
-                    ui.painter().galley(
-                        egui::pos2(text_pos.x - galley.size().x / 2.0, text_pos.y),
-                        galley,
-                        Color32::from_rgba_unmultiplied(0, 0, 0, app_alpha),
-                    );
+                    if should_draw_splash_icons {
+                        let splash_alpha = if i == 2 && phone_state.app_launch_progress > 0.5 {
+                            // Fade out splash icons for Underground TV
+                            (255.0 * (1.0 - (phone_state.app_launch_progress - 0.5) / 0.25)) as u8
+                        } else {
+                            app_alpha
+                        };
+
+                        let (icon_id, _, splash_name) = icons[i];
+                        let large_icon_size = icon_size * 2.0;
+                        let large_icon_rect = egui::Rect::from_center_size(
+                            phone_screen_rect.center(),
+                            egui::vec2(large_icon_size, large_icon_size),
+                        );
+                        let mut app_mesh = egui::Mesh::with_texture(icon_id);
+                        app_mesh.add_rect_with_uv(
+                            large_icon_rect,
+                            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                            Color32::from_rgba_unmultiplied(255, 255, 255, splash_alpha),
+                        );
+                        ui.painter().add(app_mesh);
+
+                        let text_job = apply_brainrot_ui(
+                            splash_name,
+                            player.brainrot,
+                            ui.style(),
+                            egui::FontSelection::FontId(egui::FontId::proportional(32.0 * scale_y)),
+                            egui::Align::Center,
+                        )
+                        .into_layout_job(
+                            ui.style(),
+                            egui::FontSelection::FontId(egui::FontId::proportional(32.0 * scale_y)),
+                            egui::Align::Center,
+                        );
+
+                        let mut text_job = (*text_job).clone();
+                        for section in &mut text_job.sections {
+                            section.format.color =
+                                Color32::from_rgba_unmultiplied(0, 0, 0, splash_alpha);
+                        }
+
+                        let galley = ui.painter().layout_job(text_job);
+                        let text_pos = egui::pos2(
+                            large_icon_rect.center().x,
+                            large_icon_rect.bottom() + 16.0 * scale_y,
+                        );
+
+                        ui.painter().galley(
+                            egui::pos2(text_pos.x - galley.size().x / 2.0, text_pos.y),
+                            galley,
+                            Color32::from_rgba_unmultiplied(0, 0, 0, splash_alpha),
+                        );
+                    }
                 }
             }
 
