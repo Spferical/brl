@@ -3,6 +3,7 @@ use bevy_egui::egui::{self, Color32, RichText};
 
 use crate::game::Player;
 use crate::game::assets::WorldAssets;
+use crate::game::chat::StreamingState;
 use crate::game::phone::PhoneState;
 
 pub trait MobileApp: Send + Sync {
@@ -13,6 +14,7 @@ pub trait MobileApp: Send + Sync {
         &self,
         ui: &mut egui::Ui,
         phone_state: &mut PhoneState,
+        streaming_state: &mut StreamingState,
         player: &Player,
         scale: f32,
         alpha: u8,
@@ -35,6 +37,7 @@ impl MobileApp for Crawlr {
         &self,
         _ui: &mut egui::Ui,
         _phone_state: &mut PhoneState,
+        _streaming_state: &mut StreamingState,
         _player: &Player,
         _scale: f32,
         _alpha: u8,
@@ -58,6 +61,7 @@ impl MobileApp for DungeonDash {
         &self,
         _ui: &mut egui::Ui,
         _phone_state: &mut PhoneState,
+        _streaming_state: &mut StreamingState,
         _player: &Player,
         _scale: f32,
         _alpha: u8,
@@ -80,12 +84,13 @@ impl MobileApp for UndergroundTV {
     fn draw_content(
         &self,
         ui: &mut egui::Ui,
-        phone_state: &mut PhoneState,
+        _phone_state: &mut PhoneState,
+        streaming_state: &mut StreamingState,
         _player: &Player,
         scale: f32,
         alpha: u8,
     ) {
-        let button_text = if phone_state.is_streaming {
+        let button_text = if streaming_state.is_streaming {
             "Stop Streaming"
         } else {
             "Start Streaming"
@@ -101,13 +106,13 @@ impl MobileApp for UndergroundTV {
             .fill(Color32::from_rgba_unmultiplied(200, 200, 200, alpha)),
         );
         if button_res.clicked() {
-            phone_state.is_streaming = !phone_state.is_streaming;
-            if phone_state.is_streaming {
-                phone_state.viewers = phone_state.subscribers;
-                phone_state.viewers_displayed = phone_state.subscribers as f32;
+            streaming_state.is_streaming = !streaming_state.is_streaming;
+            if streaming_state.is_streaming {
+                streaming_state.viewers = streaming_state.subscribers;
+                streaming_state.viewers_displayed = streaming_state.subscribers as f32;
             } else {
-                phone_state.viewers = 0;
-                phone_state.viewers_displayed = 0.0;
+                streaming_state.viewers = 0;
+                streaming_state.viewers_displayed = 0.0;
             }
         }
     }

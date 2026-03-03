@@ -67,6 +67,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<input::InputMode>();
     app.init_resource::<targeting::ValidTargets>();
     app.init_resource::<phone::PhoneState>();
+    app.init_resource::<chat::StreamingState>();
     app.init_resource::<chat::ChatHistory>();
     app.init_resource::<TurnCounter>();
     app.init_state::<phone::PhoneScreen>();
@@ -83,7 +84,7 @@ pub(super) fn plugin(app: &mut App) {
                 .run_if(resource_changed::<targeting::ValidTargets>),
             phone::toggle_phone,
             phone::update_phone,
-            phone::update_streaming_stats,
+            chat::update_streaming_stats,
             chat::update_money_timer,
             chat::update_chat,
             animation::process_move_animations,
@@ -144,7 +145,13 @@ pub(super) fn plugin(app: &mut App) {
     );
     app.add_systems(
         EguiPrimaryContextPass,
-        (sidebar, left_sidebar, phone::draw_phone, chat::draw_chat)
+        (
+            sidebar,
+            left_sidebar,
+            chat::draw_streaming_indicator,
+            phone::draw_phone,
+            chat::draw_chat,
+        )
             .run_if(in_state(Screen::Gameplay)),
     );
 }
@@ -817,7 +824,7 @@ fn prune_dead(
     mut damage_animation: MessageWriter<DamageAnimationMessage>,
     q_creatures: Query<(Entity, &Creature, &MapPos, Option<&DropsCorpse>), Without<Player>>,
     mut player: Single<&mut Player>,
-    phone_state: Res<phone::PhoneState>,
+    streaming_state: Res<chat::StreamingState>,
     mut chat: ResMut<chat::ChatHistory>,
 ) {
     let world_entity = world.into_inner();
@@ -826,7 +833,7 @@ fn prune_dead(
         if creature.is_dead() {
             commands.entity(entity).despawn();
 
-            chat::handle_payout(player, &phone_state, &mut chat);
+            chat::handle_payout(player, &streaming_state, &mut chat);
 
             if let Some(DropsCorpse(corpse_sprite)) = corpse {
                 let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
@@ -1141,7 +1148,7 @@ fn left_sidebar(
     mut contexts: EguiContexts,
     player: Single<(&Creature, &Player)>,
     time: Res<Time>,
-    phone_state: Res<crate::game::phone::PhoneState>,
+    streaming_state: Res<crate::game::chat::StreamingState>,
 ) {
     let (creature, player_stats) = player.into_inner();
     let ctx = contexts.ctx_mut().unwrap();
@@ -1313,16 +1320,16 @@ fn left_sidebar(
 
             ui.separator();
             ui.label(apply_brainrot_ui(
-                format!("Subscribers: {}", phone_state.subscribers),
+                format!("Subscribers: {}", streaming_state.subscribers),
                 player_stats.brainrot,
                 ui.style(),
                 FontSelection::Default,
                 Align::LEFT,
             ));
 
-            if phone_state.is_streaming {
+            if streaming_state.is_streaming {
                 ui.label(apply_brainrot_ui(
-                    format!("Viewers: {}", phone_state.viewers_displayed as i32),
+                    format!("Viewers: {}", streaming_state.viewers_displayed as i32),
                     player_stats.brainrot,
                     ui.style(),
                     FontSelection::Default,

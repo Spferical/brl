@@ -1,98 +1,12 @@
 use crate::game::animation::DamageAnimationMessage;
 use crate::game::apply_brainrot_ui;
-use crate::game::phone::{self, PhoneState};
 use crate::game::{Player, TurnCounter};
 use bevy::prelude::*;
-use bevy_egui::{EguiContexts, egui};
+use bevy_egui::EguiContexts;
+use bevy_egui::egui::{self, Color32, RichText};
 use rand::{Rng, seq::IndexedRandom};
 
 use std::collections::VecDeque;
-
-pub fn update_streaming_turn(
-    mut player: Single<&mut Player>,
-    mut phone_state: ResMut<phone::PhoneState>,
-    turn_counter: Res<TurnCounter>,
-) {
-    if phone_state.is_streaming {
-        // 1 brainrot every 30 turns
-        if turn_counter.0.is_multiple_of(30) {
-            player.brainrot += 1;
-        }
-
-        // Viewers growth per turn: a * e^(b * rizz)
-        // b = ln(50)/40 = 0.0978 (50x increase from 10 to 50 rizz)
-        // a = 100 / e^(100*b) = 0.00566 (100/turn at 100 rizz)
-        let rizz = player.rizz as f32;
-        let mut gain = 0.00566 * (0.0978 * rizz).exp();
-
-        // Taper after 2000 viewers
-        if phone_state.viewers > 2000 {
-            let overflow = (phone_state.viewers - 2000) as f32;
-            // 1 / n^2
-            let factor = 2000.0 / (2000.0 + overflow);
-            gain *= factor * factor;
-        }
-
-        phone_state.viewers_fractional += gain;
-        if phone_state.viewers_fractional >= 1.0 {
-            let i_gain = phone_state.viewers_fractional.floor();
-            phone_state.viewers += i_gain as i32;
-            phone_state.viewers_fractional -= i_gain;
-        }
-
-        // Sub growth: sublinear to viewers
-        // 10% of sqrt(viewers) per turn
-        let sub_growth = (phone_state.viewers as f32).sqrt() * 0.1;
-        phone_state.subscribers_fractional += sub_growth;
-        if phone_state.subscribers_fractional >= 1.0 {
-            let gain = phone_state.subscribers_fractional.floor();
-            phone_state.subscribers += gain as i32;
-            phone_state.subscribers_fractional -= gain;
-        }
-    }
-
-    // Sub decay: half-life 50 turns
-    // new = old * 0.5 ^ (1 / 50)
-    // 0.5 ^ (1 / 50) approx 0.98623.
-    let decay_factor = 0.98623;
-    let old_subs = phone_state.subscribers as f32 + phone_state.subscribers_fractional;
-    let new_subs = old_subs * decay_factor;
-
-    phone_state.subscribers = new_subs.floor() as i32;
-    phone_state.subscribers_fractional = new_subs.fract();
-}
-
-pub fn update_money_timer(time: Res<Time>, mut player: Single<&mut Player>) {
-    if player.money_gain_timer > 0.0 {
-        player.money_gain_timer -= time.delta_secs();
-    }
-}
-
-#[derive(Resource)]
-pub struct ChatHistory {
-    pub messages: Vec<ChatMessage>,
-    pub queue: VecDeque<ChatMessage>,
-    pub spawn_timer: Timer,
-    pub pop_timer: Timer,
-}
-
-impl Default for ChatHistory {
-    fn default() -> Self {
-        Self {
-            messages: Vec::new(),
-            queue: VecDeque::new(),
-            spawn_timer: Timer::from_seconds(1.0, TimerMode::Once),
-            pop_timer: Timer::from_seconds(0.1, TimerMode::Repeating),
-        }
-    }
-}
-
-pub struct ChatMessage {
-    pub username: String,
-    pub text: String,
-    pub timer: Timer,
-    pub donation: Option<i32>,
-}
 
 const MAX_CHAT_MESSAGES: usize = 15;
 const MESSAGE_LIFETIME: f32 = 8.0;
@@ -175,12 +89,141 @@ const WHALE_MESSAGES: &[&str] = &[
     "W STREAMER",
 ];
 
-pub fn handle_payout(player: &mut Player, phone_state: &PhoneState, chat: &mut ChatHistory) {
-    if phone_state.is_streaming && phone_state.subscribers > 0 {
+#[derive(Resource)]
+pub struct ChatHistory {
+    pub messages: Vec<ChatMessage>,
+    pub queue: VecDeque<ChatMessage>,
+    pub spawn_timer: Timer,
+    pub pop_timer: Timer,
+}
+
+impl Default for ChatHistory {
+    fn default() -> Self {
+        Self {
+            messages: Vec::new(),
+            queue: VecDeque::new(),
+            spawn_timer: Timer::from_seconds(1.0, TimerMode::Once),
+            pop_timer: Timer::from_seconds(0.1, TimerMode::Repeating),
+        }
+    }
+}
+
+pub struct ChatMessage {
+    pub username: String,
+    pub text: String,
+    pub timer: Timer,
+    pub donation: Option<i32>,
+}
+
+#[derive(Resource, Default)]
+pub struct StreamingState {
+    pub is_streaming: bool,
+    pub subscribers: i32,
+    pub viewers: i32,            // True count, updated on Turn
+    pub viewers_displayed: f32,  // For UI animation
+    pub viewers_fractional: f32, // For precise turn-based growth
+    pub subscribers_fractional: f32,
+}
+
+pub fn update_streaming_stats(time: Res<Time>, mut streaming_state: ResMut<StreamingState>) {
+    if !streaming_state.is_streaming {
+        streaming_state.viewers = 0;
+        streaming_state.viewers_displayed = 0.0;
+        return;
+    }
+
+    // Animate viewers_displayed towards viewers
+    let target = streaming_state.viewers as f32;
+    let diff = target - streaming_state.viewers_displayed;
+
+    if diff.abs() > 0.1 {
+        // Speed is proportional to the diff to ensure it roughly takes 1s
+        // but has a minimum speed so it doesn't crawl at the end
+        let speed = (diff.abs() / 1.0).max(10.0);
+        let move_amt = speed * time.delta_secs();
+
+        if diff > 0.0 {
+            streaming_state.viewers_displayed =
+                (streaming_state.viewers_displayed + move_amt).min(target);
+        } else {
+            streaming_state.viewers_displayed =
+                (streaming_state.viewers_displayed - move_amt).max(target);
+        }
+    } else {
+        streaming_state.viewers_displayed = target;
+    }
+}
+
+pub fn update_streaming_turn(
+    mut player: Single<&mut Player>,
+    mut streaming_state: ResMut<StreamingState>,
+    turn_counter: Res<TurnCounter>,
+) {
+    if streaming_state.is_streaming {
+        // 1 brainrot every 30 turns
+        if turn_counter.0.is_multiple_of(30) {
+            player.brainrot += 1;
+        }
+
+        // Viewers growth per turn: a * e^(b * rizz)
+        // b = ln(50)/40 = 0.0978 (50x increase from 10 to 50 rizz)
+        // a = 100 / e^(100*b) = 0.00566 (100/turn at 100 rizz)
+        let rizz = player.rizz as f32;
+        let mut gain = 0.00566 * (0.0978 * rizz).exp();
+
+        // Taper after 2000 viewers
+        if streaming_state.viewers > 2000 {
+            let overflow = (streaming_state.viewers - 2000) as f32;
+            // 1 / n^2
+            let factor = 2000.0 / (2000.0 + overflow);
+            gain *= factor * factor;
+        }
+
+        streaming_state.viewers_fractional += gain;
+        if streaming_state.viewers_fractional >= 1.0 {
+            let i_gain = streaming_state.viewers_fractional.floor();
+            streaming_state.viewers += i_gain as i32;
+            streaming_state.viewers_fractional -= i_gain;
+        }
+
+        // Sub growth: sublinear to viewers
+        // 10% of sqrt(viewers) per turn
+        let sub_growth = (streaming_state.viewers as f32).sqrt() * 0.1;
+        streaming_state.subscribers_fractional += sub_growth;
+        if streaming_state.subscribers_fractional >= 1.0 {
+            let gain = streaming_state.subscribers_fractional.floor();
+            streaming_state.subscribers += gain as i32;
+            streaming_state.subscribers_fractional -= gain;
+        }
+    }
+
+    // Sub decay: half-life 50 turns
+    // new = old * 0.5 ^ (1 / 50)
+    // 0.5 ^ (1 / 50) approx 0.98623.
+    let decay_factor = 0.98623;
+    let old_subs = streaming_state.subscribers as f32 + streaming_state.subscribers_fractional;
+    let new_subs = old_subs * decay_factor;
+
+    streaming_state.subscribers = new_subs.floor() as i32;
+    streaming_state.subscribers_fractional = new_subs.fract();
+}
+
+pub fn update_money_timer(time: Res<Time>, mut player: Single<&mut Player>) {
+    if player.money_gain_timer > 0.0 {
+        player.money_gain_timer -= time.delta_secs();
+    }
+}
+
+pub fn handle_payout(
+    player: &mut Player,
+    streaming_state: &StreamingState,
+    chat: &mut ChatHistory,
+) {
+    if streaming_state.is_streaming && streaming_state.subscribers > 0 {
         let mut rng = rand::rng();
 
-        // $1 per 100 subscribers (min $1 if streaming)
-        let base_payout = (phone_state.subscribers / 100).max(1);
+        // $1 per 100 subscribers
+        let base_payout = (streaming_state.subscribers / 100).max(1);
 
         // Add randomness: 50% to 150% of base
         let random_factor = rng.random_range(0.5..1.5);
@@ -219,11 +262,11 @@ pub fn handle_payout(player: &mut Player, phone_state: &PhoneState, chat: &mut C
 pub fn update_chat(
     time: Res<Time>,
     mut chat: ResMut<ChatHistory>,
-    phone_state: Res<PhoneState>,
+    streaming_state: Res<StreamingState>,
     mut damage_events: MessageReader<DamageAnimationMessage>,
     player_query: Single<Entity, With<Player>>,
 ) {
-    if !phone_state.is_streaming {
+    if !streaming_state.is_streaming {
         chat.messages.clear();
         chat.queue.clear();
         return;
@@ -256,7 +299,7 @@ pub fn update_chat(
             ));
         chat.spawn_timer.reset();
 
-        let spawn_chance = (phone_state.viewers as f32 * 0.01).min(0.8);
+        let spawn_chance = (streaming_state.viewers as f32 * 0.01).min(0.8);
         if rng.random_bool(spawn_chance as f64 + 0.1) {
             queue_message(&mut chat, &mut rng, GENERIC_MESSAGES);
         }
@@ -298,13 +341,42 @@ fn queue_message(chat: &mut ChatHistory, rng: &mut impl Rng, pool: &[&str]) {
     });
 }
 
+pub fn draw_streaming_indicator(mut contexts: EguiContexts, streaming_state: Res<StreamingState>) {
+    if !streaming_state.is_streaming {
+        return;
+    }
+
+    let Ok(ctx) = contexts.ctx_mut() else {
+        return;
+    };
+
+    egui::Area::new(egui::Id::new("streaming_indicator"))
+        .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 20.0))
+        .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                let (rect, _) =
+                    ui.allocate_exact_size(egui::vec2(20.0, 20.0), egui::Sense::hover());
+                ui.painter().circle_filled(rect.center(), 8.0, Color32::RED);
+                ui.label(
+                    RichText::new("Streaming...")
+                        .color(Color32::RED)
+                        .font(egui::FontId::new(
+                            20.0,
+                            egui::FontFamily::Name("press_start".into()),
+                        ))
+                        .strong(),
+                );
+            });
+        });
+}
+
 pub fn draw_chat(
     mut contexts: EguiContexts,
     chat: Res<ChatHistory>,
-    phone_state: Res<PhoneState>,
+    streaming_state: Res<StreamingState>,
     player: Single<&Player>,
 ) {
-    if !phone_state.is_streaming || chat.messages.is_empty() {
+    if !streaming_state.is_streaming || chat.messages.is_empty() {
         return;
     }
 

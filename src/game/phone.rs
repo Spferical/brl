@@ -22,44 +22,11 @@ pub struct PhoneState {
     pub click_progress: [f32; 3],
     pub app_open_progress: f32,
     pub last_opened_app: Option<usize>,
-    pub is_streaming: bool,
     pub app_launch_progress: f32,
-    pub subscribers: i32,
-    pub viewers: i32,            // True count, updated on Turn
-    pub viewers_displayed: f32,  // For UI animation
-    pub viewers_fractional: f32, // For precise turn-based growth
-    pub subscribers_fractional: f32,
 }
 
 pub fn is_phone_closed(phone_state: Res<PhoneState>) -> bool {
     !phone_state.is_open && phone_state.slide_progress == 0.0
-}
-
-pub fn update_streaming_stats(time: Res<Time>, mut phone_state: ResMut<PhoneState>) {
-    if !phone_state.is_streaming {
-        phone_state.viewers = 0;
-        phone_state.viewers_displayed = 0.0;
-        return;
-    }
-
-    // Animate viewers_displayed towards viewers
-    let target = phone_state.viewers as f32;
-    let diff = target - phone_state.viewers_displayed;
-
-    if diff.abs() > 0.1 {
-        // Speed is proportional to the diff to ensure it roughly takes 1s
-        // but has a minimum speed so it doesn't crawl at the end
-        let speed = (diff.abs() / 1.0).max(10.0);
-        let move_amt = speed * time.delta_secs();
-
-        if diff > 0.0 {
-            phone_state.viewers_displayed = (phone_state.viewers_displayed + move_amt).min(target);
-        } else {
-            phone_state.viewers_displayed = (phone_state.viewers_displayed - move_amt).max(target);
-        }
-    } else {
-        phone_state.viewers_displayed = target;
-    }
 }
 
 pub fn toggle_phone(
@@ -148,6 +115,7 @@ pub fn draw_phone(
     mut contexts: EguiContexts,
     player: Single<&Player>,
     mut phone_state: ResMut<PhoneState>,
+    mut streaming_state: ResMut<crate::game::chat::StreamingState>,
     assets: Res<WorldAssets>,
     current_screen: Res<State<PhoneScreen>>,
     mut next_screen: ResMut<NextState<PhoneScreen>>,
@@ -162,27 +130,6 @@ pub fn draw_phone(
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };
-
-    if phone_state.is_streaming {
-        egui::Area::new(egui::Id::new("streaming_indicator"))
-            .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 20.0))
-            .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    let (rect, _) =
-                        ui.allocate_exact_size(egui::vec2(20.0, 20.0), egui::Sense::hover());
-                    ui.painter().circle_filled(rect.center(), 8.0, Color32::RED);
-                    ui.label(
-                        RichText::new("Streaming...")
-                            .color(Color32::RED)
-                            .font(egui::FontId::new(
-                                20.0,
-                                egui::FontFamily::Name("press_start".into()),
-                            ))
-                            .strong(),
-                    );
-                });
-            });
-    }
 
     if phone_state.slide_progress <= 0.0 {
         return;
@@ -386,6 +333,7 @@ pub fn draw_phone(
                         app.draw_content(
                             &mut child_ui,
                             &mut phone_state,
+                            &mut streaming_state,
                             &player,
                             scale_x,
                             alpha_byte,
