@@ -148,7 +148,11 @@ pub(crate) fn handle_input(
             if let Some(direction) = check_direction_keys(&keyboard_input) {
                 intent = Some(PlayerIntent::Move(MapPos(player.1.0 + direction)));
             } else if let Some(pos) = tile_clicked {
-                intent = Some(PlayerIntent::Move(pos));
+                if pos == *player.1 {
+                    intent = Some(PlayerIntent::Wait);
+                } else {
+                    intent = Some(PlayerIntent::Move(pos));
+                }
             } else if keyboard_input.just_pressed(Key::Character(".".into())) {
                 intent = Some(PlayerIntent::Wait);
             } else if keyboard_input.any_just_pressed([

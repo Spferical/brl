@@ -459,18 +459,13 @@ fn handle_player_move(
     match intent {
         PlayerIntent::Move(target) => {
             let old_pos = *pos;
-            let new_pos = if old_pos.adjacent().contains(target) {
-                Some(*target)
-            } else {
-                // path towards target
-                rogue_algebra::path::bfs_paths(&[old_pos], 50, |p| {
-                    p.adjacent()
-                        .into_iter()
-                        .filter(|p| !walk_blocked_map.contains(&p.0))
-                })
-                .find(|path| path.last().unwrap() == target)
-                .and_then(|path| path.into_iter().nth(1))
-            };
+            let new_pos = rogue_algebra::path::bfs_paths(&[old_pos], 50, |p| {
+                p.adjacent()
+                    .into_iter()
+                    .filter(|p| !walk_blocked_map.contains(&p.0))
+            })
+            .find(|path| path.last().unwrap() == target)
+            .and_then(|path| path.into_iter().nth(1));
             let Some(new_pos) = new_pos else {
                 moved.0 = false;
                 return;
