@@ -110,9 +110,11 @@ impl MobileApp for UndergroundTV {
             if streaming_state.is_streaming {
                 streaming_state.viewers = streaming_state.subscribers;
                 streaming_state.viewers_displayed = streaming_state.subscribers as f32;
+                streaming_state.max_viewers = streaming_state.viewers;
             } else {
                 streaming_state.viewers = 0;
                 streaming_state.viewers_displayed = 0.0;
+                streaming_state.max_viewers = 0;
             }
         }
     }

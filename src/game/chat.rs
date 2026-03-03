@@ -119,6 +119,7 @@ pub struct ChatMessage {
 pub struct StreamingState {
     pub is_streaming: bool,
     pub subscribers: i32,
+    pub max_viewers: i32,        // Max viewers in the current session
     pub viewers: i32,            // True count, updated on Turn
     pub viewers_displayed: f32,  // For UI animation
     pub viewers_fractional: f32, // For precise turn-based growth
@@ -129,6 +130,7 @@ pub fn update_streaming_stats(time: Res<Time>, mut streaming_state: ResMut<Strea
     if !streaming_state.is_streaming {
         streaming_state.viewers = 0;
         streaming_state.viewers_displayed = 0.0;
+        streaming_state.max_viewers = 0;
         return;
     }
 
@@ -186,26 +188,24 @@ pub fn update_streaming_turn(
             streaming_state.viewers_fractional -= i_gain;
         }
 
-        // Sub growth: sublinear to viewers
-        // 10% of sqrt(viewers) per turn
-        let sub_growth = (streaming_state.viewers as f32).sqrt() * 0.1;
-        streaming_state.subscribers_fractional += sub_growth;
-        if streaming_state.subscribers_fractional >= 1.0 {
-            let gain = streaming_state.subscribers_fractional.floor();
-            streaming_state.subscribers += gain as i32;
-            streaming_state.subscribers_fractional -= gain;
+        // 5% of max viewers this session
+        streaming_state.max_viewers = streaming_state.max_viewers.max(streaming_state.viewers);
+        let target_subs = (streaming_state.max_viewers as f32 * 0.05).floor() as i32;
+        if target_subs > streaming_state.subscribers {
+            streaming_state.subscribers = target_subs;
+            streaming_state.subscribers_fractional = 0.0;
         }
+    } else {
+        // Sub decay only when not streaming: half-life 50 turns
+        // new = old * 0.5 ^ (1 / 50)
+        // 0.5 ^ (1 / 50) approx 0.98623.
+        let decay_factor = 0.98623;
+        let old_subs = streaming_state.subscribers as f32 + streaming_state.subscribers_fractional;
+        let new_subs = old_subs * decay_factor;
+
+        streaming_state.subscribers = new_subs.floor() as i32;
+        streaming_state.subscribers_fractional = new_subs.fract();
     }
-
-    // Sub decay: half-life 50 turns
-    // new = old * 0.5 ^ (1 / 50)
-    // 0.5 ^ (1 / 50) approx 0.98623.
-    let decay_factor = 0.98623;
-    let old_subs = streaming_state.subscribers as f32 + streaming_state.subscribers_fractional;
-    let new_subs = old_subs * decay_factor;
-
-    streaming_state.subscribers = new_subs.floor() as i32;
-    streaming_state.subscribers_fractional = new_subs.fract();
 }
 
 pub fn update_money_timer(time: Res<Time>, mut player: Single<&mut Player>) {
@@ -219,15 +219,15 @@ pub fn handle_payout(
     streaming_state: &StreamingState,
     chat: &mut ChatHistory,
 ) {
-    if streaming_state.is_streaming && streaming_state.subscribers > 0 {
+    if streaming_state.is_streaming && streaming_state.viewers > 0 {
         let mut rng = rand::rng();
 
-        // $1 per 100 subscribers
-        let base_payout = (streaming_state.subscribers / 100).max(1);
+        // $1 per 100 viewers
+        let base_payout = (streaming_state.viewers as f32 / 100.0).max(1.0);
 
-        // Add randomness: 50% to 150% of base
-        let random_factor = rng.random_range(0.5..1.5);
-        let mut payout = (base_payout as f32 * random_factor).round() as i32;
+        // Add randomness: 20% to 250% of base
+        let random_factor = rng.random_range(0.2..2.5);
+        let mut payout = (base_payout * random_factor).round() as i32;
 
         // Whale chance: 1% chance for a massive 10x - 50x payout
         let mut is_whale = false;
@@ -266,7 +266,7 @@ pub fn update_chat(
     mut damage_events: MessageReader<DamageAnimationMessage>,
     player_query: Single<Entity, With<Player>>,
 ) {
-    if !streaming_state.is_streaming {
+    if !streaming_state.is_streaming || streaming_state.viewers == 0 {
         chat.messages.clear();
         chat.queue.clear();
         return;
@@ -295,12 +295,13 @@ pub fn update_chat(
     if chat.spawn_timer.is_finished() {
         chat.spawn_timer
             .set_duration(std::time::Duration::from_secs_f32(
-                rng.random_range(0.5..2.0),
+                rng.random_range(0.2..1.5),
             ));
         chat.spawn_timer.reset();
 
-        let spawn_chance = (streaming_state.viewers as f32 * 0.01).min(0.8);
-        if rng.random_bool(spawn_chance as f64 + 0.1) {
+        // 1% chance per viewer, capped at 95%
+        let spawn_chance = (streaming_state.viewers as f32 * 0.01).min(0.95);
+        if rng.random_bool(spawn_chance as f64) {
             queue_message(&mut chat, &mut rng, GENERIC_MESSAGES);
         }
     }
@@ -376,7 +377,7 @@ pub fn draw_chat(
     streaming_state: Res<StreamingState>,
     player: Single<&Player>,
 ) {
-    if !streaming_state.is_streaming || chat.messages.is_empty() {
+    if !streaming_state.is_streaming || streaming_state.viewers == 0 || chat.messages.is_empty() {
         return;
     }
 
