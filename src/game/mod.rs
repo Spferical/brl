@@ -17,67 +17,6 @@ use rand::{
     seq::{IndexedRandom, SliceRandom as _},
 };
 
-pub fn apply_brainrot_ui(
-    text: impl Into<WidgetText>,
-    brainrot: i32,
-    style: &egui::Style,
-    font_selection: FontSelection,
-    align: Align,
-) -> WidgetText {
-    let text = text.into();
-    let p = ((brainrot as f32 - 60.0) / 30.0).clamp(0.0, 1.0);
-
-    let job = text.into_layout_job(style, font_selection, align);
-    if p <= 0.0 {
-        return WidgetText::LayoutJob(job);
-    }
-
-    let mut new_job = LayoutJob::default();
-    new_job.halign = job.halign;
-    new_job.justify = job.justify;
-    new_job.first_row_min_height = job.first_row_min_height;
-    new_job.wrap = job.wrap.clone();
-
-    for section in &job.sections {
-        let section_text = &job.text[section.byte_range.clone()];
-
-        let mut current_text = String::new();
-        let mut current_format = section.format.clone();
-
-        for (i, c) in section_text.chars().enumerate() {
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            use std::hash::{Hash, Hasher};
-            i.hash(&mut hasher);
-            c.hash(&mut hasher);
-            let hash = hasher.finish();
-            let random_val = (hash % 1000) as f32 / 1000.0;
-
-            let mut target_format = section.format.clone();
-            if random_val < p {
-                target_format.font_id.family = egui::FontFamily::Name("comic_relief".into());
-            }
-
-            // If the format changed and we have accumulated text, append it
-            if target_format.font_id.family != current_format.font_id.family
-                && !current_text.is_empty()
-            {
-                new_job.append(&current_text, 0.0, current_format.clone());
-                current_text.clear();
-            }
-
-            current_format = target_format;
-            current_text.push(c);
-        }
-
-        // Append the remaining text
-        if !current_text.is_empty() {
-            new_job.append(&current_text, 0.0, current_format);
-        }
-    }
-
-    WidgetText::LayoutJob(new_job.into())
-}
-
 use crate::{
     asset_tracking::LoadResource as _,
     game::{
@@ -138,7 +77,7 @@ pub(super) fn plugin(app: &mut App) {
             lighting::on_add_occluder,
             lighting::on_add_player,
             input::handle_input.run_if(is_player_alive.and(phone::is_phone_closed)),
-            targeting::update_valid_targets.run_if(resource_changed::<input::InputMode>),
+            targeting::update_valid_targets,
             targeting::update_valid_target_indicators
                 .run_if(resource_changed::<targeting::ValidTargets>),
             phone::toggle_phone,
@@ -207,6 +146,67 @@ pub(super) fn plugin(app: &mut App) {
         (sidebar, left_sidebar, phone::draw_phone, chat::draw_chat)
             .run_if(in_state(Screen::Gameplay)),
     );
+}
+
+pub fn apply_brainrot_ui(
+    text: impl Into<WidgetText>,
+    brainrot: i32,
+    style: &egui::Style,
+    font_selection: FontSelection,
+    align: Align,
+) -> WidgetText {
+    let text = text.into();
+    let p = ((brainrot as f32 - 60.0) / 30.0).clamp(0.0, 1.0);
+
+    let job = text.into_layout_job(style, font_selection, align);
+    if p <= 0.0 {
+        return WidgetText::LayoutJob(job);
+    }
+
+    let mut new_job = LayoutJob::default();
+    new_job.halign = job.halign;
+    new_job.justify = job.justify;
+    new_job.first_row_min_height = job.first_row_min_height;
+    new_job.wrap = job.wrap.clone();
+
+    for section in &job.sections {
+        let section_text = &job.text[section.byte_range.clone()];
+
+        let mut current_text = String::new();
+        let mut current_format = section.format.clone();
+
+        for (i, c) in section_text.chars().enumerate() {
+            let mut hasher = std::collections::hash_map::DefaultHasher::new();
+            use std::hash::{Hash, Hasher};
+            i.hash(&mut hasher);
+            c.hash(&mut hasher);
+            let hash = hasher.finish();
+            let random_val = (hash % 1000) as f32 / 1000.0;
+
+            let mut target_format = section.format.clone();
+            if random_val < p {
+                target_format.font_id.family = egui::FontFamily::Name("comic_relief".into());
+            }
+
+            // If the format changed and we have accumulated text, append it
+            if target_format.font_id.family != current_format.font_id.family
+                && !current_text.is_empty()
+            {
+                new_job.append(&current_text, 0.0, current_format.clone());
+                current_text.clear();
+            }
+
+            current_format = target_format;
+            current_text.push(c);
+        }
+
+        // Append the remaining text
+        if !current_text.is_empty() {
+            new_job.append(&current_text, 0.0, current_format);
+        }
+    }
+
+    WidgetText::LayoutJob(new_job.into())
 }
 
 fn apply_brainrot_to_world_text(
@@ -1001,9 +1001,14 @@ fn sidebar(
 
                         for (i, ability) in player_abilities.abilities.iter().enumerate() {
                             let ability_key = (i + 1) % 10;
+                            let label = if matches!(ability, Ability::Sprint) {
+                                format!("{ability_key}/Shift: {ability}")
+                            } else {
+                                format!("{ability_key}: {ability}")
+                            };
                             if ui
                                 .button(apply_brainrot_ui(
-                                    format!("{ability_key}: {ability}"),
+                                    label,
                                     player.brainrot,
                                     ui.style(),
                                     FontSelection::Default,
@@ -1081,6 +1086,15 @@ fn sidebar(
                             FontSelection::Default,
                             Align::LEFT,
                         ));
+                        if ability == Ability::Sprint {
+                            ui.label(apply_brainrot_ui(
+                                "exit: shift",
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                        }
                     }
                 };
             });

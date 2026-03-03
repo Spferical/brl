@@ -19,9 +19,23 @@ pub(crate) fn update_valid_targets(
     player: Single<(Entity, &MapPos), With<Player>>,
     walk_blocked_map: Res<WalkBlockedMap>,
     pos_to_creature: Res<PosToCreature>,
+    keyboard_input: Res<ButtonInput<bevy::input::keyboard::Key>>,
+    abilities: Res<crate::game::PlayerAbilities>,
 ) {
-    targets.targets.clear();
-    if let InputMode::Targeting(ref ability, ..) = *mode {
+    let ability = if let InputMode::Targeting(ref ability, ..) = *mode {
+        Some(*ability)
+    } else if keyboard_input.pressed(bevy::input::keyboard::Key::Shift) {
+        abilities
+            .abilities
+            .iter()
+            .find(|a| matches!(a, crate::game::Ability::Sprint))
+            .copied()
+    } else {
+        None
+    };
+
+    let mut new_targets = HashSet::default();
+    if let Some(ability) = ability {
         let starts = &[*player.1];
         match ability.target() {
             super::AbilityTarget::ReachableTile { maxdist } => {
@@ -30,7 +44,7 @@ pub(crate) fn update_valid_targets(
                         !walk_blocked_map.0.contains(&p.0) && !pos_to_creature.0.contains_key(&p.0)
                     })
                 };
-                targets.targets.extend(rogue_algebra::path::bfs(
+                new_targets.extend(rogue_algebra::path::bfs(
                     starts,
                     maxdist as usize,
                     reachable,
@@ -42,7 +56,7 @@ pub(crate) fn update_valid_targets(
                         .into_iter()
                         .filter(|p| !walk_blocked_map.0.contains(&p.0))
                 };
-                targets.targets.extend(
+                new_targets.extend(
                     rogue_algebra::path::bfs(starts, maxdist as usize, reachable)
                         .filter(|p| pos_to_creature.0.contains_key(&p.0))
                         .filter(|p| p != player.1),
@@ -50,6 +64,10 @@ pub(crate) fn update_valid_targets(
             }
             super::AbilityTarget::NoTarget => {}
         }
+    }
+
+    if targets.targets != new_targets {
+        targets.targets = new_targets;
     }
 }
 

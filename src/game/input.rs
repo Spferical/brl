@@ -22,8 +22,8 @@ static DIRECTION_KEYS: LazyLock<HashMap<Key, IVec2>> = LazyLock::new(|| {
     m.insert(Key::Character("b".into()), IVec2::new(-1, -1));
     m.insert(Key::Character("n".into()), IVec2::new(1, -1));
     m.insert(Key::ArrowUp, IVec2::new(0, 1));
-    m.insert(Key::ArrowDown, IVec2::new(-1, 0));
-    m.insert(Key::ArrowLeft, IVec2::new(0, -1));
+    m.insert(Key::ArrowDown, IVec2::new(0, -1));
+    m.insert(Key::ArrowLeft, IVec2::new(-1, 0));
     m.insert(Key::ArrowRight, IVec2::new(1, 0));
     m
 });
@@ -116,6 +116,18 @@ pub(crate) fn handle_input(
         *mode = InputMode::Targeting(*ability, player.1.0);
         examine_pos.pos = Some(*player.1);
     }
+
+    if keyboard_input.pressed(Key::Shift) && matches!(*mode, InputMode::Normal) {
+        if let Some(sprint) = abilities
+            .abilities
+            .iter()
+            .find(|a| matches!(a, Ability::Sprint))
+        {
+            *mode = InputMode::Targeting(*sprint, player.1.0);
+            examine_pos.pos = Some(*player.1);
+        }
+    }
+
     match *mode {
         InputMode::Normal => {
             let intent = if let Some(direction) = check_direction_keys(&keyboard_input) {
@@ -153,7 +165,10 @@ pub(crate) fn handle_input(
             }
         }
         InputMode::Targeting(ability, pos) => {
-            if let Some(direction) = check_direction_keys(&keyboard_input) {
+            if ability == Ability::Sprint && keyboard_input.just_released(Key::Shift) {
+                *mode = InputMode::Normal;
+                examine_pos.pos = None;
+            } else if let Some(direction) = check_direction_keys(&keyboard_input) {
                 *mode = InputMode::Targeting(ability, pos + direction);
                 examine_pos.pos = Some(MapPos(pos + direction));
             } else if keyboard_input.any_just_pressed([Key::Escape, Key::Character("x".into())]) {
