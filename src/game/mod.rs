@@ -40,6 +40,7 @@ mod input;
 pub mod lighting;
 mod map;
 mod mapgen;
+mod mobile_apps;
 mod phone;
 mod targeting;
 

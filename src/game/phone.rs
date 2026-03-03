@@ -5,6 +5,7 @@ use bevy_egui::{
 };
 
 use crate::game::assets::WorldAssets;
+use crate::game::mobile_apps;
 use crate::game::{Player, apply_brainrot_ui};
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
@@ -152,13 +153,11 @@ pub fn draw_phone(
     mut next_screen: ResMut<NextState<PhoneScreen>>,
 ) {
     let texture_id = contexts.add_image(EguiTextureHandle::Weak(assets.phone.id()));
-    let crawlr_id = contexts.add_image(EguiTextureHandle::Weak(assets.phone_app_icons.crawlr.id()));
-    let dungeon_dash_id = contexts.add_image(EguiTextureHandle::Weak(
-        assets.phone_app_icons.dungeon_dash.id(),
-    ));
-    let underground_tv_id = contexts.add_image(EguiTextureHandle::Weak(
-        assets.phone_app_icons.underground_tv.id(),
-    ));
+    let apps = mobile_apps::get_apps();
+    let app_icons: Vec<egui::TextureId> = apps
+        .iter()
+        .map(|app| contexts.add_image(EguiTextureHandle::Weak(app.icon(&assets).id())))
+        .collect();
 
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
@@ -259,17 +258,11 @@ pub fn draw_phone(
             let icon_size = 150.0 * scale_x;
             let spacing = (screen_width - 3.0 * icon_size) / 4.0;
 
-            let icons = [
-                (crawlr_id, "Crawlr", "Crawlr"),
-                (dungeon_dash_id, "Dungeon Dash", "DungeonDash"),
-                (underground_tv_id, "Underground TV", "UndergroundTV"),
-            ];
-
             // Draw Home Screen (Apps)
             if phone_state.app_open_progress < 1.0 {
                 let home_alpha = (255.0 * (1.0 - phone_state.app_open_progress)) as u8;
 
-                for (i, (icon_id, display_name, _)) in icons.iter().enumerate() {
+                for (i, app) in apps.iter().enumerate() {
                     let row = i / 3;
                     let col = i % 3;
 
@@ -324,7 +317,8 @@ pub fn draw_phone(
                         ),
                     );
 
-                    let mut icon_mesh = egui::Mesh::with_texture(*icon_id);
+                    let icon_id = app_icons[i];
+                    let mut icon_mesh = egui::Mesh::with_texture(icon_id);
                     icon_mesh.add_rect_with_uv(
                         icon_rect,
                         egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
@@ -332,7 +326,7 @@ pub fn draw_phone(
                     );
                     ui.painter().add(icon_mesh);
 
-                    let wrapped_name = textwrap::fill(display_name, 15);
+                    let wrapped_name = textwrap::fill(app.name(), 15);
                     let text_job = apply_brainrot_ui(
                         RichText::new(wrapped_name).size(25.0 * scale_x),
                         player.brainrot,
@@ -376,7 +370,9 @@ pub fn draw_phone(
                 );
 
                 if let Some(i) = phone_state.last_opened_app {
-                    if i == 2 && phone_state.app_launch_progress > 0.5 {
+                    let app = &apps[i];
+
+                    if phone_state.app_launch_progress > 0.5 {
                         let content_alpha = (phone_state.app_launch_progress - 0.5) / 0.5;
                         let alpha_byte = (255.0 * content_alpha) as u8;
 
@@ -387,54 +383,29 @@ pub fn draw_phone(
                         );
                         child_ui.add_space(phone_screen_rect.height() * 0.4);
 
-                        let button_text = if phone_state.is_streaming {
-                            "Stop Streaming"
-                        } else {
-                            "Start Streaming"
-                        };
-
-                        let button_res = child_ui.add(
-                            egui::Button::new(
-                                RichText::new(button_text)
-                                    .size(64.0 * scale_x)
-                                    .color(Color32::BLACK),
-                            )
-                            .stroke(egui::Stroke::new(2.0, Color32::BLACK))
-                            .fill(Color32::from_rgba_unmultiplied(200, 200, 200, alpha_byte)),
+                        app.draw_content(
+                            &mut child_ui,
+                            &mut phone_state,
+                            &player,
+                            scale_x,
+                            alpha_byte,
                         );
-                        if button_res.clicked() {
-                            phone_state.is_streaming = !phone_state.is_streaming;
-                            if phone_state.is_streaming {
-                                phone_state.viewers = phone_state.subscribers;
-                                phone_state.viewers_displayed = phone_state.subscribers as f32;
-                            } else {
-                                phone_state.viewers = 0;
-                                phone_state.viewers_displayed = 0.0;
-                            }
-                        }
-
-                        // If still fading in, also show splash icons fading out?
-                        // For now let's just show icons if content_alpha < 1.0 (but that would look like sudden swap then fade)
-                        // Actually, let's keep splash icons until delay is over.
                     }
 
                     // Draw splash screen (icon and name) if not fully faded in.
-                    // For app 2, icons only show during splash (open_progress < 1) or launch delay (launch_progress < 0.5)
-                    let should_draw_splash_icons = if i == 2 {
-                        phone_state.app_launch_progress < 0.75 // overlapping fade out? No, just keep simple for now.
-                    } else {
-                        phone_state.app_launch_progress < 0.5
-                    };
+                    let should_draw_splash_icons = phone_state.app_launch_progress < 0.75;
 
                     if should_draw_splash_icons {
-                        let splash_alpha = if i == 2 && phone_state.app_launch_progress > 0.5 {
-                            // Fade out splash icons for Underground TV
+                        let splash_alpha = if phone_state.app_launch_progress > 0.5 {
+                            // Fade out splash icons
                             (255.0 * (1.0 - (phone_state.app_launch_progress - 0.5) / 0.25)) as u8
                         } else {
                             app_alpha
                         };
 
-                        let (icon_id, _, splash_name) = icons[i];
+                        let icon_id = app_icons[i];
+                        let splash_name = app.splash_name();
+
                         let large_icon_size = icon_size * 2.0;
                         let large_icon_rect = egui::Rect::from_center_size(
                             phone_screen_rect.center(),
