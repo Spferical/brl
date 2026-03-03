@@ -86,8 +86,10 @@ pub(crate) enum InputMode {
 }
 
 pub(crate) fn handle_input(
+    window: Single<&Window>,
     mut msg_ability_clicked: MessageReader<AbilityClicked>,
     mut msg_cursor: MessageReader<CursorMoved>,
+    mouse_button_input: Res<ButtonInput<MouseButton>>,
     keyboard_input: Res<ButtonInput<Key>>,
     mut commands: Commands,
     player: Single<(Entity, &MapPos), With<Player>>,
@@ -98,6 +100,17 @@ pub(crate) fn handle_input(
     camera: Single<(&Camera, &GlobalTransform)>,
 ) {
     let (camera, camera_transform) = camera.into_inner();
+    let mouse_pos = window.cursor_position();
+    let tile_clicked = if let Some(mouse_pos) = mouse_pos
+        && mouse_button_input.just_pressed(MouseButton::Left)
+    {
+        camera
+            .viewport_to_world(camera_transform, mouse_pos)
+            .ok()
+            .map(|ray| MapPos::from_vec2(ray.origin.truncate()))
+    } else {
+        None
+    };
     let mouse_move_pos = msg_cursor
         .read()
         .last()
@@ -168,6 +181,15 @@ pub(crate) fn handle_input(
             if ability == Ability::Sprint && keyboard_input.just_released(Key::Shift) {
                 *mode = InputMode::Normal;
                 examine_pos.pos = None;
+            } else if let Some(clicked) = tile_clicked
+                && valid_targets.targets.contains(&clicked)
+            {
+                *mode = InputMode::Normal;
+                examine_pos.pos = None;
+                commands
+                    .entity(player.0)
+                    .insert(PlayerIntent::UseAbility(ability, clicked));
+                commands.run_schedule(Turn);
             } else if let Some(direction) = check_direction_keys(&keyboard_input) {
                 *mode = InputMode::Targeting(ability, pos + direction);
                 examine_pos.pos = Some(MapPos(pos + direction));
