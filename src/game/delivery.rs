@@ -99,6 +99,8 @@ pub(crate) fn process_deliveries(
     players: Query<Entity, With<Player>>,
     mut damage: ResMut<PendingDamage>,
     mut damage_animation: MessageWriter<DamageAnimationMessage>,
+    mut chat: ResMut<crate::game::chat::ChatHistory>,
+    streaming_state: Res<crate::game::chat::StreamingState>,
 ) {
     let player_entity = players.iter().next();
     let world_entity = world.into_inner();
@@ -138,6 +140,9 @@ pub(crate) fn process_deliveries(
                 .id();
             commands.entity(world_entity).add_child(drop_id);
             damage_animation.write(DamageAnimationMessage { entity: drop_id });
+
+            // Chat reaction
+            crate::game::chat::queue_food_delivery_message(&mut chat, &streaming_state);
 
             to_remove.push(i);
         }

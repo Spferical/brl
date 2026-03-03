@@ -65,6 +65,7 @@ const DAMAGE_MESSAGES: &[&str] = &[
     "GET GUD",
     "gg",
     "ggwp",
+    "get wrecked lol",
 ];
 
 const DONO_MESSAGES: &[&str] = &[
@@ -87,6 +88,20 @@ const WHALE_MESSAGES: &[&str] = &[
     "HAVE MY MONEY",
     "ABSOLUTE UNIT",
     "W STREAMER",
+];
+
+const FOOD_MESSAGES: &[&str] = &[
+    "FOOD'S HERE",
+    "FOOOOOOD",
+    "CAN I HAVE SOME??",
+    "W DELIVERY",
+    "I'm hungry now",
+    "eat it eat it",
+    "is that a pizza?",
+    "W DINNER",
+    "private taxi for your burrito lmao",
+    "mukbang stream when?",
+    "tastyyyy?",
 ];
 
 #[derive(Resource)]
@@ -260,6 +275,13 @@ pub fn handle_payout(
             timer: Timer::from_seconds(MESSAGE_LIFETIME, TimerMode::Once),
             donation: Some(payout),
         });
+    }
+}
+
+pub fn queue_food_delivery_message(chat: &mut ChatHistory, streaming_state: &StreamingState) {
+    if streaming_state.is_streaming && streaming_state.viewers > 0 {
+        let mut rng = rand::rng();
+        queue_message(chat, &mut rng, FOOD_MESSAGES);
     }
 }
 
