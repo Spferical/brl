@@ -44,7 +44,8 @@ pub(crate) fn update_valid_targets(
                 };
                 targets.targets.extend(
                     rogue_algebra::path::bfs(starts, maxdist as usize, reachable)
-                        .filter(|p| pos_to_creature.0.contains_key(&p.0)),
+                        .filter(|p| pos_to_creature.0.contains_key(&p.0))
+                        .filter(|p| p != player.1),
                 );
             }
             super::AbilityTarget::NoTarget => {}

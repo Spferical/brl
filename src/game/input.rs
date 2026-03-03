@@ -1,15 +1,9 @@
 use std::sync::LazyLock;
 
-use bevy::{
-    input::keyboard::Key,
-    platform::collections::HashMap,
-    prelude::*,
-};
+use bevy::{input::keyboard::Key, platform::collections::HashMap, prelude::*};
 
 use crate::game::{
-    Ability, Player, PlayerAbilities, Turn,
-    examine::ExaminePos,
-    map::MapPos,
+    Ability, Player, PlayerAbilities, Turn, examine::ExaminePos, map::MapPos,
     targeting::ValidTargets,
 };
 
@@ -77,6 +71,7 @@ pub enum PlayerIntent {
     Move(IVec2),
     Wait,
     UseStairs,
+    UseAbility(Ability, MapPos),
 }
 
 #[derive(Resource, Default)]
@@ -145,9 +140,12 @@ pub(crate) fn handle_input(
             } else if keyboard_input.any_just_pressed([Key::Space, Key::Enter])
                 && valid_targets.targets.contains(&MapPos(pos))
             {
-                // TODO
                 *mode = InputMode::Normal;
                 examine_pos.pos = None;
+                commands
+                    .entity(player.0)
+                    .insert(PlayerIntent::UseAbility(ability, MapPos(pos)));
+                commands.run_schedule(Turn);
             }
         }
     }

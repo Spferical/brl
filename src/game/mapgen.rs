@@ -316,7 +316,7 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             hunger: 0,
             money: 0,
             rizz: 10,
-            strength: 10,
+            strength: 20,
             boredom: 30,
             signal: 5,
             money_gain_timer: 0.0,

@@ -277,7 +277,7 @@ pub struct Player {
     pub last_gain_amount: i32,
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Ability {
     Sprint,
     ShoulderCheck,
@@ -425,7 +425,8 @@ fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut
 fn handle_player_move(
     mut commands: Commands,
     player: Single<(Entity, &mut MapPos, &PlayerIntent, &Player)>,
-    stairs: Query<(&MapPos, &Stairs), Without<Player>>,
+    mut mobs: Query<&mut MapPos, (With<Creature>, Without<Player>)>,
+    stairs: Query<(&MapPos, &Stairs), (Without<Player>, Without<Creature>)>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     pos_to_creature: Res<PosToCreature>,
     turn_counter: Res<TurnCounter>,
@@ -499,6 +500,66 @@ fn handle_player_move(
                 return;
             }
         }
+        PlayerIntent::UseAbility(ability, map_pos) => match ability {
+            Ability::Sprint => {
+                let old_pos = *pos;
+                *pos = *map_pos;
+                moved.0 = true;
+                commands.entity(player_entity).insert(MoveAnimation {
+                    from: old_pos.to_vec3(PLAYER_Z),
+                    to: pos.to_vec3(PLAYER_Z),
+                    timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
+
+                    ease: EaseFunction::SineInOut,
+                    rotation: None,
+                    sway,
+                });
+            }
+            Ability::ShoulderCheck => {
+                // swap positions and damage
+                let old_pos = *pos;
+                let new_pos = map_pos.0;
+                if let Some(mob_entity) = pos_to_creature.0.get(&new_pos) {
+                    damage.0.push(DamageInstance {
+                        entity: *mob_entity,
+                        hp: 2,
+                    });
+                    pos.0 = new_pos;
+                    if let Ok(mut mob_pos) = mobs.get_mut(*mob_entity) {
+                        *mob_pos = old_pos;
+                    }
+                    commands.entity(player_entity).insert(MoveAnimation {
+                        from: old_pos.to_vec3(PLAYER_Z),
+                        to: pos.to_vec3(PLAYER_Z),
+                        timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
+
+                        ease: EaseFunction::SineInOut,
+                        rotation: None,
+                        sway,
+                    });
+                    commands.entity(*mob_entity).insert(MoveAnimation {
+                        from: pos.to_vec3(PLAYER_Z),
+                        to: old_pos.to_vec3(PLAYER_Z),
+                        timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
+
+                        ease: EaseFunction::SineInOut,
+                        rotation: None,
+                        sway,
+                    });
+                } else {
+                    pos.0 = new_pos;
+                    commands.entity(player_entity).insert(MoveAnimation {
+                        from: old_pos.to_vec3(PLAYER_Z),
+                        to: pos.to_vec3(PLAYER_Z),
+                        timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
+
+                        ease: EaseFunction::SineInOut,
+                        rotation: None,
+                        sway,
+                    });
+                }
+            }
+        },
     }
     moved.0 = true;
 }
