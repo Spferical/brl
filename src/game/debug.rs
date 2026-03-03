@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy_egui::egui::Ui;
 
-use crate::game::{FactionMap, map::MapPos};
+use crate::game::FactionMap;
 
 #[derive(Resource, Default)]
 pub struct DebugSettings {
@@ -38,7 +38,7 @@ pub(crate) fn redo_faction_map(
         for (pos, val) in dijk_map.iter() {
             commands.spawn((
                 FactionText,
-                Transform::from_translation(MapPos(IVec2::from(*pos)).to_vec3(11.0)),
+                Transform::from_translation(pos.to_vec3(11.0)),
                 Text2d(format!("{}", val)),
             ));
         }

@@ -6,7 +6,29 @@ pub(crate) const TILE_HEIGHT: f32 = 24.0;
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct MapPos(pub IVec2);
 
+pub const DIRECTIONS: [IVec2; 8] = [
+    IVec2 { x: 1, y: 0 },
+    IVec2 { x: 1, y: 1 },
+    IVec2 { x: 0, y: 1 },
+    IVec2 { x: -1, y: 1 },
+    IVec2 { x: -1, y: 0 },
+    IVec2 { x: -1, y: -1 },
+    IVec2 { x: 0, y: -1 },
+    IVec2 { x: 1, y: -1 },
+];
+
+/// Offsets of distance 1 in the four cardinal direction.
+pub const CARDINALS: [IVec2; 4] = [
+    IVec2 { x: 0, y: 1 },
+    IVec2 { x: 0, y: -1 },
+    IVec2 { x: 1, y: 0 },
+    IVec2 { x: -1, y: 0 },
+];
+
 impl MapPos {
+    pub fn adjacent(&self) -> [MapPos; 8] {
+        DIRECTIONS.map(|d| MapPos(self.0 + d))
+    }
     pub fn to_vec2(self) -> Vec2 {
         Vec2 {
             x: TILE_WIDTH * self.0.x as f32,

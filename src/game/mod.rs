@@ -11,6 +11,7 @@ use bevy_egui::{
     egui::{self, Align, FontSelection, Margin, RichText, WidgetText, text::LayoutJob},
 };
 use bevy_lit::prelude::Lighting2dPlugin;
+use indexmap::IndexSet;
 use rand::{
     Rng as _,
     seq::{IndexedRandom, SliceRandom as _},
@@ -101,6 +102,7 @@ pub mod lighting;
 mod map;
 mod mapgen;
 mod phone;
+mod targeting;
 
 const HIGHLIGHT_Z: f32 = 20.0;
 const DAMAGE_Z: f32 = 15.0;
@@ -113,6 +115,7 @@ pub(super) fn plugin(app: &mut App) {
     app.insert_resource(ClearColor(Color::from(GRAY_500)));
     app.load_resource::<assets::WorldAssets>();
     app.init_resource::<map::WalkBlockedMap>();
+    app.init_resource::<PlayerAbilities>();
     app.init_resource::<PendingDamage>();
     app.init_resource::<PlayerMoved>();
     app.init_resource::<FactionMap>();
@@ -122,6 +125,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<examine::ExaminePos>();
     app.init_resource::<examine::ExamineResults>();
     app.init_resource::<input::InputMode>();
+    app.init_resource::<targeting::ValidTargets>();
     app.init_resource::<phone::PhoneState>();
     app.init_resource::<chat::ChatHistory>();
     app.init_resource::<TurnCounter>();
@@ -133,6 +137,9 @@ pub(super) fn plugin(app: &mut App) {
             lighting::on_add_occluder,
             lighting::on_add_player,
             input::handle_input.run_if(is_player_alive.and(phone::is_phone_closed)),
+            targeting::update_valid_targets.run_if(resource_changed::<input::InputMode>),
+            targeting::update_valid_target_indicators
+                .run_if(resource_changed::<targeting::ValidTargets>),
             phone::toggle_phone,
             phone::update_phone,
             phone::update_streaming_stats,
@@ -183,6 +190,7 @@ pub(super) fn plugin(app: &mut App) {
                 update_nearby_mobs,
                 redo_faction_map,
                 set_player_corpse.run_if(not(is_player_alive)),
+                update_player_abilities,
             )
                 .chain()
                 .run_if(player_moved),
@@ -267,6 +275,62 @@ pub struct Player {
     pub signal: i32,
     pub money_gain_timer: f32,
     pub last_gain_amount: i32,
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Copy)]
+pub enum Ability {
+    Sprint,
+    ShoulderCheck,
+}
+
+impl std::fmt::Display for Ability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Ability::Sprint => "Sprint",
+            Ability::ShoulderCheck => "Shoulder Check",
+        })
+    }
+}
+
+pub enum AbilityTarget {
+    ReachableTile { maxdist: i32 },
+    NearbyMob { maxdist: i32 },
+    NoTarget,
+}
+impl Ability {
+    fn target(&self) -> AbilityTarget {
+        match self {
+            Ability::Sprint => AbilityTarget::ReachableTile { maxdist: 5 },
+            Ability::ShoulderCheck => AbilityTarget::NearbyMob { maxdist: 1 },
+        }
+    }
+}
+
+#[derive(Resource, Default)]
+pub struct PlayerAbilities {
+    // IndexSet to preserve insertion order.
+    abilities: IndexSet<Ability>,
+}
+
+impl PlayerAbilities {
+    fn add_or_remove(&mut self, condition: bool, ability: Ability) {
+        if condition {
+            self.abilities.insert(ability);
+        } else {
+            self.abilities.shift_remove(&ability);
+        }
+    }
+}
+
+fn update_player_abilities(player: Single<&Player>, mut abilities: ResMut<PlayerAbilities>) {
+    abilities.add_or_remove(player.strength >= 10, Ability::Sprint);
+    abilities.add_or_remove(player.strength >= 20, Ability::ShoulderCheck);
+}
+
+enum AbilityTargets {
+    Some(Vec<MapPos>),
+    Targetless,
+    None,
 }
 
 #[derive(Component)]
@@ -541,19 +605,18 @@ fn move_bullets(mut commands: Commands, mut bullets: Query<(Entity, &mut MapPos,
 
 #[derive(Resource, Default)]
 pub(crate) struct FactionMap {
-    dijkstra_map_per_faction: HashMap<i32, std::collections::HashMap<rogue_algebra::Pos, usize>>,
+    dijkstra_map_per_faction: HashMap<i32, std::collections::HashMap<MapPos, usize>>,
 }
 
 fn reachable(
-    p: rogue_algebra::Pos,
+    p: MapPos,
     walk_blocked_map: &map::WalkBlockedMap,
     other_unwalkable: &HashSet<IVec2>,
-) -> Vec<rogue_algebra::Pos> {
-    rogue_algebra::DIRECTIONS
-        .map(|o| p + o)
+) -> Vec<MapPos> {
+    p.adjacent()
         .into_iter()
-        .filter(|rogue_algebra::Pos { x, y }| !walk_blocked_map.contains(&IVec2::new(*x, *y)))
-        .filter(|rogue_algebra::Pos { x, y }| !other_unwalkable.contains(&IVec2::new(*x, *y)))
+        .filter(|p| !walk_blocked_map.contains(&p.0))
+        .filter(|p| !other_unwalkable.contains(&p.0))
         .collect()
 }
 
@@ -572,14 +635,14 @@ fn build_faction_map(
             .insert(pos.0);
     }
     let mut dijkstra_map_per_faction =
-        HashMap::<i32, std::collections::HashMap<rogue_algebra::Pos, usize>>::new();
+        HashMap::<i32, std::collections::HashMap<MapPos, usize>>::new();
     for (faction, friendly_positions) in positions_per_faction.iter() {
         let enemy_positions = positions_per_faction
             .iter()
             .filter(|(f, _positions)| **f != *faction)
             .flat_map(|(_f, positions)| positions)
             .copied()
-            .map(rogue_algebra::Pos::from)
+            .map(MapPos)
             .collect::<Vec<_>>();
         let reachable_cb = |p| reachable(p, &walk_blocked_map, friendly_positions);
         let maxdist = 20;
@@ -615,13 +678,12 @@ fn process_mob_turn(
             .get(&creature.faction)
             .unwrap();
 
-        let mut directions = rogue_algebra::DIRECTIONS;
-        directions.shuffle(rng);
-        let target_move = directions
-            .map(|o| rogue_algebra::Pos::from(pos.0) + o)
+        let mut adjacent = pos.adjacent();
+        adjacent.shuffle(rng);
+        let target_move = adjacent
             .into_iter()
             .filter(|p| dijkstra_map.contains_key(p))
-            .filter(|p| !claimed_moves.contains(&IVec2::from(*p)))
+            .filter(|p| !claimed_moves.contains(&p.0))
             .min_by_key(|p| dijkstra_map.get(p).cloned().unwrap_or(usize::MAX));
 
         if let Some(target_move) = target_move {
@@ -630,7 +692,7 @@ fn process_mob_turn(
             // Claim any move that is not a destination.
             // This works because destinations are always enemies.
             if dijkstra_map.get(&target_move) != Some(&1) {
-                claimed_moves.insert(IVec2::from(target_move));
+                claimed_moves.insert(target_move.0);
             }
         }
     }
@@ -639,7 +701,7 @@ fn process_mob_turn(
     for (entity, dest) in mob_moves.into_iter() {
         let (entity, mut pos, _creature, mob) = mobs.get_mut(entity).unwrap();
         let old_pos = *pos;
-        let new_pos = MapPos(IVec2::from(dest));
+        let new_pos = dest;
         if let Some(enemy) = pos_to_creature.0.get(&new_pos.0) {
             // attack
             damage.0.push(DamageInstance {
@@ -744,12 +806,12 @@ fn update_nearby_mobs(
     pos_to_creature: Res<PosToCreature>,
 ) {
     nearby_mobs.mobs.clear();
-    let player_pos = player.single().unwrap();
+    let player_pos = *player.single().unwrap();
     let maxdist = 10;
-    let reachable = |p| rogue_algebra::DIRECTIONS.map(|d| p + d);
-    for path in rogue_algebra::path::bfs_paths(&[player_pos.0.into()], maxdist, reachable) {
+    let reachable = |p: MapPos| p.adjacent();
+    for path in rogue_algebra::path::bfs_paths(&[player_pos], maxdist, reachable) {
         if let Some(pos) = path.last()
-            && let Some(mob) = pos_to_creature.0.get(&IVec2::from(*pos))
+            && let Some(mob) = pos_to_creature.0.get(&pos.0)
             && let Ok((pos, creature, mob, text, color)) = mobs.get(*mob)
         {
             nearby_mobs.mobs.push((
@@ -770,6 +832,7 @@ fn sidebar(
     examine_results: Res<examine::ExamineResults>,
     world_assets: If<Res<WorldAssets>>,
     atlas_assets: If<Res<Assets<TextureAtlasLayout>>>,
+    player_abilities: Res<PlayerAbilities>,
     input_mode: Res<InputMode>,
 ) {
     let heart = world_assets
@@ -872,10 +935,58 @@ fn sidebar(
                             FontSelection::Default,
                             Align::LEFT,
                         ));
+
+                        for (i, ability) in player_abilities.abilities.iter().enumerate() {
+                            let ability_key = (i + 1) % 10;
+                            ui.label(apply_brainrot_ui(
+                                format!("{ability_key}: {ability}"),
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                        }
                     }
                     InputMode::Examine(_) => {
                         ui.label(apply_brainrot_ui(
                             RichText::new("EXAMINING"),
+                            player.brainrot,
+                            ui.style(),
+                            FontSelection::Default,
+                            Align::LEFT,
+                        ));
+                        ui.label(apply_brainrot_ui(
+                            "move: arrow keys",
+                            player.brainrot,
+                            ui.style(),
+                            FontSelection::Default,
+                            Align::LEFT,
+                        ));
+                        ui.label(apply_brainrot_ui(
+                            "move: hjklyubn",
+                            player.brainrot,
+                            ui.style(),
+                            FontSelection::Default,
+                            Align::LEFT,
+                        ));
+                        ui.label(apply_brainrot_ui(
+                            "exit: x",
+                            player.brainrot,
+                            ui.style(),
+                            FontSelection::Default,
+                            Align::LEFT,
+                        ));
+                    }
+                    InputMode::Targeting(ability, _pos) => {
+                        ui.label(apply_brainrot_ui(
+                            RichText::new(format!("TARGETING {ability}")),
+                            player.brainrot,
+                            ui.style(),
+                            FontSelection::Default,
+                            Align::LEFT,
+                        ));
+                        ui.label(apply_brainrot_ui(
+                            "choose target: enter",
                             player.brainrot,
                             ui.style(),
                             FontSelection::Default,

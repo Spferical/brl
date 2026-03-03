@@ -1,38 +1,43 @@
-use bevy::prelude::*;
+use std::sync::LazyLock;
 
-use crate::game::{Player, Turn, examine::ExaminePos, map::MapPos};
+use bevy::{
+    input::keyboard::Key,
+    platform::collections::HashMap,
+    prelude::*,
+};
 
-const DIRECTION_KEYS: &[(KeyCode, IVec2)] = &[
-    (KeyCode::KeyW, IVec2::new(0, 1)),
-    (KeyCode::KeyA, IVec2::new(-1, 0)),
-    (KeyCode::KeyS, IVec2::new(0, -1)),
-    (KeyCode::KeyD, IVec2::new(1, 0)),
-    (KeyCode::KeyH, IVec2::new(-1, 0)),
-    (KeyCode::KeyJ, IVec2::new(0, -1)),
-    (KeyCode::KeyK, IVec2::new(0, 1)),
-    (KeyCode::KeyL, IVec2::new(1, 0)),
-    (KeyCode::KeyY, IVec2::new(-1, 1)),
-    (KeyCode::KeyU, IVec2::new(1, 1)),
-    (KeyCode::KeyB, IVec2::new(-1, -1)),
-    (KeyCode::KeyN, IVec2::new(1, -1)),
-    (KeyCode::Numpad1, IVec2::new(-1, 1)),
-    (KeyCode::Numpad2, IVec2::new(0, 1)),
-    (KeyCode::Numpad3, IVec2::new(1, 1)),
-    (KeyCode::Numpad4, IVec2::new(-1, 0)),
-    (KeyCode::Numpad6, IVec2::new(1, 0)),
-    (KeyCode::Numpad7, IVec2::new(-1, -1)),
-    (KeyCode::Numpad8, IVec2::new(0, -1)),
-    (KeyCode::Numpad9, IVec2::new(1, -1)),
-    (KeyCode::ArrowUp, IVec2::new(0, 1)),
-    (KeyCode::ArrowDown, IVec2::new(-1, 0)),
-    (KeyCode::ArrowLeft, IVec2::new(0, -1)),
-    (KeyCode::ArrowRight, IVec2::new(1, 0)),
-];
+use crate::game::{
+    Ability, Player, PlayerAbilities, Turn,
+    examine::ExaminePos,
+    map::MapPos,
+    targeting::ValidTargets,
+};
 
-fn check_direction_keys(keyboard_input: &ButtonInput<KeyCode>) -> Option<IVec2> {
+static DIRECTION_KEYS: LazyLock<HashMap<Key, IVec2>> = LazyLock::new(|| {
+    let mut m = HashMap::new();
+    m.insert(Key::Character("w".into()), IVec2::new(0, 1));
+    m.insert(Key::Character("a".into()), IVec2::new(-1, 0));
+    m.insert(Key::Character("s".into()), IVec2::new(0, -1));
+    m.insert(Key::Character("d".into()), IVec2::new(1, 0));
+    m.insert(Key::Character("h".into()), IVec2::new(-1, 0));
+    m.insert(Key::Character("j".into()), IVec2::new(0, -1));
+    m.insert(Key::Character("k".into()), IVec2::new(0, 1));
+    m.insert(Key::Character("l".into()), IVec2::new(1, 0));
+    m.insert(Key::Character("y".into()), IVec2::new(-1, 1));
+    m.insert(Key::Character("u".into()), IVec2::new(1, 1));
+    m.insert(Key::Character("b".into()), IVec2::new(-1, -1));
+    m.insert(Key::Character("n".into()), IVec2::new(1, -1));
+    m.insert(Key::ArrowUp, IVec2::new(0, 1));
+    m.insert(Key::ArrowDown, IVec2::new(-1, 0));
+    m.insert(Key::ArrowLeft, IVec2::new(0, -1));
+    m.insert(Key::ArrowRight, IVec2::new(1, 0));
+    m
+});
+
+fn check_direction_keys(keyboard_input: &ButtonInput<Key>) -> Option<IVec2> {
     let mut move_intent = IVec2::ZERO;
-    for (key, dir) in DIRECTION_KEYS {
-        if keyboard_input.just_pressed(*key) {
+    for (key, dir) in DIRECTION_KEYS.iter() {
+        if keyboard_input.just_pressed(key.clone()) {
             move_intent += dir;
         }
     }
@@ -41,6 +46,30 @@ fn check_direction_keys(keyboard_input: &ButtonInput<KeyCode>) -> Option<IVec2> 
     } else {
         None
     }
+}
+
+static ABILITY_KEYS: LazyLock<Vec<Key>> = LazyLock::new(|| {
+    vec![
+        Key::Character("1".into()),
+        Key::Character("2".into()),
+        Key::Character("3".into()),
+        Key::Character("4".into()),
+        Key::Character("5".into()),
+        Key::Character("6".into()),
+        Key::Character("7".into()),
+        Key::Character("8".into()),
+        Key::Character("9".into()),
+        Key::Character("0".into()),
+    ]
+});
+
+fn check_ability_keys(keyboard_input: &ButtonInput<Key>) -> Option<usize> {
+    for (i, key) in ABILITY_KEYS.iter().enumerate() {
+        if keyboard_input.just_pressed(key.clone()) {
+            return Some(i);
+        }
+    }
+    None
 }
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,24 +84,37 @@ pub(crate) enum InputMode {
     #[default]
     Normal,
     Examine(IVec2),
+    Targeting(Ability, IVec2),
 }
 
 pub(crate) fn handle_input(
-    keyboard_input: Res<ButtonInput<KeyCode>>,
+    keyboard_input: Res<ButtonInput<Key>>,
     mut commands: Commands,
     player: Single<(Entity, &MapPos), With<Player>>,
     mut mode: ResMut<InputMode>,
     mut examine_pos: ResMut<ExaminePos>,
+    abilities: Res<PlayerAbilities>,
+    valid_targets: Res<ValidTargets>,
 ) {
     match *mode {
         InputMode::Normal => {
             let intent = if let Some(direction) = check_direction_keys(&keyboard_input) {
                 Some(PlayerIntent::Move(direction))
-            } else if keyboard_input.just_pressed(KeyCode::Period) {
+            } else if let Some(idx) = check_ability_keys(&keyboard_input)
+                && let Some(ability) = abilities.abilities.get_index(idx)
+            {
+                *mode = InputMode::Targeting(*ability, player.1.0);
+                examine_pos.pos = Some(*player.1);
+                None
+            } else if keyboard_input.just_pressed(Key::Character(".".into())) {
                 Some(PlayerIntent::Wait)
-            } else if keyboard_input.any_just_pressed([KeyCode::Comma, KeyCode::Enter]) {
+            } else if keyboard_input.any_just_pressed([
+                Key::Character("<".into()),
+                Key::Character(">".into()),
+                Key::Enter,
+            ]) {
                 Some(PlayerIntent::UseStairs)
-            } else if keyboard_input.just_pressed(KeyCode::KeyX) {
+            } else if keyboard_input.just_pressed(Key::Character("x".into())) {
                 *mode = InputMode::Examine(player.1.0);
                 examine_pos.pos = Some(*player.1);
                 None
@@ -88,7 +130,22 @@ pub(crate) fn handle_input(
             if let Some(direction) = check_direction_keys(&keyboard_input) {
                 *mode = InputMode::Examine(pos + direction);
                 examine_pos.pos = Some(MapPos(pos + direction));
-            } else if keyboard_input.any_just_pressed([KeyCode::Escape, KeyCode::KeyX]) {
+            } else if keyboard_input.any_just_pressed([Key::Escape, Key::Character("x".into())]) {
+                *mode = InputMode::Normal;
+                examine_pos.pos = None;
+            }
+        }
+        InputMode::Targeting(ability, pos) => {
+            if let Some(direction) = check_direction_keys(&keyboard_input) {
+                *mode = InputMode::Targeting(ability, pos + direction);
+                examine_pos.pos = Some(MapPos(pos + direction));
+            } else if keyboard_input.any_just_pressed([Key::Escape, Key::Character("x".into())]) {
+                *mode = InputMode::Normal;
+                examine_pos.pos = None;
+            } else if keyboard_input.any_just_pressed([Key::Space, Key::Enter])
+                && valid_targets.targets.contains(&MapPos(pos))
+            {
+                // TODO
                 *mode = InputMode::Normal;
                 examine_pos.pos = None;
             }
