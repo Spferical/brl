@@ -457,21 +457,32 @@ fn handle_player_move(
     };
 
     match intent {
-        PlayerIntent::Move(move_intent) => {
+        PlayerIntent::Move(target) => {
             let old_pos = *pos;
-            let new_pos = pos.0 + move_intent;
-            if walk_blocked_map.contains(&new_pos) {
+            let new_pos = if old_pos.adjacent().contains(target) {
+                Some(*target)
+            } else {
+                // path towards target
+                rogue_algebra::path::bfs_paths(&[old_pos], 50, |p| {
+                    p.adjacent()
+                        .into_iter()
+                        .filter(|p| !walk_blocked_map.contains(&p.0))
+                })
+                .find(|path| path.last().unwrap() == target)
+                .and_then(|path| path.into_iter().nth(1))
+            };
+            let Some(new_pos) = new_pos else {
                 moved.0 = false;
                 return;
-            }
+            };
 
-            if let Some(entity) = pos_to_creature.0.get(&new_pos) {
+            if let Some(entity) = pos_to_creature.0.get(&new_pos.0) {
                 damage.0.push(DamageInstance {
                     entity: *entity,
                     hp: 2,
                 });
             } else {
-                pos.0 = new_pos;
+                pos.0 = new_pos.0;
                 commands.entity(player_entity).insert(MoveAnimation {
                     from: old_pos.to_vec3(PLAYER_Z),
                     to: pos.to_vec3(PLAYER_Z),

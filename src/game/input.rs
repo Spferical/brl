@@ -71,7 +71,7 @@ pub struct AbilityClicked(pub Ability);
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerIntent {
-    Move(IVec2),
+    Move(MapPos),
     Wait,
     UseStairs,
     UseAbility(Ability, MapPos),
@@ -146,7 +146,9 @@ pub(crate) fn handle_input(
     match *mode {
         InputMode::Normal => {
             if let Some(direction) = check_direction_keys(&keyboard_input) {
-                intent = Some(PlayerIntent::Move(direction));
+                intent = Some(PlayerIntent::Move(MapPos(player.1.0 + direction)));
+            } else if let Some(pos) = tile_clicked {
+                intent = Some(PlayerIntent::Move(pos));
             } else if keyboard_input.just_pressed(Key::Character(".".into())) {
                 intent = Some(PlayerIntent::Wait);
             } else if keyboard_input.any_just_pressed([
