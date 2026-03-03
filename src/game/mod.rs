@@ -817,6 +817,7 @@ fn prune_dead(
     q_creatures: Query<(Entity, &Creature, &MapPos, Option<&DropsCorpse>), Without<Player>>,
     mut player: Single<&mut Player>,
     phone_state: Res<phone::PhoneState>,
+    mut chat: ResMut<chat::ChatHistory>,
 ) {
     let world_entity = world.into_inner();
     let player = player.as_mut();
@@ -824,7 +825,7 @@ fn prune_dead(
         if creature.is_dead() {
             commands.entity(entity).despawn();
 
-            chat::handle_payout(player, &phone_state);
+            chat::handle_payout(player, &phone_state, &mut chat);
 
             if let Some(DropsCorpse(corpse_sprite)) = corpse {
                 let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));

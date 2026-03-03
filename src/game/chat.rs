@@ -91,6 +91,7 @@ pub struct ChatMessage {
     pub username: String,
     pub text: String,
     pub timer: Timer,
+    pub donation: Option<i32>,
 }
 
 const MAX_CHAT_MESSAGES: usize = 15;
@@ -152,13 +153,66 @@ const DAMAGE_MESSAGES: &[&str] = &[
     "ggwp",
 ];
 
-pub fn handle_payout(player: &mut Player, phone_state: &PhoneState) {
+const DONO_MESSAGES: &[&str] = &[
+    "Nice kill!",
+    "GET EM",
+    "EZ MONEY",
+    "Keep it up",
+    "W",
+    "POG",
+    "Insane",
+    "LETS GO",
+];
+
+const WHALE_MESSAGES: &[&str] = &[
+    "HOLY COW",
+    "GOAT",
+    "MY HERO",
+    "I LOVE THIS STREAM",
+    "MARRY ME",
+    "HAVE MY MONEY",
+    "ABSOLUTE UNIT",
+    "W STREAMER",
+];
+
+pub fn handle_payout(player: &mut Player, phone_state: &PhoneState, chat: &mut ChatHistory) {
     if phone_state.is_streaming && phone_state.subscribers > 0 {
+        let mut rng = rand::rng();
+
         // $1 per 100 subscribers (min $1 if streaming)
-        let payout = (phone_state.subscribers / 100).max(1);
+        let base_payout = (phone_state.subscribers / 100).max(1);
+
+        // Add randomness: 50% to 150% of base
+        let random_factor = rng.random_range(0.5..1.5);
+        let mut payout = (base_payout as f32 * random_factor).round() as i32;
+
+        // Whale chance: 1% chance for a massive 10x - 50x payout
+        let mut is_whale = false;
+        if rng.random_bool(0.01) {
+            let multiplier = rng.random_range(10..50);
+            payout *= multiplier;
+            is_whale = true;
+        }
+
         player.money += payout;
         player.last_gain_amount = payout;
-        player.money_gain_timer = 2.0; // Show for 2 seconds
+        player.money_gain_timer = 2.0;
+
+        // Queue a dono message
+        let username = USERNAMES.choose(&mut rng).unwrap().to_string();
+        let pool = if is_whale {
+            WHALE_MESSAGES
+        } else {
+            DONO_MESSAGES
+        };
+        let text = pool.choose(&mut rng).unwrap().to_string();
+
+        chat.queue.push_back(ChatMessage {
+            username,
+            text,
+            timer: Timer::from_seconds(MESSAGE_LIFETIME, TimerMode::Once),
+            donation: Some(payout),
+        });
     }
 }
 
@@ -240,6 +294,7 @@ fn queue_message(chat: &mut ChatHistory, rng: &mut impl Rng, pool: &[&str]) {
         username,
         text,
         timer: Timer::from_seconds(MESSAGE_LIFETIME, TimerMode::Once),
+        donation: None,
     });
 }
 
@@ -281,7 +336,10 @@ pub fn draw_chat(
                         continue;
                     }
 
-                    let text = format!("{}: {}", msg.username, msg.text);
+                    let mut text = format!("{}: {}", msg.username, msg.text);
+                    if let Some(amt) = msg.donation {
+                        text = format!("{} [${}]: {}", msg.username, amt, msg.text);
+                    }
 
                     let job = apply_brainrot_ui(
                         text,
@@ -299,7 +357,13 @@ pub fn draw_chat(
                     // Apply alpha to all sections
                     let mut job = (*job).clone();
                     for section in &mut job.sections {
-                        section.format.color = section.format.color.gamma_multiply(alpha);
+                        if msg.donation.is_some() {
+                            // Highlight donations in gold
+                            section.format.color =
+                                egui::Color32::from_rgb(255, 215, 0).gamma_multiply(alpha);
+                        } else {
+                            section.format.color = section.format.color.gamma_multiply(alpha);
+                        }
                     }
 
                     ui.add(
