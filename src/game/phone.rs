@@ -328,7 +328,6 @@ pub fn draw_phone(
                                 .max_rect(phone_screen_rect)
                                 .layout(egui::Layout::top_down(egui::Align::Center)),
                         );
-                        child_ui.add_space(phone_screen_rect.height() * 0.4);
 
                         app.draw_content(
                             &mut child_ui,
