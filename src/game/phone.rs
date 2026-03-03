@@ -336,21 +336,34 @@ pub fn draw_phone(
                                 .layout(egui::Layout::top_down(egui::Align::Center)),
                         );
 
-                        app.draw_content(
-                            &mut child_ui,
-                            &mut phone_state,
-                            &mut streaming_state,
-                            &mut *player,
-                            &mut *creature,
-                            player_pos,
-                            &mut active_delivery,
-                            &walk_blocked_map,
-                            scale_x,
-                            alpha_byte,
-                            dd_screen.get(),
-                            &mut next_dd_screen,
-                            &mut dd_selection,
-                        );
+                        if player.signal <= 1 {
+                            child_ui.add_space(child_ui.available_height() * 0.4);
+                            child_ui.label(apply_brainrot_ui(
+                                RichText::new("No Network Connection")
+                                    .size(32.0 * scale_x)
+                                    .color(Color32::from_rgba_unmultiplied(0, 0, 0, alpha_byte)),
+                                player.brainrot,
+                                child_ui.style(),
+                                egui::FontSelection::Default,
+                                egui::Align::Center,
+                            ));
+                        } else {
+                            app.draw_content(
+                                &mut child_ui,
+                                &mut phone_state,
+                                &mut streaming_state,
+                                &mut *player,
+                                &mut *creature,
+                                player_pos,
+                                &mut active_delivery,
+                                &walk_blocked_map,
+                                scale_x,
+                                alpha_byte,
+                                dd_screen.get(),
+                                &mut next_dd_screen,
+                                &mut dd_selection,
+                            );
+                        }
                     }
 
                     // Draw splash screen (icon and name) if not fully faded in.
@@ -365,7 +378,11 @@ pub fn draw_phone(
                         };
 
                         let icon_id = app_icons[i];
-                        let splash_name = app.splash_name();
+                        let splash_name = if player.signal <= 1 {
+                            "No Network Connection"
+                        } else {
+                            app.splash_name()
+                        };
 
                         let large_icon_size = icon_size * 2.0;
                         let large_icon_rect = egui::Rect::from_center_size(
