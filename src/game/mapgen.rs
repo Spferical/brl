@@ -19,6 +19,9 @@ enum TileKind {
 #[derive(Clone, Copy)]
 enum MobKind {
     GiantFrog,
+    GymBro,
+    Influencer,
+    Normie,
 }
 
 impl MobKind {
@@ -39,7 +42,58 @@ impl MobKind {
                         ..Default::default()
                     },
                 },
-                sprite: assets.get_ascii_sprite('F', Color::srgb(0.2, 0.8, 0.2)),
+                sprite: assets.get_ascii_sprite('f', Color::srgb(0.2, 0.8, 0.2)),
+                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+            },
+            MobKind::GymBro => MobBundle {
+                name: Name::new("Gym Bro"),
+                creature: Creature {
+                    hp: 4,
+                    max_hp: 4,
+                    faction: -1,
+                },
+                mob: Mob {
+                    melee_damage: 1,
+                    ranged: false,
+                    attrs: MobAttrs::default(),
+                },
+                sprite: assets.get_ascii_sprite('g', Color::srgb(0.8, 0.3, 0.3)),
+                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+            },
+            MobKind::Influencer => MobBundle {
+                name: Name::new("Influencer"),
+                creature: Creature {
+                    hp: 2,
+                    max_hp: 2,
+                    faction: -1,
+                },
+                mob: Mob {
+                    melee_damage: 1,
+                    ranged: false,
+                    attrs: MobAttrs {
+                        mog_risk: true,
+                        ..Default::default()
+                    },
+                },
+                sprite: assets.get_ascii_sprite('i', Color::srgb(0.2, 0.5, 0.8)),
+                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+            },
+            MobKind::Normie => MobBundle {
+                name: Name::new("Normie"),
+                creature: Creature {
+                    hp: 2,
+                    max_hp: 2,
+                    faction: -1,
+                },
+                mob: Mob {
+                    melee_damage: 1,
+                    ranged: false,
+                    attrs: MobAttrs {
+                        basic: true,
+                        ..Default::default()
+                    },
+                },
+                sprite: assets.get_ascii_sprite('n', Color::srgb(0.5, 0.5, 0.5)),
                 corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
             },
         }
@@ -94,7 +148,9 @@ impl LevelDraft {
             .copied()
             .collect::<Vec<rogue_algebra::Pos>>();
         for pos in floors.choose_multiple(rng, num_mobs) {
-            self.mobs.insert(*pos, MobKind::GiantFrog);
+            use MobKind::*;
+            let opts = [GiantFrog, GymBro, Influencer, Normie];
+            self.mobs.insert(*pos, *opts.choose(rng).unwrap());
         }
         self
     }
