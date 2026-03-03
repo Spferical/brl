@@ -19,17 +19,9 @@ pub(crate) fn update_valid_targets(
     player: Single<(Entity, &MapPos), With<Player>>,
     walk_blocked_map: Res<WalkBlockedMap>,
     pos_to_creature: Res<PosToCreature>,
-    keyboard_input: Res<ButtonInput<bevy::input::keyboard::Key>>,
-    abilities: Res<crate::game::PlayerAbilities>,
 ) {
     let ability = if let InputMode::Targeting(ref ability, ..) = *mode {
         Some(*ability)
-    } else if keyboard_input.pressed(bevy::input::keyboard::Key::Shift) {
-        abilities
-            .abilities
-            .iter()
-            .find(|a| matches!(a, crate::game::Ability::Sprint))
-            .copied()
     } else {
         None
     };

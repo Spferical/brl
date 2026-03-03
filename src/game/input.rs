@@ -173,6 +173,10 @@ pub(crate) fn handle_input(
             } else if keyboard_input.any_just_pressed([Key::Escape, Key::Character("x".into())]) {
                 *mode = InputMode::Normal;
                 examine_pos.pos = None;
+            } else if keyboard_input
+                .any_just_pressed([Key::Character("<".into()), Key::Character(">".into())])
+            {
+                intent = Some(PlayerIntent::UseStairs);
             } else if let Some(mouse_pos) = mouse_move_pos {
                 *mode = InputMode::Examine(mouse_pos.0);
                 examine_pos.pos = Some(mouse_pos);
@@ -188,6 +192,10 @@ pub(crate) fn handle_input(
                 *mode = InputMode::Normal;
                 examine_pos.pos = None;
                 intent = Some(PlayerIntent::UseAbility(ability, clicked))
+            } else if keyboard_input
+                .any_just_pressed([Key::Character("<".into()), Key::Character(">".into())])
+            {
+                intent = Some(PlayerIntent::UseStairs);
             } else if let Some(direction) = check_direction_keys(&keyboard_input) {
                 *mode = InputMode::Targeting(ability, pos + direction);
                 examine_pos.pos = Some(MapPos(pos + direction));
