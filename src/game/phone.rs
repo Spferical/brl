@@ -3,6 +3,7 @@ use bevy_egui::{
     EguiContexts, EguiTextureHandle,
     egui::{self, Color32, RichText},
 };
+use rand::Rng as _;
 
 use crate::game::assets::WorldAssets;
 use crate::game::{Creature, Player, apply_brainrot_ui};
@@ -22,6 +23,8 @@ pub struct PhoneState {
     pub app_open_progress: f32,
     pub last_opened_app: Option<usize>,
     pub app_launch_progress: f32,
+    pub bump_timer: f32,
+    pub bump_progress: f32,
 }
 
 pub fn is_phone_closed(phone_state: Res<PhoneState>) -> bool {
@@ -42,6 +45,7 @@ pub fn update_phone(
     mut phone_state: ResMut<PhoneState>,
     mut contexts: EguiContexts,
     current_screen: Res<State<PhoneScreen>>,
+    player: Single<&Player>,
 ) {
     if let PhoneScreen::App(i) = *current_screen.get() {
         phone_state.last_opened_app = Some(i);
@@ -60,6 +64,27 @@ pub fn update_phone(
     }
 
     if old_progress != phone_state.slide_progress {
+        needs_repaint = true;
+    }
+
+    // Bump logic
+    if !phone_state.is_open && phone_state.slide_progress == 0.0 {
+        phone_state.bump_timer -= time.delta_secs();
+        if phone_state.bump_timer <= 0.0 && player.boredom > 80 {
+            phone_state.bump_progress = 0.01;
+
+            let p = ((player.boredom as f32 - 80.0) / 20.0).clamp(0.0, 1.0);
+            let factor = 1.0 - (p * 0.5); // 1.0 at 80 boredom, 0.5 at 100 boredom (twice as frequent)
+
+            phone_state.bump_timer = rand::rng().random_range((2.0 * factor)..(5.0 * factor));
+        }
+    }
+
+    if phone_state.bump_progress > 0.0 {
+        phone_state.bump_progress += time.delta_secs() * 2.0;
+        if phone_state.bump_progress >= 1.0 {
+            phone_state.bump_progress = 0.0;
+        }
         needs_repaint = true;
     }
 
@@ -138,7 +163,7 @@ pub fn draw_phone(
         return;
     };
 
-    if phone_state.slide_progress <= 0.0 {
+    if phone_state.slide_progress <= 0.0 && phone_state.bump_progress <= 0.0 {
         return;
     }
 
@@ -146,23 +171,27 @@ pub fn draw_phone(
         .sample_clamped(phone_state.slide_progress);
 
     let screen_rect = ctx.content_rect();
-    let dim_alpha = (220.0 * eased_progress) as u8;
 
-    egui::Area::new(egui::Id::new("phone_dim_area"))
-        .order(egui::Order::Foreground)
-        .interactable(true)
-        .fixed_pos(screen_rect.min)
-        .show(ctx, |ui| {
-            let (rect, response) = ui.allocate_exact_size(screen_rect.size(), egui::Sense::click());
-            ui.painter().rect_filled(
-                rect,
-                0.0,
-                Color32::from_rgba_premultiplied(0, 0, 0, dim_alpha),
-            );
-            if response.clicked() {
-                phone_state.is_open = false;
-            }
-        });
+    if eased_progress > 0.0 {
+        let dim_alpha = (220.0 * eased_progress) as u8;
+
+        egui::Area::new(egui::Id::new("phone_dim_area"))
+            .order(egui::Order::Foreground)
+            .interactable(true)
+            .fixed_pos(screen_rect.min)
+            .show(ctx, |ui| {
+                let (rect, response) =
+                    ui.allocate_exact_size(screen_rect.size(), egui::Sense::click());
+                ui.painter().rect_filled(
+                    rect,
+                    0.0,
+                    Color32::from_rgba_premultiplied(0, 0, 0, dim_alpha),
+                );
+                if response.clicked() {
+                    phone_state.is_open = false;
+                }
+            });
+    }
 
     let phone_img_width = 900.0;
     let phone_img_height = 1600.0;
@@ -182,7 +211,12 @@ pub fn draw_phone(
     let offscreen_y = screen_rect.max.y + final_height * 0.5;
     let onscreen_y = screen_rect.center().y;
 
-    let current_y = egui::lerp(offscreen_y..=onscreen_y, eased_progress);
+    let mut current_y = egui::lerp(offscreen_y..=onscreen_y, eased_progress);
+
+    if phone_state.bump_progress > 0.0 {
+        let bump_offset = (phone_state.bump_progress * std::f32::consts::PI).sin() * 100.0;
+        current_y -= bump_offset;
+    }
 
     let phone_rect = egui::Rect::from_center_size(egui::pos2(center_x, current_y), phone_size);
 
