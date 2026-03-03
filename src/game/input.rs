@@ -83,6 +83,7 @@ pub(crate) enum InputMode {
 }
 
 pub(crate) fn handle_input(
+    mut msg_cursor: MessageReader<CursorMoved>,
     keyboard_input: Res<ButtonInput<Key>>,
     mut commands: Commands,
     player: Single<(Entity, &MapPos), With<Player>>,
@@ -90,7 +91,18 @@ pub(crate) fn handle_input(
     mut examine_pos: ResMut<ExaminePos>,
     abilities: Res<PlayerAbilities>,
     valid_targets: Res<ValidTargets>,
+    camera: Single<(&Camera, &GlobalTransform)>,
 ) {
+    let (camera, camera_transform) = camera.into_inner();
+    let mut mouse_move_pos = None;
+    for msg_cursor in msg_cursor.read() {
+        if let Ok(pos) = camera
+            .viewport_to_world(camera_transform, msg_cursor.position)
+            .map(|ray| ray.origin.truncate())
+        {
+            mouse_move_pos = Some(MapPos::from_vec2(pos));
+        }
+    }
     match *mode {
         InputMode::Normal => {
             let intent = if let Some(direction) = check_direction_keys(&keyboard_input) {
@@ -128,6 +140,9 @@ pub(crate) fn handle_input(
             } else if keyboard_input.any_just_pressed([Key::Escape, Key::Character("x".into())]) {
                 *mode = InputMode::Normal;
                 examine_pos.pos = None;
+            } else if let Some(mouse_pos) = mouse_move_pos {
+                *mode = InputMode::Examine(mouse_pos.0);
+                examine_pos.pos = Some(mouse_pos);
             }
         }
         InputMode::Targeting(ability, pos) => {
@@ -146,6 +161,9 @@ pub(crate) fn handle_input(
                     .entity(player.0)
                     .insert(PlayerIntent::UseAbility(ability, MapPos(pos)));
                 commands.run_schedule(Turn);
+            } else if let Some(mouse_pos) = mouse_move_pos {
+                *mode = InputMode::Targeting(ability, mouse_pos.0);
+                examine_pos.pos = Some(mouse_pos);
             }
         }
     }

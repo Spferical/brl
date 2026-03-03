@@ -43,11 +43,10 @@ impl MapPos {
     pub fn from_vec3(vec3: Vec3) -> Self {
         Self::from_vec2(vec3.xy())
     }
-    #[allow(unused)]
     pub fn from_vec2(vec2: Vec2) -> Self {
         Self(IVec2 {
-            x: (vec2.x / TILE_WIDTH) as i32,
-            y: (vec2.y / TILE_HEIGHT) as i32,
+            x: ((vec2.x / TILE_WIDTH) + 0.5) as i32,
+            y: ((vec2.y / TILE_HEIGHT) + 0.5) as i32,
         })
     }
     #[allow(unused)]
