@@ -149,7 +149,8 @@ pub(super) fn plugin(app: &mut App) {
     );
     app.add_systems(
         Update,
-        (apply_brainrot_to_world_text, apply_brainrot_to_walls).run_if(in_state(Screen::Gameplay)),
+        (apply_brainrot_to_world_text, apply_brainrot_visual_effects)
+            .run_if(in_state(Screen::Gameplay)),
     );
     app.add_systems(
         EguiPrimaryContextPass,
@@ -278,39 +279,84 @@ fn apply_brainrot_to_world_text(
     }
 }
 
-fn apply_brainrot_to_walls(
-    mut q_walls: Query<(&map::MapPos, &mut Transform), With<lighting::Occluder>>,
-    player: Query<(&map::MapPos, &Player)>,
+fn apply_brainrot_visual_effects(
+    mut q_transforms: Query<
+        (
+            &map::MapPos,
+            &mut Transform,
+            Option<&lighting::Occluder>,
+            Has<Creature>,
+            Has<Player>,
+        ),
+        Without<animation::MoveAnimation>,
+    >,
+    player_q: Query<(&map::MapPos, &Player)>,
+    time: Res<Time>,
 ) {
-    let Some((player_pos, player)) = player.iter().next() else {
+    let Some((player_pos, player)) = player_q.iter().next() else {
         return;
     };
-    let p = ((player.brainrot as f32 - 80.0) / 20.0).clamp(0.0, 1.0);
 
+    let brainrot = player.brainrot;
+
+    // Bulge walls
+    let bulge_p = ((brainrot as f32 - 80.0) / 20.0).clamp(0.0, 1.0);
     let player_world = player_pos.to_vec3(TILE_Z);
 
-    for (map_pos, mut transform) in q_walls.iter_mut() {
-        let base_world = map_pos.to_vec3(TILE_Z);
-        if p > 0.0 {
-            let diff = base_world - player_world;
-            let dist = diff.truncate().length();
+    // Bounce amplitudes
+    let bounce_mobs_p = ((brainrot as f32 - 80.0) / 20.0).clamp(0.0, 1.0);
+    let bounce_all_p = ((brainrot as f32 - 90.0) / 10.0).clamp(0.0, 1.0);
+
+    for (map_pos, mut transform, occluder, is_creature, is_player) in q_transforms.iter_mut() {
+        let base_z = transform.translation.z;
+        let mut target_pos = map_pos.to_vec3(base_z);
+
+        if occluder.is_some() && bulge_p > 0.0 {
+            let diff = target_pos.truncate() - player_world.truncate();
+            let dist = diff.length();
             if dist > 0.0 {
                 let dir = diff / dist;
                 let max_displacement = map::TILE_WIDTH * 0.4;
                 let radius = map::TILE_WIDTH * 4.0;
                 let strength = (1.0 - (dist / radius)).clamp(0.0, 1.0);
 
-                let displacement = dir * max_displacement * p * strength;
-                transform.translation = base_world + displacement;
-            } else {
-                transform.translation = base_world;
+                let displacement = dir * max_displacement * bulge_p * strength;
+                target_pos += displacement.extend(0.0);
             }
-        } else {
-            transform.translation = base_world;
         }
+
+        let bounce_amp = if is_player {
+            0.0
+        } else if is_creature {
+            bounce_mobs_p
+        } else {
+            bounce_all_p
+        };
+
+        if bounce_amp > 0.0 {
+            let x = map_pos.0.x as f32;
+            let y = map_pos.0.y as f32;
+            let time_s = time.elapsed_secs() * 5.0;
+
+            let wave1 = (time_s + x * 0.5 + y * 0.5).sin();
+            let wave2 = (time_s * 1.3 - x * 0.8 + y * 0.2).cos();
+            let wave3 = (time_s * 0.7 + (x * x + y * y).sqrt() * 0.3).sin();
+
+            let combined = (wave1 + wave2 + wave3) / 3.0;
+            let bounce_val = (combined + 1.0) * 0.5;
+
+            // Squash and stretch
+            let stretch = 1.0 + (bounce_val * 0.5 * bounce_amp);
+            let squash = 1.0 - (bounce_val * 0.3 * bounce_amp);
+
+            transform.scale = Vec3::new(squash, stretch, 1.0);
+        } else {
+            transform.scale = Vec3::ONE;
+        }
+
+        transform.translation = target_pos;
     }
 }
-
 #[derive(Component)]
 pub struct GameWorld;
 
