@@ -183,11 +183,13 @@ pub fn apply_brainrot_ui(
         return WidgetText::LayoutJob(job);
     }
 
-    let mut new_job = LayoutJob::default();
-    new_job.halign = job.halign;
-    new_job.justify = job.justify;
-    new_job.first_row_min_height = job.first_row_min_height;
-    new_job.wrap = job.wrap.clone();
+    let mut new_job = LayoutJob {
+        halign: job.halign,
+        justify: job.justify,
+        first_row_min_height: job.first_row_min_height,
+        wrap: job.wrap.clone(),
+        ..Default::default()
+    };
 
     for section in &job.sections {
         let section_text = &job.text[section.byte_range.clone()];
