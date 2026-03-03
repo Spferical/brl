@@ -293,8 +293,13 @@ impl std::fmt::Display for Ability {
 }
 
 pub enum AbilityTarget {
-    ReachableTile { maxdist: i32 },
-    NearbyMob { maxdist: i32 },
+    ReachableTile {
+        maxdist: i32,
+    },
+    NearbyMob {
+        maxdist: i32,
+    },
+    #[allow(unused)]
     NoTarget,
 }
 impl Ability {
@@ -325,12 +330,6 @@ impl PlayerAbilities {
 fn update_player_abilities(player: Single<&Player>, mut abilities: ResMut<PlayerAbilities>) {
     abilities.add_or_remove(player.strength >= 10, Ability::Sprint);
     abilities.add_or_remove(player.strength >= 20, Ability::ShoulderCheck);
-}
-
-enum AbilityTargets {
-    Some(Vec<MapPos>),
-    Targetless,
-    None,
 }
 
 #[derive(Component)]

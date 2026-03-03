@@ -18,6 +18,7 @@ pub const DIRECTIONS: [IVec2; 8] = [
 ];
 
 /// Offsets of distance 1 in the four cardinal direction.
+#[allow(unused)]
 pub const CARDINALS: [IVec2; 4] = [
     IVec2 { x: 0, y: 1 },
     IVec2 { x: 0, y: -1 },
