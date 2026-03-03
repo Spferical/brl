@@ -141,28 +141,23 @@ pub(crate) fn handle_input(
         }
     }
 
+    let mut intent = None;
+
     match *mode {
         InputMode::Normal => {
-            let intent = if let Some(direction) = check_direction_keys(&keyboard_input) {
-                Some(PlayerIntent::Move(direction))
+            if let Some(direction) = check_direction_keys(&keyboard_input) {
+                intent = Some(PlayerIntent::Move(direction));
             } else if keyboard_input.just_pressed(Key::Character(".".into())) {
-                Some(PlayerIntent::Wait)
+                intent = Some(PlayerIntent::Wait);
             } else if keyboard_input.any_just_pressed([
                 Key::Character("<".into()),
                 Key::Character(">".into()),
                 Key::Enter,
             ]) {
-                Some(PlayerIntent::UseStairs)
+                intent = Some(PlayerIntent::UseStairs);
             } else if keyboard_input.just_pressed(Key::Character("x".into())) {
                 *mode = InputMode::Examine(player.1.0);
                 examine_pos.pos = Some(*player.1);
-                None
-            } else {
-                None
-            };
-            if let Some(intent) = intent {
-                commands.entity(player.0).insert(intent);
-                commands.run_schedule(Turn);
             }
         }
         InputMode::Examine(pos) => {
@@ -186,10 +181,7 @@ pub(crate) fn handle_input(
             {
                 *mode = InputMode::Normal;
                 examine_pos.pos = None;
-                commands
-                    .entity(player.0)
-                    .insert(PlayerIntent::UseAbility(ability, clicked));
-                commands.run_schedule(Turn);
+                intent = Some(PlayerIntent::UseAbility(ability, clicked))
             } else if let Some(direction) = check_direction_keys(&keyboard_input) {
                 *mode = InputMode::Targeting(ability, pos + direction);
                 examine_pos.pos = Some(MapPos(pos + direction));
@@ -201,14 +193,16 @@ pub(crate) fn handle_input(
             {
                 *mode = InputMode::Normal;
                 examine_pos.pos = None;
-                commands
-                    .entity(player.0)
-                    .insert(PlayerIntent::UseAbility(ability, MapPos(pos)));
-                commands.run_schedule(Turn);
+                intent = Some(PlayerIntent::UseAbility(ability, MapPos(pos)))
             } else if let Some(mouse_pos) = mouse_move_pos {
                 *mode = InputMode::Targeting(ability, mouse_pos.0);
                 examine_pos.pos = Some(mouse_pos);
             }
         }
+    };
+
+    if let Some(intent) = intent {
+        commands.entity(player.0).insert(intent);
+        commands.run_schedule(Turn);
     }
 }
