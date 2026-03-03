@@ -114,9 +114,11 @@ use crate::game::mobile_apps::{self, DungeonDashScreen, DungeonDashSelection};
 
 pub fn draw_phone(
     mut contexts: EguiContexts,
-    player_query: Single<(&mut Player, &mut Creature)>,
+    player_query: Single<(&mut Player, &mut Creature, &crate::game::map::MapPos)>,
     mut phone_state: ResMut<PhoneState>,
     mut streaming_state: ResMut<crate::game::chat::StreamingState>,
+    mut active_delivery: ResMut<crate::game::delivery::ActiveDelivery>,
+    walk_blocked_map: Res<crate::game::map::WalkBlockedMap>,
     assets: Res<WorldAssets>,
     current_screen: Res<State<PhoneScreen>>,
     mut next_screen: ResMut<NextState<PhoneScreen>>,
@@ -124,7 +126,7 @@ pub fn draw_phone(
     mut next_dd_screen: ResMut<NextState<DungeonDashScreen>>,
     mut dd_selection: ResMut<DungeonDashSelection>,
 ) {
-    let (mut player, mut creature) = player_query.into_inner();
+    let (mut player, mut creature, player_pos) = player_query.into_inner();
     let texture_id = contexts.add_image(EguiTextureHandle::Weak(assets.phone.id()));
     let apps = mobile_apps::get_apps();
     let app_icons: Vec<egui::TextureId> = apps
@@ -340,6 +342,9 @@ pub fn draw_phone(
                             &mut streaming_state,
                             &mut *player,
                             &mut *creature,
+                            player_pos,
+                            &mut active_delivery,
+                            &walk_blocked_map,
                             scale_x,
                             alpha_byte,
                             dd_screen.get(),

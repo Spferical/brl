@@ -4,6 +4,7 @@ use bevy_egui::egui::{self, Color32, RichText};
 use crate::game::apply_brainrot_ui;
 use crate::game::assets::WorldAssets;
 use crate::game::chat::StreamingState;
+use crate::game::delivery::FOODS;
 use crate::game::phone::PhoneState;
 use crate::game::{Creature, Player};
 
@@ -32,6 +33,9 @@ pub trait MobileApp: Send + Sync {
         streaming_state: &mut StreamingState,
         player: &mut Player,
         creature: &mut Creature,
+        player_pos: &crate::game::map::MapPos,
+        active_delivery: &mut crate::game::delivery::ActiveDelivery,
+        walk_blocked_map: &crate::game::map::WalkBlockedMap,
         scale: f32,
         alpha: u8,
         dd_screen: &DungeonDashScreen,
@@ -59,6 +63,9 @@ impl MobileApp for Crawlr {
         _streaming_state: &mut StreamingState,
         _player: &mut Player,
         _creature: &mut Creature,
+        _player_pos: &crate::game::map::MapPos,
+        _active_delivery: &mut crate::game::delivery::ActiveDelivery,
+        _walk_blocked_map: &crate::game::map::WalkBlockedMap,
         _scale: f32,
         _alpha: u8,
         _dd_screen: &DungeonDashScreen,
@@ -69,75 +76,6 @@ impl MobileApp for Crawlr {
 }
 
 pub struct DungeonDash;
-
-#[derive(Clone, Copy)]
-struct FoodItem {
-    name: &'static str,
-    price: i32,
-    hunger: i32,
-    hp: i32,
-    strength: i32,
-    effects: &'static str,
-}
-
-const FOODS: [FoodItem; 7] = [
-    FoodItem {
-        name: "Burrito",
-        price: 8,
-        hunger: -60,
-        hp: 1,
-        strength: 3,
-        effects: "-60 hunger, +1hp, +3 strength",
-    },
-    FoodItem {
-        name: "Protein Shake",
-        price: 20,
-        hunger: -5,
-        hp: 0,
-        strength: 15,
-        effects: "-5 hunger, +15 strength",
-    },
-    FoodItem {
-        name: "Health Salad",
-        price: 20,
-        hunger: -5,
-        hp: 6,
-        strength: 0,
-        effects: "-5 hunger, +6hp",
-    },
-    FoodItem {
-        name: "Chicken Tenders",
-        price: 4,
-        hunger: -30,
-        hp: 0,
-        strength: 0,
-        effects: "-30 hunger",
-    },
-    FoodItem {
-        name: "Pizza",
-        price: 5,
-        hunger: -60,
-        hp: 0,
-        strength: 0,
-        effects: "-60 hunger",
-    },
-    FoodItem {
-        name: "Milkshake",
-        price: 5,
-        hunger: -100,
-        hp: -1,
-        strength: 0,
-        effects: "-100 hunger, -1 hp",
-    },
-    FoodItem {
-        name: "Poke",
-        price: 20,
-        hunger: -40,
-        hp: 0,
-        strength: 10,
-        effects: "-40 hunger, +10 strength",
-    },
-];
 
 impl MobileApp for DungeonDash {
     fn name(&self) -> &str {
@@ -156,6 +94,9 @@ impl MobileApp for DungeonDash {
         _streaming_state: &mut StreamingState,
         player: &mut Player,
         creature: &mut Creature,
+        player_pos: &crate::game::map::MapPos,
+        active_delivery: &mut crate::game::delivery::ActiveDelivery,
+        walk_blocked_map: &crate::game::map::WalkBlockedMap,
         scale: f32,
         alpha: u8,
         dd_screen: &DungeonDashScreen,
@@ -183,6 +124,9 @@ impl MobileApp for DungeonDash {
                 ui,
                 player,
                 creature,
+                player_pos,
+                active_delivery,
+                walk_blocked_map,
                 scale,
                 alpha,
                 next_dd_screen,
@@ -307,7 +251,10 @@ impl DungeonDash {
         &self,
         ui: &mut egui::Ui,
         player: &mut Player,
-        creature: &mut Creature,
+        _creature: &mut Creature,
+        player_pos: &crate::game::map::MapPos,
+        active_delivery: &mut crate::game::delivery::ActiveDelivery,
+        walk_blocked_map: &crate::game::map::WalkBlockedMap,
         scale: f32,
         alpha: u8,
         next_dd_screen: &mut NextState<DungeonDashScreen>,
@@ -565,9 +512,39 @@ impl DungeonDash {
 
                 if button.clicked() {
                     player.money -= total;
-                    player.hunger = (player.hunger + food.hunger).clamp(0, 100);
-                    player.strength += food.strength;
-                    creature.hp = (creature.hp + food.hp).clamp(0, creature.max_hp);
+
+                    let mut target_pos = player_pos.0;
+                    let maxdist = 5;
+                    let reachable = |p: crate::game::map::MapPos| p.adjacent();
+                    let mut possible_spots = vec![];
+                    for path in rogue_algebra::path::bfs_paths(&[*player_pos], maxdist, reachable) {
+                        if let Some(pos) = path.last() {
+                            if !walk_blocked_map.0.contains(&pos.0) {
+                                possible_spots.push(pos.0);
+                            }
+                        }
+                    }
+
+                    if !possible_spots.is_empty() {
+                        use rand::seq::IndexedRandom;
+                        let mut rng = rand::rng();
+                        target_pos = *possible_spots.choose(&mut rng).unwrap();
+                    }
+
+                    use rand::Rng;
+                    let turns_remaining = match dd_selection.tip_percentage {
+                        25 => rand::rng().random_range(5..=10),
+                        20 => rand::rng().random_range(10..=30),
+                        _ => rand::rng().random_range(20..=50),
+                    };
+
+                    active_delivery
+                        .deliveries
+                        .push(crate::game::delivery::Delivery {
+                            turns_remaining,
+                            target_pos,
+                            food_idx,
+                        });
 
                     next_dd_screen.set(DungeonDashScreen::Menu);
                 }
@@ -623,6 +600,9 @@ impl MobileApp for UndergroundTV {
         streaming_state: &mut StreamingState,
         player: &mut Player,
         _creature: &mut Creature,
+        _player_pos: &crate::game::map::MapPos,
+        _active_delivery: &mut crate::game::delivery::ActiveDelivery,
+        _walk_blocked_map: &crate::game::map::WalkBlockedMap,
         scale: f32,
         alpha: u8,
         _dd_screen: &DungeonDashScreen,

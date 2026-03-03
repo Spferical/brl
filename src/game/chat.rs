@@ -350,11 +350,8 @@ pub fn draw_streaming_indicator(
     mut contexts: EguiContexts,
     streaming_state: Res<StreamingState>,
     player: Single<&Player>,
+    active_delivery: Res<crate::game::delivery::ActiveDelivery>,
 ) {
-    if !streaming_state.is_streaming {
-        return;
-    }
-
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };
@@ -369,20 +366,37 @@ pub fn draw_streaming_indicator(
     egui::Area::new(egui::Id::new("streaming_indicator"))
         .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 20.0))
         .show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                let (rect, _) =
-                    ui.allocate_exact_size(egui::vec2(20.0, 20.0), egui::Sense::hover());
-                ui.painter().circle_filled(rect.center(), 8.0, color);
-                ui.label(
-                    RichText::new(text)
-                        .color(color)
-                        .font(egui::FontId::new(
-                            20.0,
-                            egui::FontFamily::Name("press_start".into()),
-                        ))
-                        .strong(),
-                );
-            });
+            if streaming_state.is_streaming {
+                ui.horizontal(|ui| {
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(20.0, 20.0), egui::Sense::hover());
+                    ui.painter().circle_filled(rect.center(), 8.0, color);
+                    ui.label(
+                        RichText::new(text)
+                            .color(color)
+                            .font(egui::FontId::new(
+                                20.0,
+                                egui::FontFamily::Name("press_start".into()),
+                            ))
+                            .strong(),
+                    );
+                });
+            }
+
+            for delivery in active_delivery.deliveries.iter() {
+                ui.horizontal(|ui| {
+                    ui.add_space(30.0); // Indent a bit
+                    ui.label(
+                        RichText::new(format!("Delivery in {} turns", delivery.turns_remaining))
+                            .color(Color32::from_rgb(255, 165, 0)) // Orange
+                            .font(egui::FontId::new(
+                                16.0,
+                                egui::FontFamily::Name("press_start".into()),
+                            ))
+                            .strong(),
+                    );
+                });
+            }
         });
 }
 

@@ -35,6 +35,7 @@ mod assets;
 mod camera;
 mod chat;
 pub(crate) mod debug;
+mod delivery;
 mod examine;
 mod input;
 pub mod lighting;
@@ -69,6 +70,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<targeting::ValidTargets>();
     app.init_resource::<phone::PhoneState>();
     app.init_resource::<mobile_apps::DungeonDashSelection>();
+    app.init_resource::<delivery::ActiveDelivery>();
     app.init_resource::<chat::StreamingState>();
     app.init_resource::<chat::ChatHistory>();
     app.init_resource::<TurnCounter>();
@@ -95,6 +97,7 @@ pub(super) fn plugin(app: &mut App) {
             camera::update_camera,
             examine::update_examine_info,
             examine::highlight_examine_tile,
+            delivery::draw_delivery_indicators,
         )
             .run_if(in_state(Screen::Gameplay))
             .chain(),
@@ -111,6 +114,7 @@ pub(super) fn plugin(app: &mut App) {
                     chat::update_streaming_turn,
                     tick_meters,
                     signal::update_player_signal,
+                    delivery::process_deliveries,
                 )
                     .chain(),
                 // kill mobs from any player damage
@@ -155,6 +159,7 @@ pub(super) fn plugin(app: &mut App) {
             chat::draw_streaming_indicator,
             phone::draw_phone,
             chat::draw_chat,
+            delivery::draw_eat_popup,
         )
             .run_if(in_state(Screen::Gameplay)),
     );
