@@ -146,10 +146,11 @@ pub fn update_streaming_stats(
     mut streaming_state: ResMut<StreamingState>,
     player: Single<&Player>,
 ) {
-    if !streaming_state.is_streaming || player.signal <= 2 {
+    if !streaming_state.is_streaming {
         streaming_state.viewers = 0;
         streaming_state.viewers_displayed = 0.0;
         streaming_state.max_viewers = 0;
+        streaming_state.viewers_fractional = 0.0;
         return;
     }
 
@@ -180,50 +181,60 @@ pub fn update_streaming_turn(
     mut streaming_state: ResMut<StreamingState>,
     turn_counter: Res<TurnCounter>,
 ) {
-    if streaming_state.is_streaming && player.signal > 2 {
-        // 1 brainrot every 30 turns
-        if turn_counter.0.is_multiple_of(30) {
-            player.brainrot += 1;
-        }
+    let sub_decay_factor = 0.98623; // half-life 50 turns
+    let viewer_decay_factor = 0.933; // half-life 10 turns
 
-        // Viewers growth per turn: a * e^(b * rizz)
-        // b = ln(50)/40 = 0.0978 (50x increase from 10 to 50 rizz)
-        // a = 100 / e^(100*b) = 0.00566 (100/turn at 100 rizz)
-        let rizz = player.rizz as f32;
-        let mut gain = 0.00566 * (0.0978 * rizz).exp();
+    if streaming_state.is_streaming {
+        if player.signal > 2 {
+            // 1 brainrot every 30 turns
+            if turn_counter.0.is_multiple_of(30) {
+                player.brainrot += 1;
+            }
 
-        // Taper after 2000 viewers
-        if streaming_state.viewers > 2000 {
-            let overflow = (streaming_state.viewers - 2000) as f32;
-            // 1 / n^2
-            let factor = 2000.0 / (2000.0 + overflow);
-            gain *= factor * factor;
-        }
+            // Viewers growth per turn: a * e^(b * rizz)
+            // b = ln(50)/40 = 0.0978 (50x increase from 10 to 50 rizz)
+            // a = 100 / e^(100*b) = 0.00566 (100/turn at 100 rizz)
+            let rizz = player.rizz as f32;
+            let mut gain = 0.00566 * (0.0978 * rizz).exp();
 
-        streaming_state.viewers_fractional += gain;
-        if streaming_state.viewers_fractional >= 1.0 {
-            let i_gain = streaming_state.viewers_fractional.floor();
-            streaming_state.viewers += i_gain as i32;
-            streaming_state.viewers_fractional -= i_gain;
-        }
+            // Taper after 2000 viewers
+            if streaming_state.viewers > 2000 {
+                let overflow = (streaming_state.viewers - 2000) as f32;
+                // 1 / n^2
+                let factor = 2000.0 / (2000.0 + overflow);
+                gain *= factor * factor;
+            }
 
-        // 5% of max viewers this session
-        streaming_state.max_viewers = streaming_state.max_viewers.max(streaming_state.viewers);
-        let target_subs = (streaming_state.max_viewers as f32 * 0.05).floor() as i32;
-        if target_subs > streaming_state.subscribers {
-            streaming_state.subscribers = target_subs;
-            streaming_state.subscribers_fractional = 0.0;
+            streaming_state.viewers_fractional += gain;
+            if streaming_state.viewers_fractional >= 1.0 {
+                let i_gain = streaming_state.viewers_fractional.floor();
+                streaming_state.viewers += i_gain as i32;
+                streaming_state.viewers_fractional -= i_gain;
+            }
+
+            // 5% of max viewers this session
+            streaming_state.max_viewers = streaming_state.max_viewers.max(streaming_state.viewers);
+            let target_subs = (streaming_state.max_viewers as f32 * 0.05).floor() as i32;
+            if target_subs > streaming_state.subscribers {
+                streaming_state.subscribers = target_subs;
+                streaming_state.subscribers_fractional = 0.0;
+            }
+        } else {
+            // Streaming but lost signal: attenuate viewers aggressively but DO NOT decay subs
+            let old_viewers = streaming_state.viewers as f32 + streaming_state.viewers_fractional;
+            let new_viewers = old_viewers * viewer_decay_factor;
+            streaming_state.viewers = new_viewers.floor() as i32;
+            streaming_state.viewers_fractional = new_viewers.fract();
         }
     } else {
-        // Sub decay only when not streaming: half-life 50 turns
-        // new = old * 0.5 ^ (1 / 50)
-        // 0.5 ^ (1 / 50) approx 0.98623.
-        let decay_factor = 0.98623;
+        // Not streaming: attenuate subscribers, viewers reset elsewhere
         let old_subs = streaming_state.subscribers as f32 + streaming_state.subscribers_fractional;
-        let new_subs = old_subs * decay_factor;
-
+        let new_subs = old_subs * sub_decay_factor;
         streaming_state.subscribers = new_subs.floor() as i32;
         streaming_state.subscribers_fractional = new_subs.fract();
+
+        streaming_state.viewers = 0;
+        streaming_state.viewers_fractional = 0.0;
     }
 }
 

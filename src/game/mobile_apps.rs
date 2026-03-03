@@ -639,6 +639,7 @@ impl MobileApp for UndergroundTV {
                 streaming_state.viewers = 0;
                 streaming_state.viewers_displayed = 0.0;
                 streaming_state.max_viewers = 0;
+                streaming_state.viewers_fractional = 0.0;
             }
         }
     }
