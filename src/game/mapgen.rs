@@ -1,5 +1,5 @@
 use crate::game::{
-    Creature, DropsCorpse, Mob, MobBundle, PLAYER_Z, Player, TILE_Z,
+    Creature, DropsCorpse, Mob, MobAttrs, MobBundle, PLAYER_Z, Player, TILE_Z,
     assets::WorldAssets,
     camera::CameraFollow,
     lighting::Occluder,
@@ -19,6 +19,31 @@ enum TileKind {
 #[derive(Clone, Copy)]
 enum MobKind {
     GiantFrog,
+}
+
+impl MobKind {
+    fn get_bundle(&self, assets: &WorldAssets) -> MobBundle {
+        match self {
+            MobKind::GiantFrog => MobBundle {
+                name: Name::new("Giant Frog"),
+                creature: Creature {
+                    hp: 1,
+                    max_hp: 1,
+                    faction: -1,
+                },
+                mob: Mob {
+                    melee_damage: 1,
+                    ranged: false,
+                    attrs: MobAttrs {
+                        based: true,
+                        ..Default::default()
+                    },
+                },
+                sprite: assets.get_ascii_sprite('F', Color::srgb(0.2, 0.8, 0.2)),
+                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+            },
+        }
+    }
 }
 
 #[derive(Component)]
@@ -200,22 +225,7 @@ pub(crate) fn spawn_level(
 
     for (&pos, &mob_kind) in draft.mobs.iter() {
         let pos = pos + offset;
-        let bundle = match mob_kind {
-            MobKind::GiantFrog => MobBundle {
-                name: Name::new("Goblin"),
-                creature: Creature {
-                    hp: 1,
-                    max_hp: 1,
-                    faction: -1,
-                },
-                mob: Mob {
-                    strength: 1,
-                    ranged: false,
-                },
-                sprite: assets.get_ascii_sprite('g', Color::srgb(0.2, 0.8, 0.2)),
-                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
-            },
-        };
+        let bundle = mob_kind.get_bundle(&assets);
         let map_pos = MapPos(IVec2::from(pos));
         let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
         let new_mob = commands.spawn((bundle, map_pos, transform)).id();

@@ -464,7 +464,7 @@ struct Bullet {
 }
 
 /// Common fields between the player and mobs.
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, Reflect)]
 pub(crate) struct Creature {
     pub hp: i32,
     pub max_hp: i32,
@@ -481,12 +481,34 @@ fn is_player_alive(player: Single<&Creature, With<Player>>, settings: Res<DebugS
     settings.nohurt || player.hp > 0
 }
 
+#[derive(Clone, Debug, Reflect, Default)]
+struct MobAttrs {
+    based: bool,
+    basic: bool,
+    mog_risk: bool,
+}
+
 // NPC-specific fields.
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Clone, Debug, Reflect)]
 #[require(ObscuresTile)]
 struct Mob {
-    strength: i32,
+    melee_damage: i32,
     ranged: bool,
+    attrs: MobAttrs,
+}
+
+impl Mob {
+    fn get_melee_damage_type(&self) -> DamageType {
+        if self.attrs.based {
+            DamageType::Psychic
+        } else if self.attrs.mog_risk {
+            DamageType::Aura
+        } else if self.attrs.basic {
+            DamageType::Boredom
+        } else {
+            DamageType::Physical
+        }
+    }
 }
 
 #[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash, Default)]
@@ -568,7 +590,8 @@ fn handle_player_move(
             if let Some(entity) = pos_to_creature.0.get(&new_pos.0) {
                 damage.0.push(DamageInstance {
                     entity: *entity,
-                    hp: 2,
+                    amount: 2,
+                    ty: DamageType::Physical,
                 });
                 commands
                     .entity(player_entity)
@@ -638,7 +661,8 @@ fn handle_player_move(
                 if let Some(mob_entity) = pos_to_creature.0.get(&new_pos) {
                     damage.0.push(DamageInstance {
                         entity: *mob_entity,
-                        hp: 2,
+                        amount: 2,
+                        ty: DamageType::Physical,
                     });
                     pos.0 = new_pos;
                     if let Ok(mut mob_pos) = mobs.get_mut(*mob_entity) {
@@ -713,9 +737,17 @@ fn update_pos_to_creature(
     }
 }
 
+pub(crate) enum DamageType {
+    Physical,
+    Psychic,
+    Aura,
+    Boredom,
+}
+
 pub struct DamageInstance {
     entity: Entity,
-    hp: i32,
+    amount: i32,
+    ty: DamageType,
 }
 
 #[derive(Resource, Default)]
@@ -734,7 +766,8 @@ fn check_bullet_collision(
         if let Some(mob) = pos_to_mob.0.get(&pos.0) {
             damage.0.push(DamageInstance {
                 entity: *mob,
-                hp: bullet.damage,
+                amount: bullet.damage,
+                ty: DamageType::Physical,
             });
             if player_q.get(*mob).is_ok() {
                 screen_shake.trauma = (screen_shake.trauma + 0.6).min(1.0);
@@ -751,11 +784,39 @@ fn check_bullet_collision(
 fn apply_damage(
     mut damage: ResMut<PendingDamage>,
     mut animation: MessageWriter<DamageAnimationMessage>,
-    mut creature: Query<&mut Creature>,
+    mut creature: Query<(&mut Creature, Option<&mut Player>)>,
 ) {
-    for DamageInstance { entity, hp } in damage.0.drain(..) {
-        if let Ok(mut creature) = creature.get_mut(entity) {
-            creature.hp -= hp;
+    for DamageInstance { entity, amount, ty } in damage.0.drain(..) {
+        if let Ok((mut creature, player)) = creature.get_mut(entity) {
+            match player {
+                Some(mut player) => match ty {
+                    DamageType::Physical => creature.hp -= amount,
+                    DamageType::Psychic => {
+                        player.brainrot += amount;
+                        if player.brainrot > 100 {
+                            creature.hp -= player.brainrot - 100;
+                            player.brainrot = 100;
+                        }
+                    }
+                    DamageType::Aura => {
+                        player.rizz -= amount;
+                        if player.rizz < 0 {
+                            creature.hp += player.rizz;
+                            player.rizz = 0;
+                        }
+                    }
+                    DamageType::Boredom => {
+                        player.boredom += amount;
+                        if player.boredom > 100 {
+                            creature.hp -= player.boredom - 100;
+                            player.boredom = 100;
+                        }
+                    }
+                },
+                None => {
+                    creature.hp -= amount;
+                }
+            }
         }
         animation.write(DamageAnimationMessage { entity });
     }
@@ -892,7 +953,8 @@ fn process_mob_turn(
             // attack
             damage.0.push(DamageInstance {
                 entity: *enemy,
-                hp: mob.strength,
+                amount: mob.melee_damage,
+                ty: mob.get_melee_damage_type(),
             });
             commands.entity(entity).insert(animation::AttackAnimation {
                 direction: (new_pos.0 - old_pos.0).as_vec2(),
@@ -1084,11 +1146,21 @@ fn sidebar(
                                 ui.add(half_heart.clone());
                             }
                             if let Some(mob) = mob {
-                                for _ in 0..mob.strength / 2 {
+                                for _ in 0..mob.melee_damage / 2 {
                                     ui.add(sword.clone());
                                 }
-                                if mob.strength % 2 == 1 {
+                                if mob.melee_damage % 2 == 1 {
                                     ui.add(half_sword.clone());
+                                }
+                                if mob.attrs.based {
+                                    ui.label(apply_brainrot_ui(
+                                        RichText::new("Based")
+                                            .background_color(egui::Color32::PURPLE),
+                                        player.brainrot,
+                                        ui.style(),
+                                        FontSelection::Default,
+                                        Align::LEFT,
+                                    ));
                                 }
                             }
                         });

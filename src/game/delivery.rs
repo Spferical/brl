@@ -1,3 +1,4 @@
+use crate::game::DamageType;
 use crate::game::{
     CORPSE_Z, Corpse, DamageInstance, GameWorld, HIGHLIGHT_Z, PendingDamage, Player, PosToCreature,
     animation::DamageAnimationMessage, assets::WorldAssets, map,
@@ -113,14 +114,15 @@ pub(crate) fn process_deliveries(
 
         if delivery.turns_remaining == 0 {
             // delivery arrived
-            if let Some(mob) = pos_to_creature.0.get(&delivery.target_pos) {
-                if Some(*mob) != player_entity {
-                    // kill mob
-                    damage.0.push(DamageInstance {
-                        entity: *mob,
-                        hp: 9999, // enough to kill
-                    });
-                }
+            if let Some(mob) = pos_to_creature.0.get(&delivery.target_pos)
+                && Some(*mob) != player_entity
+            {
+                // kill mob
+                damage.0.push(DamageInstance {
+                    entity: *mob,
+                    amount: 9999, // enough to kill
+                    ty: DamageType::Physical,
+                });
             }
 
             // Drop off the food delivery
