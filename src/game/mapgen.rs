@@ -4,6 +4,7 @@ use crate::game::{
     camera::CameraFollow,
     lighting::Occluder,
     map::{self, MapPos},
+    signal,
 };
 use bevy::{platform::collections::HashMap, prelude::*};
 use rand::{Rng, seq::IndexedRandom};
@@ -29,6 +30,8 @@ pub struct Stairs {
 }
 
 pub struct LevelDraft {
+    width: u32,
+    height: u32,
     start: rogue_algebra::Pos,
     #[allow(unused)]
     end: rogue_algebra::Pos,
@@ -132,6 +135,8 @@ fn draft_level_mapgen_rs(
     }
 
     LevelDraft {
+        width: buf.width as u32,
+        height: buf.height as u32,
         start: start_pos,
         end: furthest_tile,
         tiles,
@@ -148,12 +153,20 @@ pub(crate) fn spawn_level(
     draft: &LevelDraft,
     offset: rogue_algebra::Offset,
 ) {
+    let signal_map = signal::generate_signal_map(
+        draft.width as i32,
+        draft.height as i32,
+        rng.random(),
+        IVec2::from(offset),
+    );
+
     let level_entity = commands
         .spawn((
             Name::new(name),
             Transform::IDENTITY,
             GlobalTransform::IDENTITY,
             InheritedVisibility::VISIBLE,
+            signal_map,
         ))
         .id();
     commands.entity(world).add_child(level_entity);

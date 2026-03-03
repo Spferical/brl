@@ -86,17 +86,21 @@ impl MobileApp for UndergroundTV {
         ui: &mut egui::Ui,
         _phone_state: &mut PhoneState,
         streaming_state: &mut StreamingState,
-        _player: &Player,
+        player: &Player,
         scale: f32,
         alpha: u8,
     ) {
+        let is_low_signal = player.signal <= 2;
         let button_text = if streaming_state.is_streaming {
             "Stop Streaming"
+        } else if is_low_signal {
+            "Low Signal"
         } else {
             "Start Streaming"
         };
 
-        let button_res = ui.add(
+        let button_res = ui.add_enabled(
+            !is_low_signal || streaming_state.is_streaming,
             egui::Button::new(
                 RichText::new(button_text)
                     .size(64.0 * scale)

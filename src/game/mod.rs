@@ -42,6 +42,7 @@ mod map;
 mod mapgen;
 mod mobile_apps;
 mod phone;
+mod signal;
 mod targeting;
 
 const HIGHLIGHT_Z: f32 = 20.0;
@@ -107,6 +108,7 @@ pub(super) fn plugin(app: &mut App) {
                     increment_turn_counter,
                     chat::update_streaming_turn,
                     tick_meters,
+                    signal::update_player_signal,
                 )
                     .chain(),
                 // kill mobs from any player damage
@@ -1293,7 +1295,12 @@ fn left_sidebar(
                     egui::pos2(rect.min.x + x_offset + bar_width, rect.max.y),
                 );
                 let color = if i < signal_val {
-                    egui::Color32::WHITE
+                    match signal_val {
+                        1 | 2 => egui::Color32::from_rgb(255, 50, 50), // Red
+                        3 => egui::Color32::from_rgb(255, 255, 50),    // Yellow
+                        4 | 5 => egui::Color32::from_rgb(50, 255, 50), // Green
+                        _ => egui::Color32::from_rgb(255, 50, 50),
+                    }
                 } else {
                     egui::Color32::from_rgba_premultiplied(100, 100, 100, 100)
                 };

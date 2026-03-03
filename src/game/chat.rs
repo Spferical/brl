@@ -126,8 +126,12 @@ pub struct StreamingState {
     pub subscribers_fractional: f32,
 }
 
-pub fn update_streaming_stats(time: Res<Time>, mut streaming_state: ResMut<StreamingState>) {
-    if !streaming_state.is_streaming {
+pub fn update_streaming_stats(
+    time: Res<Time>,
+    mut streaming_state: ResMut<StreamingState>,
+    player: Single<&Player>,
+) {
+    if !streaming_state.is_streaming || player.signal <= 2 {
         streaming_state.viewers = 0;
         streaming_state.viewers_displayed = 0.0;
         streaming_state.max_viewers = 0;
@@ -161,7 +165,7 @@ pub fn update_streaming_turn(
     mut streaming_state: ResMut<StreamingState>,
     turn_counter: Res<TurnCounter>,
 ) {
-    if streaming_state.is_streaming {
+    if streaming_state.is_streaming && player.signal > 2 {
         // 1 brainrot every 30 turns
         if turn_counter.0.is_multiple_of(30) {
             player.brainrot += 1;
@@ -342,7 +346,11 @@ fn queue_message(chat: &mut ChatHistory, rng: &mut impl Rng, pool: &[&str]) {
     });
 }
 
-pub fn draw_streaming_indicator(mut contexts: EguiContexts, streaming_state: Res<StreamingState>) {
+pub fn draw_streaming_indicator(
+    mut contexts: EguiContexts,
+    streaming_state: Res<StreamingState>,
+    player: Single<&Player>,
+) {
     if !streaming_state.is_streaming {
         return;
     }
@@ -351,16 +359,23 @@ pub fn draw_streaming_indicator(mut contexts: EguiContexts, streaming_state: Res
         return;
     };
 
+    let is_low_signal = player.signal <= 2;
+    let (text, color) = if is_low_signal {
+        ("Offline: Poor Signal", Color32::GRAY)
+    } else {
+        ("Streaming...", Color32::RED)
+    };
+
     egui::Area::new(egui::Id::new("streaming_indicator"))
         .anchor(egui::Align2::CENTER_TOP, egui::vec2(0.0, 20.0))
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 let (rect, _) =
                     ui.allocate_exact_size(egui::vec2(20.0, 20.0), egui::Sense::hover());
-                ui.painter().circle_filled(rect.center(), 8.0, Color32::RED);
+                ui.painter().circle_filled(rect.center(), 8.0, color);
                 ui.label(
-                    RichText::new("Streaming...")
-                        .color(Color32::RED)
+                    RichText::new(text)
+                        .color(color)
                         .font(egui::FontId::new(
                             20.0,
                             egui::FontFamily::Name("press_start".into()),
@@ -377,7 +392,11 @@ pub fn draw_chat(
     streaming_state: Res<StreamingState>,
     player: Single<&Player>,
 ) {
-    if !streaming_state.is_streaming || streaming_state.viewers == 0 || chat.messages.is_empty() {
+    if !streaming_state.is_streaming
+        || streaming_state.viewers == 0
+        || chat.messages.is_empty()
+        || player.signal <= 2
+    {
         return;
     }
 
