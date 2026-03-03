@@ -144,7 +144,7 @@ pub struct StreamingState {
 pub fn update_streaming_stats(
     time: Res<Time>,
     mut streaming_state: ResMut<StreamingState>,
-    player: Single<&Player>,
+    _player: Single<&Player>,
 ) {
     if !streaming_state.is_streaming {
         streaming_state.viewers = 0;

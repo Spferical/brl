@@ -302,7 +302,7 @@ impl DungeonDash {
             ui.add_space(40.0 * scale);
 
             let lines = [
-                (format!("{}", food.name), format!("${}", food.price)),
+                (food.name.to_string(), format!("${}", food.price)),
                 ("Service Fee (30%)".to_string(), format!("${}", service_fee)),
                 ("Dungeon Tax (10%)".to_string(), format!("${}", dungeon_tax)),
                 (
@@ -518,10 +518,10 @@ impl DungeonDash {
                     let reachable = |p: crate::game::map::MapPos| p.adjacent();
                     let mut possible_spots = vec![];
                     for path in rogue_algebra::path::bfs_paths(&[*player_pos], maxdist, reachable) {
-                        if let Some(pos) = path.last() {
-                            if !walk_blocked_map.0.contains(&pos.0) {
-                                possible_spots.push(pos.0);
-                            }
+                        if let Some(pos) = path.last()
+                            && !walk_blocked_map.0.contains(&pos.0)
+                        {
+                            possible_spots.push(pos.0);
                         }
                     }
 

@@ -130,15 +130,15 @@ pub(crate) fn handle_input(
         examine_pos.pos = Some(*player.1);
     }
 
-    if keyboard_input.pressed(Key::Shift) && matches!(*mode, InputMode::Normal) {
-        if let Some(sprint) = abilities
+    if keyboard_input.pressed(Key::Shift)
+        && matches!(*mode, InputMode::Normal)
+        && let Some(sprint) = abilities
             .abilities
             .iter()
             .find(|a| matches!(a, Ability::Sprint))
-        {
-            *mode = InputMode::Targeting(*sprint, player.1.0);
-            examine_pos.pos = Some(*player.1);
-        }
+    {
+        *mode = InputMode::Targeting(*sprint, player.1.0);
+        examine_pos.pos = Some(*player.1);
     }
 
     let mut intent = None;

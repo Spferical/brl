@@ -281,7 +281,7 @@ pub(crate) fn spawn_level(
 
     for (&pos, &mob_kind) in draft.mobs.iter() {
         let pos = pos + offset;
-        let bundle = mob_kind.get_bundle(&assets);
+        let bundle = mob_kind.get_bundle(assets);
         let map_pos = MapPos(IVec2::from(pos));
         let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
         let new_mob = commands.spawn((bundle, map_pos, transform)).id();
