@@ -149,7 +149,7 @@ pub(super) fn plugin(app: &mut App) {
     );
     app.add_systems(
         Update,
-        apply_brainrot_to_world_text.run_if(in_state(Screen::Gameplay)),
+        (apply_brainrot_to_world_text, apply_brainrot_to_walls).run_if(in_state(Screen::Gameplay)),
     );
     app.add_systems(
         EguiPrimaryContextPass,
@@ -274,6 +274,39 @@ fn apply_brainrot_to_world_text(
             // Restore
             text_color.0 = base_color.0;
             transform.rotation = Quat::IDENTITY;
+        }
+    }
+}
+
+fn apply_brainrot_to_walls(
+    mut q_walls: Query<(&map::MapPos, &mut Transform), With<lighting::Occluder>>,
+    player: Query<(&map::MapPos, &Player)>,
+) {
+    let Some((player_pos, player)) = player.iter().next() else {
+        return;
+    };
+    let p = ((player.brainrot as f32 - 80.0) / 20.0).clamp(0.0, 1.0);
+
+    let player_world = player_pos.to_vec3(TILE_Z);
+
+    for (map_pos, mut transform) in q_walls.iter_mut() {
+        let base_world = map_pos.to_vec3(TILE_Z);
+        if p > 0.0 {
+            let diff = base_world - player_world;
+            let dist = diff.truncate().length();
+            if dist > 0.0 {
+                let dir = diff / dist;
+                let max_displacement = map::TILE_WIDTH * 0.4;
+                let radius = map::TILE_WIDTH * 4.0;
+                let strength = (1.0 - (dist / radius)).clamp(0.0, 1.0);
+
+                let displacement = dir * max_displacement * p * strength;
+                transform.translation = base_world + displacement;
+            } else {
+                transform.translation = base_world;
+            }
+        } else {
+            transform.translation = base_world;
         }
     }
 }
