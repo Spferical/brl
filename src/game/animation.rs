@@ -42,6 +42,48 @@ pub fn process_move_animations(
     }
 }
 
+#[derive(Component, Debug)]
+pub struct AttackAnimation {
+    pub direction: Vec2,
+    pub timer: Timer,
+    pub base_translation: Vec3,
+}
+
+pub fn process_attack_animations(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut Transform, &mut AttackAnimation)>,
+    time: Res<Time>,
+) {
+    for (entity, mut transform, mut animation) in query.iter_mut() {
+        animation.timer.tick(time.delta().min(MAX_TICK));
+        let fraction = animation.timer.fraction();
+
+        let bump = (fraction * std::f32::consts::PI).sin();
+        let displacement_amount = bump * 12.0;
+
+        let stretch = 1.0 + bump * 0.4;
+        let squash = 1.0 - bump * 0.2;
+
+        if animation.direction.x.abs() > animation.direction.y.abs() {
+            transform.scale = Vec3::new(stretch, squash, 1.0);
+        } else {
+            transform.scale = Vec3::new(squash, stretch, 1.0);
+        }
+
+        transform.translation.x =
+            animation.base_translation.x + animation.direction.x * displacement_amount;
+        transform.translation.y =
+            animation.base_translation.y + animation.direction.y * displacement_amount;
+        transform.translation.z = animation.base_translation.z;
+
+        if animation.timer.is_finished() {
+            transform.scale = Vec3::ONE;
+            transform.translation = animation.base_translation;
+            commands.entity(entity).try_remove::<AttackAnimation>();
+        }
+    }
+}
+
 #[derive(Message)]
 pub struct DamageAnimationMessage {
     pub entity: Entity,

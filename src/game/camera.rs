@@ -5,16 +5,38 @@ use crate::game::Player;
 #[derive(Component)]
 pub(crate) struct CameraFollow;
 
+#[derive(Resource, Default)]
+pub struct ScreenShake {
+    pub trauma: f32,
+}
+
 pub(crate) fn update_camera(
     mut camera: Single<&mut Transform, (With<Camera2d>, Without<CameraFollow>)>,
     follow: Single<&Transform, (With<CameraFollow>, Without<Camera2d>)>,
     player: Query<&Player>,
+    mut screen_shake: ResMut<ScreenShake>,
     time: Res<Time>,
 ) {
     let Vec3 { x, y, .. } = follow.translation;
     let target = Vec3::new(x, y, camera.translation.z);
     let t = 1.0 - (-10.0 * time.delta_secs()).exp();
     camera.translation = camera.translation.lerp(target, t);
+
+    // Apply screen shake
+    if screen_shake.trauma > 0.0 {
+        let shake = screen_shake.trauma * screen_shake.trauma;
+        let max_offset = 20.0;
+        let time_s = time.elapsed_secs() * 50.0;
+        let offset_x = (time_s.sin() * 1.5 + (time_s * 1.3).cos()) * max_offset * shake;
+        let offset_y = ((time_s * 1.2).cos() * 1.5 + (time_s * 0.8).sin()) * max_offset * shake;
+        camera.translation.x += offset_x;
+        camera.translation.y += offset_y;
+
+        screen_shake.trauma -= time.delta_secs() * 1.5; // decay
+        if screen_shake.trauma < 0.0 {
+            screen_shake.trauma = 0.0;
+        }
+    }
 
     if let Some(player) = player.iter().next() {
         let p = ((player.brainrot as f32 - 70.0) / 30.0).clamp(0.0, 1.0);

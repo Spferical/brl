@@ -57,6 +57,7 @@ pub(super) fn plugin(app: &mut App) {
     app.insert_resource(ClearColor(Color::from(GRAY_500)));
     app.load_resource::<assets::WorldAssets>();
     app.init_resource::<map::WalkBlockedMap>();
+    app.init_resource::<camera::ScreenShake>();
     app.init_resource::<PlayerAbilities>();
     app.init_resource::<PendingDamage>();
     app.init_resource::<PlayerMoved>();
@@ -93,6 +94,7 @@ pub(super) fn plugin(app: &mut App) {
             chat::update_money_timer,
             chat::update_chat,
             animation::process_move_animations,
+            animation::process_attack_animations,
             animation::update_damage_animations,
             camera::update_camera,
             examine::update_examine_info,
@@ -288,7 +290,10 @@ fn apply_brainrot_visual_effects(
             Has<Creature>,
             Has<Player>,
         ),
-        Without<animation::MoveAnimation>,
+        (
+            Without<animation::MoveAnimation>,
+            Without<animation::AttackAnimation>,
+        ),
     >,
     player_q: Query<(&map::MapPos, &Player)>,
     time: Res<Time>,
@@ -528,6 +533,7 @@ fn handle_player_move(
     turn_counter: Res<TurnCounter>,
     mut damage: ResMut<PendingDamage>,
     mut moved: ResMut<PlayerMoved>,
+    mut screen_shake: ResMut<camera::ScreenShake>,
 ) {
     let (player_entity, mut pos, intent, player_stats) = player.into_inner();
     commands.entity(player_entity).remove::<PlayerIntent>();
@@ -564,6 +570,14 @@ fn handle_player_move(
                     entity: *entity,
                     hp: 2,
                 });
+                commands
+                    .entity(player_entity)
+                    .insert(animation::AttackAnimation {
+                        direction: (new_pos.0 - old_pos.0).as_vec2(),
+                        timer: Timer::new(Duration::from_millis(150), TimerMode::Once),
+                        base_translation: old_pos.to_vec3(PLAYER_Z),
+                    });
+                screen_shake.trauma = (screen_shake.trauma + 0.4).min(1.0);
             } else {
                 pos.0 = new_pos.0;
                 commands.entity(player_entity).insert(MoveAnimation {
@@ -713,6 +727,8 @@ fn check_bullet_collision(
     walk_blocked_map: Res<map::WalkBlockedMap>,
     bullets: Query<(Entity, &MapPos, &Bullet)>,
     mut damage: ResMut<PendingDamage>,
+    player_q: Query<Entity, With<Player>>,
+    mut screen_shake: ResMut<camera::ScreenShake>,
 ) {
     for (entity, pos, bullet) in bullets.iter() {
         if let Some(mob) = pos_to_mob.0.get(&pos.0) {
@@ -720,6 +736,11 @@ fn check_bullet_collision(
                 entity: *mob,
                 hp: bullet.damage,
             });
+            if player_q.get(*mob).is_ok() {
+                screen_shake.trauma = (screen_shake.trauma + 0.6).min(1.0);
+            } else {
+                screen_shake.trauma = (screen_shake.trauma + 0.2).min(1.0);
+            }
         }
         if pos_to_mob.0.contains_key(&pos.0) || walk_blocked_map.0.contains(&pos.0) {
             commands.entity(entity).despawn();
@@ -825,6 +846,8 @@ fn process_mob_turn(
     mut mobs: Query<(Entity, &mut MapPos, &Creature, &mut Mob)>,
     mut commands: Commands,
     mut damage: ResMut<PendingDamage>,
+    player_q: Query<Entity, With<Player>>,
+    mut screen_shake: ResMut<camera::ScreenShake>,
 ) {
     let world_entity = world.into_inner();
     let rng = &mut rand::rng();
@@ -871,6 +894,14 @@ fn process_mob_turn(
                 entity: *enemy,
                 hp: mob.strength,
             });
+            commands.entity(entity).insert(animation::AttackAnimation {
+                direction: (new_pos.0 - old_pos.0).as_vec2(),
+                timer: Timer::new(Duration::from_millis(150), TimerMode::Once),
+                base_translation: old_pos.to_vec3(PLAYER_Z),
+            });
+            if player_q.get(*enemy).is_ok() {
+                screen_shake.trauma = (screen_shake.trauma + 0.7).min(1.0);
+            }
         } else if mob.ranged && rng.random_bool(0.5) {
             // fire weapon
             let direction = new_pos.0 - old_pos.0;
