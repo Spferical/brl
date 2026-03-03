@@ -22,6 +22,7 @@ enum MobKind {
     GymBro,
     Influencer,
     Normie,
+    Amogus,
 }
 
 impl MobKind {
@@ -96,6 +97,24 @@ impl MobKind {
                 sprite: assets.get_ascii_sprite('n', Color::srgb(0.5, 0.5, 0.5)),
                 corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
             },
+            MobKind::Amogus => MobBundle {
+                name: Name::new("Amogus"),
+                creature: Creature {
+                    hp: 2,
+                    max_hp: 2,
+                    faction: -1,
+                },
+                mob: Mob {
+                    melee_damage: 4,
+                    ranged: false,
+                    attrs: MobAttrs {
+                        sus: true,
+                        ..Default::default()
+                    },
+                },
+                sprite: assets.get_ascii_sprite('a', Color::srgb(1.0, 0.1, 0.1)),
+                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+            },
         }
     }
 }
@@ -149,8 +168,8 @@ impl LevelDraft {
             .collect::<Vec<rogue_algebra::Pos>>();
         for pos in floors.choose_multiple(rng, num_mobs) {
             use MobKind::*;
-            let opts = [GiantFrog, GymBro, Influencer, Normie];
-            self.mobs.insert(*pos, *opts.choose(rng).unwrap());
+            let mob_kinds = [GiantFrog, GymBro, Influencer, Normie, Amogus];
+            self.mobs.insert(*pos, *mob_kinds.choose(rng).unwrap());
         }
         self
     }

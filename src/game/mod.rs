@@ -488,6 +488,7 @@ struct MobAttrs {
     based: bool,
     basic: bool,
     mog_risk: bool,
+    sus: bool,
 }
 
 // NPC-specific fields.
@@ -870,7 +871,7 @@ fn reachable(
 fn build_faction_map(
     mut faction_map: ResMut<FactionMap>,
     creatures: Query<(Entity, &mut MapPos, &mut Creature)>,
-    walk_blocked_map: ResMut<map::WalkBlockedMap>,
+    walk_blocked_map: Res<map::WalkBlockedMap>,
 ) {
     // For each enemy, target their nearest enemy
     // Build a dijkstra map _from_ each faction, towards all enemies of that faction.
@@ -911,13 +912,21 @@ fn process_mob_turn(
     mut damage: ResMut<PendingDamage>,
     player_q: Query<Entity, With<Player>>,
     mut screen_shake: ResMut<camera::ScreenShake>,
+    walk_blocked_map: Res<map::WalkBlockedMap>,
 ) {
+    enum Action {
+        Move(MapPos),
+        Melee(Entity, MapPos),
+        RangedAttack(MapPos),
+        AttackAndTeleport(Entity, MapPos),
+    }
+
     let world_entity = world.into_inner();
     let rng = &mut rand::rng();
     // Determine mob intentions.
     let mut mob_moves = HashMap::new();
-    let mut claimed_moves = HashSet::new();
-    for (entity, pos, creature, _mob) in mobs.iter() {
+    let mut claimed_locations = HashSet::new();
+    for (entity, pos, creature, mob) in mobs.iter() {
         if creature.is_dead() {
             continue;
         }
@@ -929,80 +938,129 @@ fn process_mob_turn(
 
         let mut adjacent = pos.adjacent();
         adjacent.shuffle(rng);
-        let target_move = adjacent
+        let target = adjacent
             .into_iter()
             .filter(|p| dijkstra_map.contains_key(p))
-            .filter(|p| !claimed_moves.contains(&p.0))
+            .filter(|p| !claimed_locations.contains(&p.0))
             .min_by_key(|p| dijkstra_map.get(p).cloned().unwrap_or(usize::MAX));
 
-        if let Some(target_move) = target_move {
-            // move
-            mob_moves.insert(entity, target_move);
+        if let Some(target) = target {
+            if mob.ranged && rng.random_bool(0.5) {
+                mob_moves.insert(entity, Action::RangedAttack(target));
+            } else if let Some(occupier) = pos_to_creature.0.get(&target.0) {
+                if mob.attrs.sus {
+                    let teleport_target = rogue_algebra::path::bfs_paths(&[*pos], 25, |p| {
+                        p.adjacent()
+                            .into_iter()
+                            .filter(|p| !walk_blocked_map.contains(&p.0))
+                    })
+                    .filter(|path| {
+                        let pos = path.last().unwrap();
+                        !pos_to_creature.0.contains_key(&pos.0)
+                            && !claimed_locations.contains(&pos.0)
+                    })
+                    .max_by_key(|path| path.len())
+                    .map(|path| *path.last().unwrap());
+                    if let Some(teleport_target) = teleport_target {
+                        mob_moves.insert(
+                            entity,
+                            Action::AttackAndTeleport(*occupier, teleport_target),
+                        );
+                        claimed_locations.insert(teleport_target.0);
+                    } else {
+                        mob_moves.insert(entity, Action::Melee(*occupier, target));
+                    }
+                } else {
+                    mob_moves.insert(entity, Action::Melee(*occupier, target));
+                }
+            } else {
+                mob_moves.insert(entity, Action::Move(target));
+            }
             // Claim any move that is not a destination.
             // This works because destinations are always enemies.
-            if dijkstra_map.get(&target_move) != Some(&1) {
-                claimed_moves.insert(target_move.0);
+            if dijkstra_map.get(&target) != Some(&1) {
+                claimed_locations.insert(target.0);
             }
         }
     }
 
     // Apply moves.
-    for (entity, dest) in mob_moves.into_iter() {
+    for (entity, action) in mob_moves.into_iter() {
         let (entity, mut pos, _creature, mob) = mobs.get_mut(entity).unwrap();
         let old_pos = *pos;
-        let new_pos = dest;
-        if let Some(enemy) = pos_to_creature.0.get(&new_pos.0) {
-            // attack
-            damage.0.push(DamageInstance {
-                entity: *enemy,
-                amount: mob.melee_damage,
-                ty: mob.get_melee_damage_type(),
-            });
-            commands.entity(entity).insert(animation::AttackAnimation {
-                direction: (new_pos.0 - old_pos.0).as_vec2(),
-                timer: Timer::new(Duration::from_millis(150), TimerMode::Once),
-                base_translation: old_pos.to_vec3(PLAYER_Z),
-            });
-            if player_q.get(*enemy).is_ok() {
-                screen_shake.trauma = (screen_shake.trauma + 0.7).min(1.0);
-            }
-        } else if mob.ranged && rng.random_bool(0.5) {
-            // fire weapon
-            let direction = new_pos.0 - old_pos.0;
-            let (_, rotation) = match (direction.x, direction.y) {
-                (1, 1) => (2093, 0.0),
-                (-1, 1) => (2093, PI / 2.0),
-                (-1, -1) => (2093, PI),
-                (1, -1) => (2093, PI * 1.5),
-                (0, 1) => (2094, 0.0),
-                (-1, 0) => (2094, PI / 2.0),
-                (0, -1) => (2094, PI),
-                (1, 0) => (2094, PI * 1.5),
-                _ => panic!("Unexpected bullet direction: {direction:?}"),
-            };
-            let bullet_sprite = assets.get_ascii_sprite('^', Color::WHITE);
-            let transform = Transform::from_translation(new_pos.to_vec3(PLAYER_Z))
-                .with_rotation(Quat::from_rotation_z(rotation));
-            let bullet = Bullet {
-                direction,
-                damage: 1,
-            };
-            let bullet_id = commands
-                .spawn((bullet, bullet_sprite, new_pos, transform))
-                .id();
-            commands.entity(world_entity).add_child(bullet_id);
-        } else {
-            // move
-            *pos = new_pos;
-            commands.entity(entity).insert(MoveAnimation {
-                from: old_pos.to_vec3(PLAYER_Z),
-                to: new_pos.to_vec3(PLAYER_Z),
-                timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
+        match action {
+            Action::Move(new_pos) => {
+                *pos = new_pos;
+                commands.entity(entity).insert(MoveAnimation {
+                    from: old_pos.to_vec3(PLAYER_Z),
+                    to: new_pos.to_vec3(PLAYER_Z),
+                    timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
 
-                ease: EaseFunction::SineInOut,
-                rotation: None,
-                sway: None,
-            });
+                    ease: EaseFunction::SineInOut,
+                    rotation: None,
+                    sway: None,
+                });
+            }
+            Action::Melee(enemy, new_pos) => {
+                damage.0.push(DamageInstance {
+                    entity: enemy,
+                    amount: mob.melee_damage,
+                    ty: mob.get_melee_damage_type(),
+                });
+                commands.entity(entity).insert(animation::AttackAnimation {
+                    direction: (new_pos.0 - old_pos.0).as_vec2(),
+                    timer: Timer::new(Duration::from_millis(150), TimerMode::Once),
+                    base_translation: old_pos.to_vec3(PLAYER_Z),
+                });
+                if player_q.get(enemy).is_ok() {
+                    screen_shake.trauma = (screen_shake.trauma + 0.7).min(1.0);
+                }
+            }
+            Action::RangedAttack(new_pos) => {
+                let direction = new_pos.0 - old_pos.0;
+                let (_, rotation) = match (direction.x, direction.y) {
+                    (1, 1) => (2093, 0.0),
+                    (-1, 1) => (2093, PI / 2.0),
+                    (-1, -1) => (2093, PI),
+                    (1, -1) => (2093, PI * 1.5),
+                    (0, 1) => (2094, 0.0),
+                    (-1, 0) => (2094, PI / 2.0),
+                    (0, -1) => (2094, PI),
+                    (1, 0) => (2094, PI * 1.5),
+                    _ => panic!("Unexpected bullet direction: {direction:?}"),
+                };
+                let bullet_sprite = assets.get_ascii_sprite('^', Color::WHITE);
+                let transform = Transform::from_translation(new_pos.to_vec3(PLAYER_Z))
+                    .with_rotation(Quat::from_rotation_z(rotation));
+                let bullet = Bullet {
+                    direction,
+                    damage: 1,
+                };
+                let bullet_id = commands
+                    .spawn((bullet, bullet_sprite, new_pos, transform))
+                    .id();
+                commands.entity(world_entity).add_child(bullet_id);
+            }
+            Action::AttackAndTeleport(enemy, teleport_pos) => {
+                damage.0.push(DamageInstance {
+                    entity: enemy,
+                    amount: mob.melee_damage,
+                    ty: mob.get_melee_damage_type(),
+                });
+                *pos = teleport_pos;
+                commands.entity(entity).insert(MoveAnimation {
+                    from: old_pos.to_vec3(PLAYER_Z),
+                    to: teleport_pos.to_vec3(PLAYER_Z),
+                    timer: Timer::new(Duration::from_millis(1), TimerMode::Once),
+
+                    ease: EaseFunction::Linear,
+                    rotation: None,
+                    sway: None,
+                });
+                if player_q.get(enemy).is_ok() {
+                    screen_shake.trauma = (screen_shake.trauma + 0.7).min(1.0);
+                }
+            }
         }
     }
 }
