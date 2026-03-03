@@ -5,8 +5,7 @@ use bevy_egui::{
 };
 
 use crate::game::assets::WorldAssets;
-use crate::game::mobile_apps;
-use crate::game::{Player, apply_brainrot_ui};
+use crate::game::{Creature, Player, apply_brainrot_ui};
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PhoneScreen {
@@ -111,15 +110,21 @@ pub fn update_phone(
     }
 }
 
+use crate::game::mobile_apps::{self, DungeonDashScreen, DungeonDashSelection};
+
 pub fn draw_phone(
     mut contexts: EguiContexts,
-    player: Single<&Player>,
+    player_query: Single<(&mut Player, &mut Creature)>,
     mut phone_state: ResMut<PhoneState>,
     mut streaming_state: ResMut<crate::game::chat::StreamingState>,
     assets: Res<WorldAssets>,
     current_screen: Res<State<PhoneScreen>>,
     mut next_screen: ResMut<NextState<PhoneScreen>>,
+    dd_screen: Res<State<DungeonDashScreen>>,
+    mut next_dd_screen: ResMut<NextState<DungeonDashScreen>>,
+    mut dd_selection: ResMut<DungeonDashSelection>,
 ) {
+    let (mut player, mut creature) = player_query.into_inner();
     let texture_id = contexts.add_image(EguiTextureHandle::Weak(assets.phone.id()));
     let apps = mobile_apps::get_apps();
     let app_icons: Vec<egui::TextureId> = apps
@@ -333,9 +338,13 @@ pub fn draw_phone(
                             &mut child_ui,
                             &mut phone_state,
                             &mut streaming_state,
-                            &player,
+                            &mut *player,
+                            &mut *creature,
                             scale_x,
                             alpha_byte,
+                            dd_screen.get(),
+                            &mut next_dd_screen,
+                            &mut dd_selection,
                         );
                     }
 

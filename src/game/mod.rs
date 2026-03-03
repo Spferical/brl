@@ -68,10 +68,12 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<input::InputMode>();
     app.init_resource::<targeting::ValidTargets>();
     app.init_resource::<phone::PhoneState>();
+    app.init_resource::<mobile_apps::DungeonDashSelection>();
     app.init_resource::<chat::StreamingState>();
     app.init_resource::<chat::ChatHistory>();
     app.init_resource::<TurnCounter>();
     app.init_state::<phone::PhoneScreen>();
+    app.init_state::<mobile_apps::DungeonDashScreen>();
     app.add_message::<DamageAnimationMessage>();
     app.add_message::<input::AbilityClicked>();
     app.add_systems(
@@ -374,10 +376,10 @@ struct Bullet {
 
 /// Common fields between the player and mobs.
 #[derive(Component, Clone, Debug)]
-struct Creature {
-    hp: i32,
-    max_hp: i32,
-    faction: i32,
+pub(crate) struct Creature {
+    pub hp: i32,
+    pub max_hp: i32,
+    pub faction: i32,
 }
 
 impl Creature {
