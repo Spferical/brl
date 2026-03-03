@@ -66,6 +66,9 @@ fn check_ability_keys(keyboard_input: &ButtonInput<Key>) -> Option<usize> {
     None
 }
 
+#[derive(Message)]
+pub struct AbilityClicked(pub Ability);
+
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerIntent {
     Move(IVec2),
@@ -83,6 +86,7 @@ pub(crate) enum InputMode {
 }
 
 pub(crate) fn handle_input(
+    mut msg_ability_clicked: MessageReader<AbilityClicked>,
     mut msg_cursor: MessageReader<CursorMoved>,
     keyboard_input: Res<ButtonInput<Key>>,
     mut commands: Commands,
@@ -94,25 +98,28 @@ pub(crate) fn handle_input(
     camera: Single<(&Camera, &GlobalTransform)>,
 ) {
     let (camera, camera_transform) = camera.into_inner();
-    let mut mouse_move_pos = None;
-    for msg_cursor in msg_cursor.read() {
-        if let Ok(pos) = camera
-            .viewport_to_world(camera_transform, msg_cursor.position)
-            .map(|ray| ray.origin.truncate())
-        {
-            mouse_move_pos = Some(MapPos::from_vec2(pos));
-        }
+    let mouse_move_pos = msg_cursor
+        .read()
+        .last()
+        .and_then(|CursorMoved { position, .. }| {
+            camera.viewport_to_world(camera_transform, *position).ok()
+        })
+        .map(|ray| MapPos::from_vec2(ray.origin.truncate()));
+    let selected_ability = msg_ability_clicked
+        .read()
+        .last()
+        .map(|AbilityClicked(ability)| ability)
+        .or_else(|| {
+            check_ability_keys(&keyboard_input).and_then(|idx| abilities.abilities.get_index(idx))
+        });
+    if let Some(ability) = selected_ability {
+        *mode = InputMode::Targeting(*ability, player.1.0);
+        examine_pos.pos = Some(*player.1);
     }
     match *mode {
         InputMode::Normal => {
             let intent = if let Some(direction) = check_direction_keys(&keyboard_input) {
                 Some(PlayerIntent::Move(direction))
-            } else if let Some(idx) = check_ability_keys(&keyboard_input)
-                && let Some(ability) = abilities.abilities.get_index(idx)
-            {
-                *mode = InputMode::Targeting(*ability, player.1.0);
-                examine_pos.pos = Some(*player.1);
-                None
             } else if keyboard_input.just_pressed(Key::Character(".".into())) {
                 Some(PlayerIntent::Wait)
             } else if keyboard_input.any_just_pressed([

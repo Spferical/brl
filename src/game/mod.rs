@@ -84,7 +84,7 @@ use crate::{
         animation::{DamageAnimationMessage, MoveAnimation, spawn_damage_animations},
         assets::WorldAssets,
         debug::{DebugSettings, redo_faction_map},
-        input::{InputMode, PlayerIntent},
+        input::{AbilityClicked, InputMode, PlayerIntent},
         map::{MapPos, TILE_HEIGHT, TILE_WIDTH},
         mapgen::{Stairs, Tile},
     },
@@ -131,6 +131,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<TurnCounter>();
     app.init_state::<phone::PhoneScreen>();
     app.add_message::<DamageAnimationMessage>();
+    app.add_message::<input::AbilityClicked>();
     app.add_systems(
         Update,
         (
@@ -894,6 +895,7 @@ fn sidebar(
     atlas_assets: If<Res<Assets<TextureAtlasLayout>>>,
     player_abilities: Res<PlayerAbilities>,
     input_mode: Res<InputMode>,
+    mut msg_ability_clicked: MessageWriter<AbilityClicked>,
 ) {
     let heart = world_assets
         .get_urizen_egui_image(&mut contexts, &atlas_assets, 7700)
@@ -998,13 +1000,18 @@ fn sidebar(
 
                         for (i, ability) in player_abilities.abilities.iter().enumerate() {
                             let ability_key = (i + 1) % 10;
-                            ui.label(apply_brainrot_ui(
-                                format!("{ability_key}: {ability}"),
-                                player.brainrot,
-                                ui.style(),
-                                FontSelection::Default,
-                                Align::LEFT,
-                            ));
+                            if ui
+                                .button(apply_brainrot_ui(
+                                    format!("{ability_key}: {ability}"),
+                                    player.brainrot,
+                                    ui.style(),
+                                    FontSelection::Default,
+                                    Align::LEFT,
+                                ))
+                                .clicked()
+                            {
+                                msg_ability_clicked.write(AbilityClicked(*ability));
+                            };
                         }
                     }
                     InputMode::Examine(_) => {
