@@ -471,6 +471,7 @@ impl Player {
             self.strength = 0;
         }
     }
+    #[allow(unused)]
     fn add_or_remove_ability(&mut self, condition: bool, ability: Ability) {
         let ability_idx = self.abilities.iter().position(|a| *a == ability);
         if condition && ability_idx.is_none() {
@@ -963,7 +964,9 @@ pub(crate) enum DamageType {
     Psychic,
     Aura,
     Boredom,
+    #[allow(unused)]
     Hunger,
+    #[allow(unused)]
     Strength,
 }
 
