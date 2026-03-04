@@ -8,6 +8,8 @@ use bevy_egui::{
     EguiContexts, EguiTextureHandle,
     egui::{self, Color32},
 };
+use geo::{ConvexHull, MultiPoint, Point};
+use std::collections::HashMap;
 
 use crate::game::map::{TILE_HEIGHT, TILE_WIDTH};
 
@@ -27,6 +29,8 @@ pub struct WorldAssets {
     urizen: Handle<Image>,
     urizen_mask: Handle<Image>,
     urizen_layout: Handle<TextureAtlasLayout>,
+    pub urizen_hulls: Vec<Vec<Vec2>>,
+    pub char_hulls: HashMap<char, Vec<Vec2>>,
     solid_mask: Handle<Image>,
     pub phone: Handle<Image>,
     pub phone_app_icons: PhoneAppIcons,
@@ -83,6 +87,17 @@ impl WorldAssets {
     pub(crate) fn get_solid_mask(&self) -> Handle<Image> {
         self.solid_mask.clone()
     }
+
+    pub(crate) fn get_solid_hull(&self) -> Vec<Vec2> {
+        let w = TILE_WIDTH / 2.0 * 0.9;
+        let h = TILE_HEIGHT / 2.0 * 0.9;
+        vec![
+            Vec2::new(-w, -h),
+            Vec2::new(w, -h),
+            Vec2::new(w, h),
+            Vec2::new(-w, h),
+        ]
+    }
 }
 
 impl FromWorld for WorldAssets {
@@ -106,10 +121,52 @@ impl FromWorld for WorldAssets {
             mask_data.extend_from_slice(&[val, val, val, val]);
         }
 
+        let img_width = image.width();
+        let img_height = image.height();
+
+        let grid_layout = TextureAtlasLayout::from_grid(
+            UVec2::splat(12),
+            206,
+            50,
+            Some(UVec2::splat(1)),
+            Some(UVec2::splat(1)),
+        );
+        let mut urizen_hulls = Vec::with_capacity(grid_layout.textures.len());
+
+        for rect in &grid_layout.textures {
+            let mut points = Vec::new();
+            for y in rect.min.y..rect.max.y {
+                for x in rect.min.x..rect.max.x {
+                    let idx = (y as usize * img_width as usize + x as usize) * 4;
+                    let alpha = data[idx + 3];
+                    if alpha > 0 {
+                        // Center the coordinates around the tile center
+                        let local_x = x as f32 - rect.min.x as f32 - TILE_WIDTH / 2.0;
+                        let local_y = y as f32 - rect.min.y as f32 - TILE_HEIGHT / 2.0;
+                        points.push(Point::new(local_x as f64, local_y as f64));
+                    }
+                }
+            }
+
+            if points.is_empty() {
+                urizen_hulls.push(Vec::new());
+            } else {
+                let multipoint = MultiPoint::from(points);
+                let hull = multipoint.convex_hull();
+                use geo::coords_iter::CoordsIter;
+                let hull_vec2: Vec<Vec2> = hull
+                    .exterior()
+                    .coords_iter()
+                    .map(|c| Vec2::new(c.x as f32, c.y as f32))
+                    .collect();
+                urizen_hulls.push(hull_vec2);
+            }
+        }
+
         let mask_image = Image::new(
             Extent3d {
-                width: image.width(),
-                height: image.height(),
+                width: img_width,
+                height: img_height,
                 depth_or_array_layers: 1,
             },
             TextureDimension::D2,
@@ -117,6 +174,9 @@ impl FromWorld for WorldAssets {
             TextureFormat::Rgba8Unorm,
             RenderAssetUsages::default(),
         );
+
+        let mut tals = world.resource_mut::<Assets<TextureAtlasLayout>>();
+        let urizen_layout = tals.add(grid_layout);
 
         let mut images = world.resource_mut::<Assets<Image>>();
         let urizen = images.add(image);
@@ -135,17 +195,47 @@ impl FromWorld for WorldAssets {
         );
         let solid_mask = images.add(solid_mask_image);
 
-        let mut tals = world.resource_mut::<Assets<TextureAtlasLayout>>();
-        let urizen_layout = tals.add(TextureAtlasLayout::from_grid(
-            UVec2::splat(12),
-            206,
-            50,
-            Some(UVec2::splat(1)),
-            Some(UVec2::splat(1)),
-        ));
-
         let font_bytes = include_bytes!("../../assets/PressStart2P/PressStart2P-Regular.ttf");
         let font_asset = Font::try_from_bytes(font_bytes.to_vec()).unwrap();
+
+        // Calculate hulls for common ASCII characters
+        let mut char_hulls = HashMap::new();
+        use ab_glyph::{Font as _, FontArc, Glyph, PxScale, ScaleFont as _};
+        let font_arc = FontArc::try_from_slice(font_bytes).unwrap();
+        let scale = PxScale::from(TILE_HEIGHT);
+        let scaled_font = font_arc.as_scaled(scale);
+
+        for c in ' '..='~' {
+            let glyph: Glyph = scaled_font
+                .glyph_id(c)
+                .with_scale_and_position(scale, ab_glyph::point(0.0, scaled_font.ascent()));
+            if let Some(outline) = font_arc.outline_glyph(glyph) {
+                let mut points = Vec::new();
+                let bounds = outline.px_bounds();
+
+                outline.draw(|x, y, v| {
+                    if v > 0.5 {
+                        // Center points around the middle of the character's bounding box
+                        let px = x as f32 - bounds.width() / 2.0;
+                        let py = y as f32 - bounds.height() / 2.0;
+                        points.push(Point::new(px as f64, py as f64));
+                    }
+                });
+
+                if !points.is_empty() {
+                    let multipoint = MultiPoint::from(points);
+                    let hull = multipoint.convex_hull();
+                    use geo::coords_iter::CoordsIter;
+                    let hull_vec2: Vec<Vec2> = hull
+                        .exterior()
+                        .coords_iter()
+                        .map(|c| Vec2::new(c.x as f32, c.y as f32))
+                        .collect();
+                    char_hulls.insert(c, hull_vec2);
+                }
+            }
+        }
+
         let font = world.resource_mut::<Assets<Font>>().add(font_asset);
 
         let comic_relief_bytes =
@@ -211,6 +301,8 @@ impl FromWorld for WorldAssets {
             urizen,
             urizen_mask,
             urizen_layout,
+            urizen_hulls,
+            char_hulls,
             solid_mask,
             phone,
             phone_app_icons: PhoneAppIcons {

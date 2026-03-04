@@ -1,7 +1,6 @@
 use std::{f32::consts::PI, time::Duration};
 
 use bevy::{
-    color::palettes::tailwind::GRAY_500,
     ecs::schedule::ScheduleLabel,
     platform::collections::{HashMap, HashSet},
     prelude::*,
@@ -10,7 +9,7 @@ use bevy_egui::{
     EguiContexts, EguiPrimaryContextPass,
     egui::{self, Align, FontSelection, Margin, RichText, WidgetText, text::LayoutJob},
 };
-use bevy_lit::prelude::Lighting2dPlugin;
+use bevy_firefly::prelude::FireflyPlugin;
 use indexmap::IndexSet;
 use rand::{
     Rng as _,
@@ -24,7 +23,7 @@ use crate::{
         assets::WorldAssets,
         debug::{DebugSettings, redo_faction_map},
         input::{AbilityClicked, InputMode, PlayerIntent, StairsClicked},
-        map::{MapPos, PosToCreature, PosToInteractable, TILE_HEIGHT, TILE_WIDTH, Tile},
+        map::{MapPos, PosToCreature, PosToInteractable, TILE_HEIGHT, TILE_WIDTH},
     },
     screens::Screen,
 };
@@ -52,8 +51,8 @@ const CORPSE_Z: f32 = 5.0;
 const TILE_Z: f32 = 0.0;
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_plugins(Lighting2dPlugin);
-    app.insert_resource(ClearColor(Color::from(GRAY_500)));
+    app.add_plugins(FireflyPlugin);
+    app.insert_resource(ClearColor(Color::BLACK));
     app.load_resource::<assets::WorldAssets>();
     app.init_resource::<map::WalkBlockedMap>();
     app.init_resource::<camera::ScreenShake>();
@@ -140,7 +139,6 @@ pub(super) fn plugin(app: &mut App) {
                 prune_dead,
                 map::update_pos_to_creature,
                 // end-of-turn bookkeeping
-                obscure_tiles,
                 update_nearby_mobs,
                 redo_faction_map,
                 set_player_corpse.run_if(not(is_player_alive)),
@@ -370,7 +368,6 @@ fn apply_brainrot_visual_effects(
 pub struct GameWorld;
 
 #[derive(Component, Reflect)]
-#[require(ObscuresTile)]
 pub struct Player {
     pub brainrot: i32,
     pub hunger: i32,
@@ -443,7 +440,6 @@ fn update_player_abilities(player: Single<&Player>, mut abilities: ResMut<Player
 }
 
 #[derive(Component, Default)]
-#[require(ObscuresTile)]
 struct Interactable;
 
 #[derive(Component)]
@@ -453,7 +449,6 @@ pub struct Stairs {
 }
 
 #[derive(Component)]
-#[require(ObscuresTile)]
 struct Corpse;
 
 #[derive(Component, Clone)]
@@ -475,7 +470,6 @@ struct MobSpawner {
 }
 
 #[derive(Component)]
-#[require(ObscuresTile)]
 struct Bullet {
     direction: IVec2,
     damage: i32,
@@ -521,7 +515,6 @@ enum Resist {
 
 // NPC-specific fields.
 #[derive(Component, Clone, Debug, Reflect)]
-#[require(ObscuresTile)]
 struct Mob {
     melee_damage: i32,
     ranged: bool,
@@ -1141,23 +1134,6 @@ fn prune_dead(
                 damage_animation.write(DamageAnimationMessage { entity: corpse_id });
             }
         }
-    }
-}
-
-#[derive(Component, Default)]
-struct ObscuresTile;
-
-fn obscure_tiles(
-    obscures: Query<&MapPos, With<ObscuresTile>>,
-    tiles: Query<(&MapPos, &mut Visibility), With<Tile>>,
-) {
-    let obscured_positions = obscures.iter().map(|p| p.0).collect::<HashSet<IVec2>>();
-    for (pos, mut visibility) in tiles {
-        *visibility = if obscured_positions.contains(&pos.0) {
-            Visibility::Hidden
-        } else {
-            Visibility::Inherited
-        };
     }
 }
 

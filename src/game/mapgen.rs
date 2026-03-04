@@ -274,22 +274,57 @@ pub(crate) fn spawn_level(
         let pos = pos + offset;
         let map_pos = MapPos(IVec2::from(pos));
         let transform = Transform::from_translation(map_pos.to_vec3(TILE_Z));
-        let mut tile = commands.spawn((Tile, map_pos, transform));
+        let mut tile = commands.spawn((
+            Tile,
+            map_pos,
+            transform,
+            GlobalTransform::IDENTITY,
+            InheritedVisibility::VISIBLE,
+        ));
         match tile_kind {
             TileKind::Floor => {
                 let r = rng.random::<f32>();
+                let color = Color::srgb(0.4, 0.4, 0.4);
                 let sprite = if r <= 0.1 {
-                    assets.get_ascii_sprite('.', Color::srgb(0.4, 0.4, 0.4))
+                    assets.get_ascii_sprite('.', color)
                 } else if r <= 0.2 {
-                    assets.get_ascii_sprite(',', Color::srgb(0.4, 0.4, 0.4))
+                    assets.get_ascii_sprite(',', color)
                 } else {
-                    assets.get_ascii_sprite(' ', Color::srgb(0.3, 0.3, 0.3))
+                    assets.get_ascii_sprite(' ', color)
                 };
                 tile.insert(sprite);
+                tile.with_children(|parent| {
+                    parent.spawn((
+                        Sprite {
+                            image: assets.get_solid_mask(),
+                            color: Color::srgb(0.1, 0.1, 0.1),
+                            custom_size: Some(Vec2::new(
+                                map::TILE_WIDTH + 1.0,
+                                map::TILE_HEIGHT + 1.0,
+                            )),
+                            ..default()
+                        },
+                        Transform::from_translation(Vec3::new(0.0, 0.0, -0.1)),
+                    ));
+                });
             }
             TileKind::Wall => {
                 let sprite = assets.get_ascii_sprite('#', Color::srgb(0.6, 0.6, 0.6));
                 tile.insert((sprite, map::BlocksMovement, Occluder));
+                tile.with_children(|parent| {
+                    parent.spawn((
+                        Sprite {
+                            image: assets.get_solid_mask(),
+                            color: Color::srgb(0.15, 0.15, 0.15),
+                            custom_size: Some(Vec2::new(
+                                map::TILE_WIDTH + 1.0,
+                                map::TILE_HEIGHT + 1.0,
+                            )),
+                            ..default()
+                        },
+                        Transform::from_translation(Vec3::new(0.0, 0.0, -0.1)),
+                    ));
+                });
             }
         }
         tiles.push(tile.id());
@@ -317,24 +352,52 @@ pub(crate) fn spawn_stairs(
     let down_pos = MapPos(IVec2::from(down_pos));
     let color = Color::srgb(0.4, 0.4, 0.4);
     commands.entity(world).with_children(|parent| {
-        parent.spawn((
-            Name::new("Up Stairs"),
-            up_pos,
-            Transform::from_translation(up_pos.to_vec3(TILE_Z)),
-            Stairs {
-                destination: down_pos,
-            },
-            assets.get_ascii_sprite('<', color),
-        ));
-        parent.spawn((
-            Name::new("Down Stairs"),
-            down_pos,
-            Transform::from_translation(down_pos.to_vec3(TILE_Z)),
-            Stairs {
-                destination: up_pos,
-            },
-            assets.get_ascii_sprite('>', color),
-        ));
+        parent
+            .spawn((
+                Name::new("Up Stairs"),
+                up_pos,
+                Transform::from_translation(up_pos.to_vec3(TILE_Z)),
+                Stairs {
+                    destination: down_pos,
+                },
+                assets.get_ascii_sprite('<', color),
+                GlobalTransform::IDENTITY,
+                InheritedVisibility::VISIBLE,
+            ))
+            .with_children(|p| {
+                p.spawn((
+                    Sprite {
+                        image: assets.get_solid_mask(),
+                        color: Color::srgb(0.1, 0.1, 0.1),
+                        custom_size: Some(Vec2::new(map::TILE_WIDTH, map::TILE_HEIGHT)),
+                        ..default()
+                    },
+                    Transform::from_translation(Vec3::new(0.0, 0.0, -0.1)),
+                ));
+            });
+        parent
+            .spawn((
+                Name::new("Down Stairs"),
+                down_pos,
+                Transform::from_translation(down_pos.to_vec3(TILE_Z)),
+                Stairs {
+                    destination: up_pos,
+                },
+                assets.get_ascii_sprite('>', color),
+                GlobalTransform::IDENTITY,
+                InheritedVisibility::VISIBLE,
+            ))
+            .with_children(|p| {
+                p.spawn((
+                    Sprite {
+                        image: assets.get_solid_mask(),
+                        color: Color::srgb(0.1, 0.1, 0.1),
+                        custom_size: Some(Vec2::new(map::TILE_WIDTH, map::TILE_HEIGHT)),
+                        ..default()
+                    },
+                    Transform::from_translation(Vec3::new(0.0, 0.0, -0.1)),
+                ));
+            });
     });
 }
 
@@ -426,6 +489,8 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
         player_sprite,
         player_pos,
         Transform::from_translation(player_pos.to_vec3(PLAYER_Z)),
+        GlobalTransform::IDENTITY,
+        InheritedVisibility::VISIBLE,
     );
 
     let player = commands.spawn(player).id();
