@@ -92,7 +92,7 @@ pub fn update_phone(
 
     if phone_state.bump_progress > 0.0 {
         phone_state.bump_progress += time.delta_secs() * 2.0;
-        if phone_state.bump_progrress >= 1.0 {
+        if phone_state.bump_progress >= 1.0 {
             phone_state.bump_progress = 0.0;
         }
         needs_repaint = true;
