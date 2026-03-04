@@ -74,6 +74,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<chat::StreamingState>();
     app.init_resource::<chat::ChatHistory>();
     app.init_resource::<TurnCounter>();
+    app.add_message::<phone::NotificationEvent>();
     app.init_state::<phone::PhoneScreen>();
     app.init_state::<mobile_apps::DungeonDashScreen>();
     app.add_message::<DamageAnimationMessage>();
@@ -88,8 +89,11 @@ pub(super) fn plugin(app: &mut App) {
             targeting::update_valid_targets,
             targeting::update_valid_target_indicators
                 .run_if(resource_changed::<targeting::ValidTargets>),
-            phone::toggle_phone,
-            phone::update_phone,
+            (
+                phone::toggle_phone,
+                phone::update_phone,
+                phone::handle_notifications,
+            ),
             chat::update_streaming_stats,
             chat::update_money_timer,
             chat::update_chat,

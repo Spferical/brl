@@ -3,7 +3,7 @@ use bevy_egui::{
     EguiContexts, EguiTextureHandle,
     egui::{self, Color32, RichText},
 };
-use rand::Rng as _;
+use rand::Rng;
 
 use crate::game::assets::WorldAssets;
 use crate::game::{Creature, Player, apply_brainrot_ui};
@@ -13,6 +13,20 @@ pub enum PhoneScreen {
     #[default]
     Home,
     App(usize),
+}
+
+#[derive(Message, Default)]
+pub struct NotificationEvent;
+
+pub fn handle_notifications(
+    mut events: MessageReader<NotificationEvent>,
+    mut phone_state: ResMut<PhoneState>,
+) {
+    for _ in events.read() {
+        if !phone_state.is_open && phone_state.slide_progress == 0.0 {
+            phone_state.bump_progress = 0.01;
+        }
+    }
 }
 
 #[derive(Resource, Default)]
@@ -25,6 +39,10 @@ pub struct PhoneState {
     pub app_launch_progress: f32,
     pub bump_timer: f32,
     pub bump_progress: f32,
+    pub creep_timer: f32,
+    pub creep_progress: f32,
+    pub is_creeping: bool,
+    pub is_hovered: bool,
 }
 
 pub fn is_phone_closed(phone_state: Res<PhoneState>) -> bool {
@@ -70,22 +88,68 @@ pub fn update_phone(
     // Bump logic
     if !phone_state.is_open && phone_state.slide_progress == 0.0 {
         phone_state.bump_timer -= time.delta_secs();
-        if phone_state.bump_timer <= 0.0 && player.boredom > 80 {
-            phone_state.bump_progress = 0.01;
-
-            let p = ((player.boredom as f32 - 80.0) / 20.0).clamp(0.0, 1.0);
-            let factor = 1.0 - (p * 0.5); // 1.0 at 80 boredom, 0.5 at 100 boredom (twice as frequent)
-
-            phone_state.bump_timer = rand::rng().random_range((2.0 * factor)..(5.0 * factor));
-        }
     }
 
     if phone_state.bump_progress > 0.0 {
         phone_state.bump_progress += time.delta_secs() * 2.0;
-        if phone_state.bump_progress >= 1.0 {
+        if phone_state.bump_progrress >= 1.0 {
             phone_state.bump_progress = 0.0;
         }
         needs_repaint = true;
+    }
+
+    // Creep logic
+    if phone_state.is_open {
+        phone_state.creep_timer = 5.0; // Wait 5 seconds after closing
+        phone_state.is_creeping = false;
+        if phone_state.creep_progress > 0.0 {
+            phone_state.creep_progress = 0.0;
+            needs_repaint = true;
+        }
+    } else if phone_state.slide_progress == 0.0 {
+        if phone_state.is_creeping {
+            if !phone_state.is_hovered {
+                phone_state.creep_timer -= time.delta_secs();
+            }
+            let p = ((player.boredom as f32 - 80.0) / 20.0).clamp(0.0, 1.0);
+            let target_creep = 0.5 + (0.5 * p); // From 0.5 to 1.0 based on boredom
+
+            if phone_state.creep_progress < target_creep {
+                phone_state.creep_progress =
+                    (phone_state.creep_progress + time.delta_secs() * 0.5).min(target_creep);
+                needs_repaint = true;
+            } else if phone_state.creep_progress > target_creep {
+                phone_state.creep_progress =
+                    (phone_state.creep_progress - time.delta_secs() * 0.5).max(target_creep);
+                needs_repaint = true;
+            }
+
+            if phone_state.creep_timer <= 0.0 {
+                phone_state.is_creeping = false;
+                let factor = 1.0 - (p * 0.8); // 1.0 at 80 boredom, 0.2 at 100 boredom
+                phone_state.creep_timer = rand::rng().random_range((2.0 * factor)..(6.0 * factor));
+            }
+        } else {
+            if phone_state.creep_timer > 0.0 {
+                phone_state.creep_timer -= time.delta_secs();
+                if phone_state.creep_progress > 0.0 {
+                    if !phone_state.is_hovered {
+                        phone_state.creep_progress =
+                            (phone_state.creep_progress - time.delta_secs() * 2.0).max(0.0);
+                        needs_repaint = true;
+                    }
+                }
+            } else if player.boredom > 80 {
+                phone_state.is_creeping = true;
+                phone_state.creep_timer = rand::rng().random_range(1.5..3.0); // Stay up for 1.5 to 3.0 seconds
+            } else if phone_state.creep_progress > 0.0 {
+                if !phone_state.is_hovered {
+                    phone_state.creep_progress =
+                        (phone_state.creep_progress - time.delta_secs() * 2.0).max(0.0);
+                    needs_repaint = true;
+                }
+            }
+        }
     }
 
     let click_speed = 3.0 * time.delta_secs();
@@ -163,7 +227,10 @@ pub fn draw_phone(
         return;
     };
 
-    if phone_state.slide_progress <= 0.0 && phone_state.bump_progress <= 0.0 {
+    if phone_state.slide_progress <= 0.0
+        && phone_state.bump_progress <= 0.0
+        && phone_state.creep_progress <= 0.0
+    {
         return;
     }
 
@@ -218,6 +285,11 @@ pub fn draw_phone(
         current_y -= bump_offset;
     }
 
+    if phone_state.creep_progress > 0.0 {
+        let creep_offset = phone_state.creep_progress * 150.0;
+        current_y -= creep_offset;
+    }
+
     let phone_rect = egui::Rect::from_center_size(egui::pos2(center_x, current_y), phone_size);
 
     egui::Area::new(egui::Id::new("phone_modal_area"))
@@ -225,7 +297,19 @@ pub fn draw_phone(
         .constrain(false)
         .fixed_pos(phone_rect.min)
         .show(ctx, |ui| {
-            let (rect, _) = ui.allocate_exact_size(phone_size, egui::Sense::hover());
+            let sense = if phone_state.is_open {
+                egui::Sense::hover()
+            } else {
+                egui::Sense::click()
+            };
+            let (rect, response) = ui.allocate_exact_size(phone_size, sense);
+
+            phone_state.is_hovered = response.hovered();
+
+            if response.clicked() && !phone_state.is_open {
+                phone_state.is_open = true;
+            }
+
             let mut mesh = egui::Mesh::with_texture(texture_id);
             mesh.add_rect_with_uv(
                 rect,
