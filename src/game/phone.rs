@@ -5,29 +5,14 @@ use bevy_egui::{
 };
 use rand::Rng;
 
-use crate::game::assets::WorldAssets;
 use crate::game::{Creature, Player, apply_brainrot_ui};
+use crate::game::{assets::WorldAssets, upgrades::UpgradeMessage};
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PhoneScreen {
     #[default]
     Home,
     App(usize),
-}
-
-#[derive(Message, Default)]
-pub struct NotificationEvent(pub usize);
-
-pub fn handle_notifications(
-    mut events: MessageReader<NotificationEvent>,
-    mut phone_state: ResMut<PhoneState>,
-) {
-    for event in events.read() {
-        phone_state.unread_notification = Some(event.0);
-        if !phone_state.is_open && phone_state.slide_progress == 0.0 {
-            phone_state.bump_progress = 0.01;
-        }
-    }
 }
 
 #[derive(Resource, Default)]
@@ -45,6 +30,27 @@ pub struct PhoneState {
     pub is_creeping: bool,
     pub is_hovered: bool,
     pub unread_notification: Option<usize>,
+}
+
+impl PhoneState {
+    fn set_notification(&mut self, notif: Option<usize>) {
+        if self.unread_notification.is_none()
+            && notif.is_some()
+            && !self.is_open
+            && self.slide_progress == 0.0
+        {
+            self.bump_progress = 0.01;
+        }
+        self.unread_notification = notif;
+    }
+}
+
+pub fn set_notification(mut phone_state: ResMut<PhoneState>, player: Single<&Player>) {
+    if player.pending_upgrades > 0 {
+        phone_state.set_notification(Some(3));
+    } else {
+        phone_state.set_notification(None);
+    }
 }
 
 pub fn is_phone_closed(phone_state: Res<PhoneState>) -> bool {
@@ -218,6 +224,7 @@ pub fn draw_phone(
     dd_screen: Res<State<DungeonDashScreen>>,
     mut next_dd_screen: ResMut<NextState<DungeonDashScreen>>,
     mut dd_selection: ResMut<DungeonDashSelection>,
+    mut msg_upgrade: MessageWriter<UpgradeMessage>,
 ) {
     let (mut player, mut creature, player_pos) = player_query.into_inner();
     let texture_id = contexts.add_image(EguiTextureHandle::Weak(assets.phone.id()));
@@ -551,6 +558,7 @@ pub fn draw_phone(
                                 dd_screen.get(),
                                 &mut next_dd_screen,
                                 &mut dd_selection,
+                                &mut msg_upgrade,
                             );
                         }
                     }

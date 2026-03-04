@@ -6,6 +6,7 @@ use crate::game::assets::WorldAssets;
 use crate::game::chat::StreamingState;
 use crate::game::delivery::FOODS;
 use crate::game::phone::PhoneState;
+use crate::game::upgrades::{UPGRADES, UpgradeMessage};
 use crate::game::{Creature, Player};
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
@@ -44,6 +45,7 @@ pub trait MobileApp: Send + Sync {
         dd_screen: &DungeonDashScreen,
         next_dd_screen: &mut NextState<DungeonDashScreen>,
         dd_selection: &mut DungeonDashSelection,
+        msg_upgrade: &mut MessageWriter<UpgradeMessage>,
     );
 }
 
@@ -74,6 +76,7 @@ impl MobileApp for Crawlr {
         _dd_screen: &DungeonDashScreen,
         _next_dd_screen: &mut NextState<DungeonDashScreen>,
         _dd_selection: &mut DungeonDashSelection,
+        _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
     ) {
     }
 }
@@ -105,6 +108,7 @@ impl MobileApp for DungeonDash {
         dd_screen: &DungeonDashScreen,
         next_dd_screen: &mut NextState<DungeonDashScreen>,
         dd_selection: &mut DungeonDashSelection,
+        _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
     ) {
         let menu_alpha = ui.ctx().animate_bool_with_time(
             egui::Id::new("dd_menu_alpha"),
@@ -611,6 +615,7 @@ impl MobileApp for UndergroundTV {
         _dd_screen: &DungeonDashScreen,
         _next_dd_screen: &mut NextState<DungeonDashScreen>,
         _dd_selection: &mut DungeonDashSelection,
+        _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
     ) {
         ui.add_space(ui.available_height() * 0.4);
         let is_low_signal = player.signal <= 2;
@@ -678,6 +683,7 @@ impl MobileApp for Upgrade {
         _dd_screen: &DungeonDashScreen,
         _next_dd_screen: &mut NextState<DungeonDashScreen>,
         _dd_selection: &mut DungeonDashSelection,
+        msg_upgrade: &mut MessageWriter<UpgradeMessage>,
     ) {
         ui.add_space(40.0 * scale);
         ui.label(apply_brainrot_ui(
@@ -691,15 +697,11 @@ impl MobileApp for Upgrade {
         ));
         ui.add_space(40.0 * scale);
 
-        let upgrades = [
-            ("More Health", "Increases your maximum HP by 10"),
-            ("More Strength", "Increases your attack power"),
-            ("More Rizz", "Improves your aura"),
-        ];
-
         ui.vertical_centered(|ui| {
             let width = ui.available_width() * 0.9;
-            for (name, desc) in upgrades {
+            for upgrade_idx in &player.upgrade_options {
+                #[allow(clippy::borrow_interior_mutable_const)]
+                let upgrade = &UPGRADES[*upgrade_idx];
                 let height = 120.0 * scale;
                 let (rect, response) =
                     ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
@@ -725,7 +727,9 @@ impl MobileApp for Upgrade {
                     ui.vertical_centered(|ui| {
                         ui.add(
                             egui::Label::new(apply_brainrot_ui(
-                                RichText::new(name).size(36.0 * scale).color(Color32::BLACK),
+                                RichText::new(upgrade.name)
+                                    .size(36.0 * scale)
+                                    .color(Color32::BLACK),
                                 player.brainrot,
                                 ui.style(),
                                 egui::FontSelection::Default,
@@ -737,7 +741,7 @@ impl MobileApp for Upgrade {
                         ui.add_space(8.0 * scale);
                         ui.add(
                             egui::Label::new(apply_brainrot_ui(
-                                RichText::new(desc)
+                                RichText::new(upgrade.describe())
                                     .size(24.0 * scale)
                                     .color(Color32::from_rgba_unmultiplied(80, 80, 80, alpha)),
                                 player.brainrot,
@@ -752,9 +756,9 @@ impl MobileApp for Upgrade {
                 });
 
                 if response.clicked() {
-                    // For now, it's a dummy upgrade, but we could close it by changing screen.
-                    // Actually, we don't have a way to easily change to home screen from here unless we pass `next_screen`.
-                    // We don't have `next_screen` passed in `draw_content`. So they can just use the physical home button.
+                    msg_upgrade.write(UpgradeMessage {
+                        upgrade: *upgrade_idx,
+                    });
                 }
 
                 ui.add_space(16.0 * scale);

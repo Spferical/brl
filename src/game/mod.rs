@@ -10,7 +10,6 @@ use bevy_egui::{
     egui::{self, Align, FontSelection, Margin, RichText, WidgetText, text::LayoutJob},
 };
 use bevy_firefly::prelude::FireflyPlugin;
-use indexmap::IndexSet;
 use rand::{
     Rng as _,
     seq::{IndexedRandom, SliceRandom as _},
@@ -44,6 +43,7 @@ mod mobile_apps;
 mod phone;
 mod signal;
 mod targeting;
+mod upgrades;
 
 const HIGHLIGHT_Z: f32 = 20.0;
 const DAMAGE_Z: f32 = 15.0;
@@ -60,7 +60,6 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<map::PlayerVisibilityMap>();
     app.init_resource::<map::PlayerMemoryMap>();
     app.init_resource::<camera::ScreenShake>();
-    app.init_resource::<PlayerAbilities>();
     app.init_resource::<PendingDamage>();
     app.init_resource::<PlayerMoved>();
     app.init_resource::<FactionMap>();
@@ -78,13 +77,13 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<chat::StreamingState>();
     app.init_resource::<chat::ChatHistory>();
     app.init_resource::<TurnCounter>();
-    app.add_message::<phone::NotificationEvent>();
     app.init_state::<phone::PhoneScreen>();
     app.init_state::<mobile_apps::DungeonDashScreen>();
     app.add_message::<DamageAnimationMessage>();
     app.add_message::<input::AbilityClicked>();
     app.add_message::<input::StairsClicked>();
     app.add_message::<input::EatEvent>();
+    app.add_message::<upgrades::UpgradeMessage>();
     app.add_systems(
         Update,
         (
@@ -99,21 +98,25 @@ pub(super) fn plugin(app: &mut App) {
             targeting::update_valid_target_indicators
                 .run_if(resource_changed::<targeting::ValidTargets>),
             (
+                phone::set_notification,
                 phone::toggle_phone,
                 phone::update_phone,
-                phone::handle_notifications,
             )
                 .chain(),
             chat::update_streaming_stats,
             chat::update_money_timer,
             chat::update_chat,
-            animation::process_move_animations,
-            animation::process_attack_animations,
-            animation::update_damage_animations,
+            (
+                animation::process_move_animations,
+                animation::process_attack_animations,
+                animation::update_damage_animations,
+            )
+                .chain(),
             camera::update_camera,
             examine::update_examine_info,
             examine::highlight_examine_tile,
             delivery::draw_delivery_indicators,
+            upgrades::handle_upgrades,
         )
             .run_if(in_state(Screen::Gameplay))
             .chain(),
@@ -155,7 +158,6 @@ pub(super) fn plugin(app: &mut App) {
                 update_nearby_mobs,
                 redo_faction_map,
                 set_player_corpse.run_if(not(is_player_alive)),
-                update_player_abilities,
             )
                 .chain()
                 .run_if(player_moved),
@@ -441,9 +443,15 @@ pub struct Player {
     pub strength: i32,
     pub boredom: i32,
     pub signal: i32,
+
     pub money_gain_timer: f32,
     pub last_gain_amount: i32,
     pub max_depth: i32,
+    pub abilities: Vec<Ability>,
+
+    pub upgrades: Vec<usize>,
+    pub pending_upgrades: usize,
+    pub upgrade_options: Vec<usize>,
 }
 
 impl Player {
@@ -463,9 +471,17 @@ impl Player {
             self.strength = 0;
         }
     }
+    fn add_or_remove_ability(&mut self, condition: bool, ability: Ability) {
+        let ability_idx = self.abilities.iter().position(|a| *a == ability);
+        if condition && !ability_idx.is_some() {
+            self.abilities.push(ability);
+        } else if let Some(idx) = ability_idx {
+            self.abilities.remove(idx);
+        }
+    }
 }
 
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, Reflect)]
 pub enum Ability {
     Sprint,
     ShoulderCheck,
@@ -500,28 +516,6 @@ impl Ability {
             Ability::Mog => AbilityTarget::NearbyMob { maxdist: 5 },
         }
     }
-}
-
-#[derive(Resource, Default)]
-pub struct PlayerAbilities {
-    // IndexSet to preserve insertion order.
-    abilities: IndexSet<Ability>,
-}
-
-impl PlayerAbilities {
-    fn add_or_remove(&mut self, condition: bool, ability: Ability) {
-        if condition {
-            self.abilities.insert(ability);
-        } else {
-            self.abilities.shift_remove(&ability);
-        }
-    }
-}
-
-fn update_player_abilities(player: Single<&Player>, mut abilities: ResMut<PlayerAbilities>) {
-    abilities.add_or_remove(player.strength >= 10, Ability::Sprint);
-    abilities.add_or_remove(player.strength >= 20, Ability::ShoulderCheck);
-    abilities.add_or_remove(player.rizz >= 10, Ability::Mog);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -754,7 +748,6 @@ fn handle_player_move(
     interactables: Query<&Interactable>,
     mut msg_stairs_clicked: MessageWriter<StairsClicked>,
     mut msg_eat: MessageWriter<EatEvent>,
-    mut msg_notification: MessageWriter<phone::NotificationEvent>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     pos_to_creature: Res<PosToCreature>,
     turn_counter: Res<TurnCounter>,
@@ -853,8 +846,7 @@ fn handle_player_move(
                 let new_depth = (destination.0.y / 200).max(0);
                 if new_depth > player_stats.max_depth {
                     player_stats.max_depth = new_depth;
-                    // Upgrade app is index 3 in `get_apps()`
-                    msg_notification.write(phone::NotificationEvent(3));
+                    player_stats.pending_upgrades += 1;
                 }
 
                 moved.0 = true;
@@ -1411,7 +1403,6 @@ fn sidebar(
     examine_results: Res<examine::ExamineResults>,
     world_assets: If<Res<WorldAssets>>,
     atlas_assets: If<Res<Assets<TextureAtlasLayout>>>,
-    player_abilities: Res<PlayerAbilities>,
     input_mode: Res<InputMode>,
     mut msg_ability_clicked: MessageWriter<AbilityClicked>,
 ) {
@@ -1585,7 +1576,7 @@ fn sidebar(
                             Align::LEFT,
                         ));
 
-                        for (i, ability) in player_abilities.abilities.iter().enumerate() {
+                        for (i, ability) in player.abilities.iter().enumerate() {
                             let ability_key = (i + 1) % 10;
                             let label = if matches!(ability, Ability::Sprint) {
                                 format!("{ability_key}/Shift: {ability}")
@@ -1926,7 +1917,6 @@ pub fn enter(
     mut commands: Commands,
     assets: Res<assets::WorldAssets>,
     q_camera: Single<Entity, With<Camera2d>>,
-    mut msg_notification: MessageWriter<phone::NotificationEvent>,
     mut phone: ResMut<PhoneState>,
 ) {
     let world = (
@@ -1941,9 +1931,6 @@ pub fn enter(
     lighting::enable_lighting(&mut commands, *q_camera);
     mapgen::gen_map(world, commands, assets);
     *phone = PhoneState::default();
-
-    // Upgrade app is index 3 in `get_apps()`
-    msg_notification.write(phone::NotificationEvent(3));
 }
 
 pub fn exit(

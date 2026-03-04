@@ -4,7 +4,7 @@ use bevy::{input::keyboard::Key, platform::collections::HashMap, prelude::*};
 use bevy_egui::EguiContexts;
 
 use crate::game::{
-    Ability, Player, PlayerAbilities, Turn,
+    Ability, Player, Turn,
     examine::ExaminePos,
     map::{MapPos, PosToInteractable},
     targeting::ValidTargets,
@@ -104,14 +104,14 @@ pub(crate) fn handle_input(
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     keyboard_input: Res<ButtonInput<Key>>,
     mut commands: Commands,
-    player: Single<(Entity, &MapPos), With<Player>>,
+    player: Single<(Entity, &Player, &MapPos)>,
     mut mode: ResMut<InputMode>,
     mut examine_pos: ResMut<ExaminePos>,
-    abilities: Res<PlayerAbilities>,
     valid_targets: Res<ValidTargets>,
     camera: Single<(&Camera, &GlobalTransform)>,
     pos_to_interactable: Res<PosToInteractable>,
 ) {
+    let (player_entity, player, player_pos) = player.into_inner();
     let (camera, camera_transform) = camera.into_inner();
     let mouse_pos = window.cursor_position();
     let tile_clicked = if let Some(mouse_pos) = mouse_pos
@@ -139,23 +139,21 @@ pub(crate) fn handle_input(
         .read()
         .last()
         .map(|AbilityClicked(ability)| ability)
-        .or_else(|| {
-            check_ability_keys(&keyboard_input).and_then(|idx| abilities.abilities.get_index(idx))
-        });
+        .or_else(|| check_ability_keys(&keyboard_input).and_then(|idx| player.abilities.get(idx)));
     if let Some(ability) = selected_ability {
-        *mode = InputMode::Targeting(*ability, player.1.0);
-        examine_pos.pos = Some(*player.1);
+        *mode = InputMode::Targeting(*ability, player_pos.0);
+        examine_pos.pos = Some(*player_pos);
     }
 
     if keyboard_input.pressed(Key::Shift)
         && matches!(*mode, InputMode::Normal)
-        && let Some(sprint) = abilities
+        && let Some(sprint) = player
             .abilities
             .iter()
             .find(|a| matches!(a, Ability::Sprint))
     {
-        *mode = InputMode::Targeting(*sprint, player.1.0);
-        examine_pos.pos = Some(*player.1);
+        *mode = InputMode::Targeting(*sprint, player_pos.0);
+        examine_pos.pos = Some(*player_pos);
     }
 
     let mut intent = None;
@@ -166,9 +164,9 @@ pub(crate) fn handle_input(
         }
         InputMode::Normal => {
             if let Some(direction) = check_direction_keys(&keyboard_input) {
-                intent = Some(PlayerIntent::Move(MapPos(player.1.0 + direction)));
+                intent = Some(PlayerIntent::Move(MapPos(player_pos.0 + direction)));
             } else if let Some(pos) = tile_clicked {
-                if pos == *player.1 {
+                if pos == *player_pos {
                     intent = Some(PlayerIntent::Wait);
                 } else {
                     intent = Some(PlayerIntent::Move(pos));
@@ -182,10 +180,14 @@ pub(crate) fn handle_input(
             ]) {
                 intent = Some(PlayerIntent::UseStairs);
             } else if keyboard_input.just_pressed(Key::Character("x".into())) {
-                *mode = InputMode::Examine(player.1.0);
-                examine_pos.pos = Some(*player.1);
+                *mode = InputMode::Examine(player_pos.0);
+                examine_pos.pos = Some(*player_pos);
             } else if keyboard_input.just_pressed(Key::Character("e".into())) {
-                if let Some(entity) = pos_to_interactable.0.get(player.1).and_then(|v| v.first()) {
+                if let Some(entity) = pos_to_interactable
+                    .0
+                    .get(player_pos)
+                    .and_then(|v| v.first())
+                {
                     intent = Some(PlayerIntent::Interact(*entity));
                 }
             }
@@ -240,7 +242,7 @@ pub(crate) fn handle_input(
     };
 
     if let Some(intent) = intent {
-        commands.entity(player.0).insert(intent);
+        commands.entity(player_entity).insert(intent);
         commands.run_schedule(Turn);
     }
 }

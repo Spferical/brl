@@ -801,7 +801,7 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
     let player_sprite = assets.get_ascii_sprite('@', Color::WHITE);
     let player = (
         Player {
-            brainrot: 85,
+            brainrot: 0,
             hunger: 0,
             money: 0,
             rizz: 10,
@@ -811,6 +811,10 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             money_gain_timer: 0.0,
             last_gain_amount: 0,
             max_depth: 0,
+            abilities: vec![],
+            upgrades: vec![],
+            pending_upgrades: 1,
+            upgrade_options: vec![],
         },
         Creature {
             hp: 6,
