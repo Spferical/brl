@@ -81,8 +81,8 @@ impl WorldAssets {
     }
 
     pub(crate) fn get_solid_hull(&self) -> Vec<Vec2> {
-        let w = TILE_WIDTH / 2.0 * 0.9;
-        let h = TILE_HEIGHT / 2.0 * 0.9;
+        let w = TILE_WIDTH / 2.0 * 0.4;
+        let h = TILE_HEIGHT / 2.0 * 0.4;
         vec![
             Vec2::new(-w, -h),
             Vec2::new(w, -h),

@@ -10,6 +10,7 @@ pub fn enable_lighting(commands: &mut Commands, camera_entity: Entity) {
     commands.entity(camera_entity).insert(FireflyConfig {
         ambient_color: Color::from(WHITE),
         ambient_brightness: 0.05,
+        z_sorting: true,
         ..default()
     });
 }
@@ -65,7 +66,9 @@ pub(super) fn on_add_occluder(
         if !hull.is_empty()
             && let Some(occluder) = Occluder2d::polygon(hull)
         {
-            commands.entity(entity).insert(occluder);
+            commands
+                .entity(entity)
+                .insert(occluder.with_z_sorting(true));
         }
     }
 }

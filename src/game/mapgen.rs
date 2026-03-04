@@ -596,7 +596,7 @@ pub(crate) fn spawn_level(
                     parent.spawn((
                         Sprite {
                             image: assets.get_solid_mask(),
-                            color: Color::srgb(0.15, 0.15, 0.15),
+                            color: Color::srgb(0.1, 0.1, 0.1),
                             custom_size: Some(Vec2::new(
                                 map::TILE_WIDTH + 1.0,
                                 map::TILE_HEIGHT + 1.0,
