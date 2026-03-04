@@ -433,6 +433,7 @@ pub struct Player {
     pub signal: i32,
     pub money_gain_timer: f32,
     pub last_gain_amount: i32,
+    pub max_depth: i32,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
@@ -720,6 +721,7 @@ fn handle_player_move(
     interactables: Query<&Interactable>,
     mut msg_stairs_clicked: MessageWriter<StairsClicked>,
     mut msg_eat: MessageWriter<EatEvent>,
+    mut msg_notification: MessageWriter<phone::NotificationEvent>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     pos_to_creature: Res<PosToCreature>,
     turn_counter: Res<TurnCounter>,
@@ -814,6 +816,14 @@ fn handle_player_move(
                     rotation: None,
                     sway,
                 });
+
+                let new_depth = (destination.0.y / 200).max(0);
+                if new_depth > player_stats.max_depth {
+                    player_stats.max_depth = new_depth;
+                    // Upgrade app is index 3 in `get_apps()`
+                    msg_notification.write(phone::NotificationEvent(3));
+                }
+
                 moved.0 = true;
             } else {
                 return;
@@ -1838,6 +1848,7 @@ pub fn enter(
     mut commands: Commands,
     assets: Res<assets::WorldAssets>,
     q_camera: Single<Entity, With<Camera2d>>,
+    mut msg_notification: MessageWriter<phone::NotificationEvent>,
 ) {
     let world = (
         GameWorld,
@@ -1850,6 +1861,9 @@ pub fn enter(
     examine::init_examine_highlight(world, &mut commands, &assets);
     lighting::enable_lighting(&mut commands, *q_camera);
     mapgen::gen_map(world, commands, assets);
+
+    // Upgrade app is index 3 in `get_apps()`
+    msg_notification.write(phone::NotificationEvent(3));
 }
 
 pub fn exit(

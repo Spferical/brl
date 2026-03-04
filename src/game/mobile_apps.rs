@@ -25,7 +25,10 @@ pub struct DungeonDashSelection {
 pub trait MobileApp: Send + Sync {
     fn name(&self) -> &str;
     fn splash_name(&self) -> &str;
-    fn icon(&self, assets: &WorldAssets) -> Handle<Image>;
+    fn icon(&self, assets: &WorldAssets) -> Option<Handle<Image>>;
+    fn show_on_home_screen(&self) -> bool {
+        true
+    }
     fn draw_content(
         &self,
         ui: &mut egui::Ui,
@@ -53,8 +56,8 @@ impl MobileApp for Crawlr {
     fn splash_name(&self) -> &str {
         "Crawlr"
     }
-    fn icon(&self, assets: &WorldAssets) -> Handle<Image> {
-        assets.phone_app_icons.crawlr.clone()
+    fn icon(&self, assets: &WorldAssets) -> Option<Handle<Image>> {
+        Some(assets.phone_app_icons.crawlr.clone())
     }
     fn draw_content(
         &self,
@@ -84,8 +87,8 @@ impl MobileApp for DungeonDash {
     fn splash_name(&self) -> &str {
         "DungeonDash"
     }
-    fn icon(&self, assets: &WorldAssets) -> Handle<Image> {
-        assets.phone_app_icons.dungeon_dash.clone()
+    fn icon(&self, assets: &WorldAssets) -> Option<Handle<Image>> {
+        Some(assets.phone_app_icons.dungeon_dash.clone())
     }
     fn draw_content(
         &self,
@@ -590,8 +593,8 @@ impl MobileApp for UndergroundTV {
     fn splash_name(&self) -> &str {
         "UndergroundTV"
     }
-    fn icon(&self, assets: &WorldAssets) -> Handle<Image> {
-        assets.phone_app_icons.underground_tv.clone()
+    fn icon(&self, assets: &WorldAssets) -> Option<Handle<Image>> {
+        Some(assets.phone_app_icons.underground_tv.clone())
     }
     fn draw_content(
         &self,
@@ -645,10 +648,126 @@ impl MobileApp for UndergroundTV {
     }
 }
 
+pub struct Upgrade;
+
+impl MobileApp for Upgrade {
+    fn name(&self) -> &str {
+        "Upgrade"
+    }
+    fn splash_name(&self) -> &str {
+        "Upgrade"
+    }
+    fn icon(&self, _assets: &WorldAssets) -> Option<Handle<Image>> {
+        None
+    }
+    fn show_on_home_screen(&self) -> bool {
+        false
+    }
+    fn draw_content(
+        &self,
+        ui: &mut egui::Ui,
+        _phone_state: &mut PhoneState,
+        _streaming_state: &mut StreamingState,
+        player: &mut Player,
+        _creature: &mut Creature,
+        _player_pos: &crate::game::map::MapPos,
+        _active_delivery: &mut crate::game::delivery::ActiveDelivery,
+        _walk_blocked_map: &crate::game::map::WalkBlockedMap,
+        scale: f32,
+        alpha: u8,
+        _dd_screen: &DungeonDashScreen,
+        _next_dd_screen: &mut NextState<DungeonDashScreen>,
+        _dd_selection: &mut DungeonDashSelection,
+    ) {
+        ui.add_space(40.0 * scale);
+        ui.label(apply_brainrot_ui(
+            RichText::new("Choose an Upgrade")
+                .size(48.0 * scale)
+                .color(Color32::from_rgba_unmultiplied(0, 0, 0, alpha)),
+            player.brainrot,
+            ui.style(),
+            egui::FontSelection::Default,
+            egui::Align::Center,
+        ));
+        ui.add_space(40.0 * scale);
+
+        let upgrades = [
+            ("More Health", "Increases your maximum HP by 10"),
+            ("More Strength", "Increases your attack power"),
+            ("More Rizz", "Improves your aura"),
+        ];
+
+        ui.vertical_centered(|ui| {
+            let width = ui.available_width() * 0.9;
+            for (name, desc) in upgrades {
+                let height = 120.0 * scale;
+                let (rect, response) =
+                    ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
+
+                let fill = if response.is_pointer_button_down_on() {
+                    Color32::from_rgba_unmultiplied(150, 150, 150, alpha)
+                } else if response.hovered() {
+                    Color32::from_rgba_unmultiplied(220, 220, 220, alpha)
+                } else {
+                    Color32::from_rgba_unmultiplied(200, 200, 200, alpha)
+                };
+
+                ui.painter().rect_filled(rect, 4.0 * scale, fill);
+                ui.painter().rect_stroke(
+                    rect,
+                    4.0 * scale,
+                    egui::Stroke::new(2.0, Color32::BLACK),
+                    egui::StrokeKind::Middle,
+                );
+
+                ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                    ui.add_space(16.0 * scale);
+                    ui.vertical_centered(|ui| {
+                        ui.add(
+                            egui::Label::new(apply_brainrot_ui(
+                                RichText::new(name).size(36.0 * scale).color(Color32::BLACK),
+                                player.brainrot,
+                                ui.style(),
+                                egui::FontSelection::Default,
+                                egui::Align::Center,
+                            ))
+                            .selectable(false)
+                            .sense(egui::Sense::empty()),
+                        );
+                        ui.add_space(8.0 * scale);
+                        ui.add(
+                            egui::Label::new(apply_brainrot_ui(
+                                RichText::new(desc)
+                                    .size(24.0 * scale)
+                                    .color(Color32::from_rgba_unmultiplied(80, 80, 80, alpha)),
+                                player.brainrot,
+                                ui.style(),
+                                egui::FontSelection::Default,
+                                egui::Align::Center,
+                            ))
+                            .selectable(false)
+                            .sense(egui::Sense::empty()),
+                        );
+                    });
+                });
+
+                if response.clicked() {
+                    // For now, it's a dummy upgrade, but we could close it by changing screen.
+                    // Actually, we don't have a way to easily change to home screen from here unless we pass `next_screen`.
+                    // We don't have `next_screen` passed in `draw_content`. So they can just use the physical home button.
+                }
+
+                ui.add_space(16.0 * scale);
+            }
+        });
+    }
+}
+
 pub fn get_apps() -> Vec<Box<dyn MobileApp>> {
     vec![
         Box::new(Crawlr),
         Box::new(DungeonDash),
         Box::new(UndergroundTV),
+        Box::new(Upgrade),
     ]
 }

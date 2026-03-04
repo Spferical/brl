@@ -776,6 +776,7 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             signal: 5,
             money_gain_timer: 0.0,
             last_gain_amount: 0,
+            max_depth: 0,
         },
         Creature {
             hp: 6,

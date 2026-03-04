@@ -16,13 +16,14 @@ pub enum PhoneScreen {
 }
 
 #[derive(Message, Default)]
-pub struct NotificationEvent;
+pub struct NotificationEvent(pub usize);
 
 pub fn handle_notifications(
     mut events: MessageReader<NotificationEvent>,
     mut phone_state: ResMut<PhoneState>,
 ) {
-    for _ in events.read() {
+    for event in events.read() {
+        phone_state.unread_notification = Some(event.0);
         if !phone_state.is_open && phone_state.slide_progress == 0.0 {
             phone_state.bump_progress = 0.01;
         }
@@ -33,7 +34,7 @@ pub fn handle_notifications(
 pub struct PhoneState {
     pub is_open: bool,
     pub slide_progress: f32,
-    pub click_progress: [f32; 3],
+    pub click_progress: [f32; 4],
     pub app_open_progress: f32,
     pub last_opened_app: Option<usize>,
     pub app_launch_progress: f32,
@@ -43,6 +44,7 @@ pub struct PhoneState {
     pub creep_progress: f32,
     pub is_creeping: bool,
     pub is_hovered: bool,
+    pub unread_notification: Option<usize>,
 }
 
 pub fn is_phone_closed(phone_state: Res<PhoneState>) -> bool {
@@ -88,6 +90,14 @@ pub fn update_phone(
     // Bump logic
     if !phone_state.is_open && phone_state.slide_progress == 0.0 {
         phone_state.bump_timer -= time.delta_secs();
+
+        if phone_state.unread_notification.is_some()
+            && phone_state.bump_progress == 0.0
+            && phone_state.bump_timer <= 0.0
+        {
+            phone_state.bump_progress = 0.01;
+            phone_state.bump_timer = 1.0;
+        }
     }
 
     if phone_state.bump_progress > 0.0 {
@@ -212,9 +222,12 @@ pub fn draw_phone(
     let (mut player, mut creature, player_pos) = player_query.into_inner();
     let texture_id = contexts.add_image(EguiTextureHandle::Weak(assets.phone.id()));
     let apps = mobile_apps::get_apps();
-    let app_icons: Vec<egui::TextureId> = apps
+    let app_icons: Vec<Option<egui::TextureId>> = apps
         .iter()
-        .map(|app| contexts.add_image(EguiTextureHandle::Weak(app.icon(&assets).id())))
+        .map(|app| {
+            app.icon(&assets)
+                .map(|handle| contexts.add_image(EguiTextureHandle::Weak(handle.id())))
+        })
         .collect();
 
     let Ok(ctx) = contexts.ctx_mut() else {
@@ -328,9 +341,14 @@ pub fn draw_phone(
             if phone_state.app_open_progress < 1.0 {
                 let home_alpha = (255.0 * (1.0 - phone_state.app_open_progress)) as u8;
 
+                let mut visible_idx = 0;
                 for (i, app) in apps.iter().enumerate() {
-                    let row = i / 3;
-                    let col = i % 3;
+                    if !app.show_on_home_screen() {
+                        continue;
+                    }
+                    let row = visible_idx / 3;
+                    let col = visible_idx % 3;
+                    visible_idx += 1;
 
                     let x = phone_screen_rect.min.x + spacing + (icon_size + spacing) * col as f32;
                     let y = phone_screen_rect.min.y + spacing + (icon_size + spacing) * row as f32;
@@ -384,13 +402,15 @@ pub fn draw_phone(
                     );
 
                     let icon_id = app_icons[i];
-                    let mut icon_mesh = egui::Mesh::with_texture(icon_id);
-                    icon_mesh.add_rect_with_uv(
-                        icon_rect,
-                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                        Color32::from_rgba_unmultiplied(255, 255, 255, home_alpha),
-                    );
-                    ui.painter().add(icon_mesh);
+                    if let Some(icon_id) = icon_id {
+                        let mut icon_mesh = egui::Mesh::with_texture(icon_id);
+                        icon_mesh.add_rect_with_uv(
+                            icon_rect,
+                            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                            Color32::from_rgba_unmultiplied(255, 255, 255, home_alpha),
+                        );
+                        ui.painter().add(icon_mesh);
+                    }
 
                     let wrapped_name = textwrap::fill(app.name(), 15);
                     let text_job = apply_brainrot_ui(
@@ -423,6 +443,63 @@ pub fn draw_phone(
                         galley,
                         Color32::from_rgba_unmultiplied(255, 255, 255, home_alpha),
                     );
+                }
+
+                if let Some(unread_idx) = phone_state.unread_notification {
+                    let banner_width = screen_width * 0.9;
+                    let banner_height = 80.0 * scale_y;
+                    let banner_rect = egui::Rect::from_center_size(
+                        egui::pos2(
+                            phone_screen_rect.center().x,
+                            phone_screen_rect.bottom() - 250.0 * scale_y,
+                        ),
+                        egui::vec2(banner_width, banner_height),
+                    );
+
+                    let response = ui.interact(
+                        banner_rect,
+                        ui.id().with("notification_banner"),
+                        egui::Sense::click(),
+                    );
+                    let fill = if response.hovered() {
+                        Color32::from_rgba_unmultiplied(220, 220, 220, home_alpha)
+                    } else {
+                        Color32::from_rgba_unmultiplied(255, 255, 255, home_alpha)
+                    };
+
+                    ui.painter().rect_filled(banner_rect, 10.0 * scale_x, fill);
+
+                    let text_job = apply_brainrot_ui(
+                        RichText::new("New Upgrade Available!").size(32.0 * scale_x),
+                        player.brainrot,
+                        ui.style(),
+                        egui::FontSelection::Default,
+                        egui::Align::Center,
+                    )
+                    .into_layout_job(
+                        ui.style(),
+                        egui::FontSelection::Default,
+                        egui::Align::Center,
+                    );
+
+                    let mut text_job = (*text_job).clone();
+                    for section in &mut text_job.sections {
+                        section.format.color = Color32::from_rgba_unmultiplied(0, 0, 0, home_alpha);
+                    }
+                    let galley = ui.painter().layout_job(text_job);
+                    ui.painter().galley(
+                        egui::pos2(
+                            banner_rect.center().x - galley.size().x / 2.0,
+                            banner_rect.center().y - galley.size().y / 2.0,
+                        ),
+                        galley,
+                        Color32::from_rgba_unmultiplied(0, 0, 0, home_alpha),
+                    );
+
+                    if response.clicked() && *current_screen.get() == PhoneScreen::Home {
+                        phone_state.unread_notification = None;
+                        next_screen.set(PhoneScreen::App(unread_idx));
+                    }
                 }
             }
 
@@ -501,13 +578,19 @@ pub fn draw_phone(
                             phone_screen_rect.center(),
                             egui::vec2(large_icon_size, large_icon_size),
                         );
-                        let mut app_mesh = egui::Mesh::with_texture(icon_id);
-                        app_mesh.add_rect_with_uv(
-                            large_icon_rect,
-                            egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
-                            Color32::from_rgba_unmultiplied(255, 255, 255, splash_alpha),
-                        );
-                        ui.painter().add(app_mesh);
+
+                        if let Some(icon_id) = icon_id {
+                            let mut app_mesh = egui::Mesh::with_texture(icon_id);
+                            app_mesh.add_rect_with_uv(
+                                large_icon_rect,
+                                egui::Rect::from_min_max(
+                                    egui::pos2(0.0, 0.0),
+                                    egui::pos2(1.0, 1.0),
+                                ),
+                                Color32::from_rgba_unmultiplied(255, 255, 255, splash_alpha),
+                            );
+                            ui.painter().add(app_mesh);
+                        }
 
                         let text_job = apply_brainrot_ui(
                             splash_name,
