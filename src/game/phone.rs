@@ -129,26 +129,20 @@ pub fn update_phone(
                 let factor = 1.0 - (p * 0.8); // 1.0 at 80 boredom, 0.2 at 100 boredom
                 phone_state.creep_timer = rand::rng().random_range((2.0 * factor)..(6.0 * factor));
             }
-        } else {
-            if phone_state.creep_timer > 0.0 {
-                phone_state.creep_timer -= time.delta_secs();
-                if phone_state.creep_progress > 0.0 {
-                    if !phone_state.is_hovered {
-                        phone_state.creep_progress =
-                            (phone_state.creep_progress - time.delta_secs() * 2.0).max(0.0);
-                        needs_repaint = true;
-                    }
-                }
-            } else if player.boredom > 80 {
-                phone_state.is_creeping = true;
-                phone_state.creep_timer = rand::rng().random_range(1.5..3.0); // Stay up for 1.5 to 3.0 seconds
-            } else if phone_state.creep_progress > 0.0 {
-                if !phone_state.is_hovered {
-                    phone_state.creep_progress =
-                        (phone_state.creep_progress - time.delta_secs() * 2.0).max(0.0);
-                    needs_repaint = true;
-                }
+        } else if phone_state.creep_timer > 0.0 {
+            phone_state.creep_timer -= time.delta_secs();
+            if phone_state.creep_progress > 0.0 && !phone_state.is_hovered {
+                phone_state.creep_progress =
+                    (phone_state.creep_progress - time.delta_secs() * 2.0).max(0.0);
+                needs_repaint = true;
             }
+        } else if player.boredom > 80 {
+            phone_state.is_creeping = true;
+            phone_state.creep_timer = rand::rng().random_range(1.5..3.0); // Stay up for 1.5 to 3.0 seconds
+        } else if phone_state.creep_progress > 0.0 && !phone_state.is_hovered {
+            phone_state.creep_progress =
+                (phone_state.creep_progress - time.delta_secs() * 2.0).max(0.0);
+            needs_repaint = true;
         }
     }
 

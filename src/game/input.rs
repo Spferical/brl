@@ -4,7 +4,9 @@ use bevy::{input::keyboard::Key, platform::collections::HashMap, prelude::*};
 use bevy_egui::EguiContexts;
 
 use crate::game::{
-    Ability, Player, PlayerAbilities, Turn, examine::ExaminePos, map::MapPos,
+    Ability, Player, PlayerAbilities, Turn,
+    examine::ExaminePos,
+    map::{MapPos, PosToInteractable},
     targeting::ValidTargets,
 };
 
@@ -73,11 +75,15 @@ pub struct AbilityClicked(pub Ability);
 #[derive(Message)]
 pub struct StairsClicked;
 
+#[derive(Message)]
+pub struct EatEvent(pub Entity);
+
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerIntent {
     Move(MapPos),
     Wait,
     UseStairs,
+    Interact(Entity),
     UseAbility(Ability, MapPos),
 }
 
@@ -104,6 +110,7 @@ pub(crate) fn handle_input(
     abilities: Res<PlayerAbilities>,
     valid_targets: Res<ValidTargets>,
     camera: Single<(&Camera, &GlobalTransform)>,
+    pos_to_interactable: Res<PosToInteractable>,
 ) {
     let (camera, camera_transform) = camera.into_inner();
     let mouse_pos = window.cursor_position();
@@ -177,6 +184,10 @@ pub(crate) fn handle_input(
             } else if keyboard_input.just_pressed(Key::Character("x".into())) {
                 *mode = InputMode::Examine(player.1.0);
                 examine_pos.pos = Some(*player.1);
+            } else if keyboard_input.just_pressed(Key::Character("e".into())) {
+                if let Some(entity) = pos_to_interactable.0.get(player.1).and_then(|v| v.first()) {
+                    intent = Some(PlayerIntent::Interact(*entity));
+                }
             }
         }
         InputMode::Examine(pos) => {

@@ -102,12 +102,6 @@ pub(crate) fn update_pos_to_creature(
 #[derive(Resource, Default)]
 pub(crate) struct PosToInteractable(pub HashMap<MapPos, Vec<Entity>>);
 
-impl PosToInteractable {
-    pub(crate) fn get<'a>(&'a self, pos: MapPos) -> impl Iterator<Item = Entity> + 'a {
-        self.0.get(&pos).into_iter().flat_map(|v| v.iter()).copied()
-    }
-}
-
 pub(crate) fn update_pos_to_interactable(
     mut pos_to_interactable: ResMut<PosToInteractable>,
     interactable: Query<(Entity, &MapPos), With<Interactable>>,

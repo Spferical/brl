@@ -62,10 +62,10 @@ pub(super) fn on_add_occluder(
             assets.get_solid_hull()
         };
 
-        if !hull.is_empty() {
-            if let Some(occluder) = Occluder2d::polygon(hull) {
-                commands.entity(entity).insert(occluder);
-            }
+        if !hull.is_empty()
+            && let Some(occluder) = Occluder2d::polygon(hull)
+        {
+            commands.entity(entity).insert(occluder);
         }
     }
 }

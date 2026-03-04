@@ -1,5 +1,6 @@
 use crate::game::{
-    Creature, DropsCorpse, Mob, MobAttrs, MobBundle, PLAYER_Z, Player, Resist, Stairs, TILE_Z,
+    Creature, DropsCorpse, Interactable, InteractionType, Mob, MobAttrs, MobBundle, PLAYER_Z,
+    Player, Resist, Stairs, TILE_Z,
     assets::WorldAssets,
     camera::CameraFollow,
     lighting::Occluder,
@@ -635,6 +636,11 @@ pub(crate) fn spawn_stairs(
                 Stairs {
                     destination: down_pos,
                 },
+                Interactable {
+                    action: "Go Up".to_string(),
+                    description: None,
+                    kind: InteractionType::Stairs,
+                },
                 assets.get_ascii_sprite('<', color),
                 GlobalTransform::IDENTITY,
                 InheritedVisibility::VISIBLE,
@@ -657,6 +663,11 @@ pub(crate) fn spawn_stairs(
                 Transform::from_translation(down_pos.to_vec3(TILE_Z)),
                 Stairs {
                     destination: up_pos,
+                },
+                Interactable {
+                    action: "Go Down".to_string(),
+                    description: None,
+                    kind: InteractionType::Stairs,
                 },
                 assets.get_ascii_sprite('>', color),
                 GlobalTransform::IDENTITY,

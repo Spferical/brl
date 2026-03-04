@@ -22,7 +22,7 @@ use crate::{
         animation::{DamageAnimationMessage, MoveAnimation, spawn_damage_animations},
         assets::WorldAssets,
         debug::{DebugSettings, redo_faction_map},
-        input::{AbilityClicked, InputMode, PlayerIntent, StairsClicked},
+        input::{AbilityClicked, EatEvent, InputMode, PlayerIntent, StairsClicked},
         map::{MapPos, PosToCreature, PosToInteractable, TILE_HEIGHT, TILE_WIDTH},
     },
     screens::Screen,
@@ -80,12 +80,14 @@ pub(super) fn plugin(app: &mut App) {
     app.add_message::<DamageAnimationMessage>();
     app.add_message::<input::AbilityClicked>();
     app.add_message::<input::StairsClicked>();
+    app.add_message::<input::EatEvent>();
     app.add_systems(
         Update,
         (
             lighting::on_add_occluder,
             lighting::on_add_player,
             input::handle_input.run_if(is_player_alive.and(phone::is_phone_closed)),
+            handle_eat,
             targeting::update_valid_targets,
             targeting::update_valid_target_indicators
                 .run_if(resource_changed::<targeting::ValidTargets>),
@@ -166,7 +168,6 @@ pub(super) fn plugin(app: &mut App) {
             chat::draw_streaming_indicator,
             phone::draw_phone,
             chat::draw_chat,
-            delivery::draw_eat_popup,
             draw_interactable_popup,
         )
             .run_if(in_state(Screen::Gameplay)),
@@ -175,16 +176,20 @@ pub(super) fn plugin(app: &mut App) {
 
 pub(crate) fn draw_interactable_popup(
     mut contexts: EguiContexts,
-    player_query: Single<(&MapPos, &Player)>,
-    interactable_query: Query<(&MapPos, &Name, &Interactable, Option<&Stairs>)>,
-    mut msg_stairs_clicked: MessageWriter<StairsClicked>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
+    player_query: Single<(Entity, &MapPos, &Player)>,
+    interactable_query: Query<(
+        Entity,
+        &MapPos,
+        Option<&Name>,
+        &Interactable,
+        Option<&delivery::Food>,
+    )>,
     q_camera: Single<(&Camera, &GlobalTransform), With<Camera2d>>,
 ) {
-    let (player_pos, player) = player_query.into_inner();
+    let (_player_entity, player_pos, player) = player_query.into_inner();
     let (camera, camera_transform) = *q_camera;
 
-    for (pos, name, interactable, stairs) in interactable_query.iter() {
+    for (_entity, pos, name, interactable, food) in interactable_query.iter() {
         if pos.0 == player_pos.0 {
             // Get screen position
             let world_pos = player_pos.to_vec3(PLAYER_Z);
@@ -196,19 +201,24 @@ pub(crate) fn draw_interactable_popup(
                 return;
             };
 
-            draw_world_popup(
-                ctx,
-                viewport_pos,
-                format!("{} {}? (e)", interactable.action, name),
-                interactable.description.clone(),
-                player.brainrot,
-            );
+            let (title, description) = if let Some(food) = food {
+                let food_item = delivery::FOODS[food.food_idx];
+                (
+                    format!("Eat {}? (e)", food_item.name),
+                    Some(food_item.effects.to_string()),
+                )
+            } else {
+                (
+                    format!(
+                        "{} {}? (e)",
+                        interactable.action,
+                        name.map(|n| n.as_str()).unwrap_or("")
+                    ),
+                    interactable.description.clone(),
+                )
+            };
 
-            if keyboard_input.just_pressed(KeyCode::KeyE) {
-                if stairs.is_some() {
-                    msg_stairs_clicked.write(StairsClicked);
-                }
-            }
+            draw_world_popup(ctx, viewport_pos, title, description, player.brainrot);
         }
     }
 }
@@ -484,10 +494,17 @@ fn update_player_abilities(player: Single<&Player>, mut abilities: ResMut<Player
     abilities.add_or_remove(player.rizz >= 10, Ability::Mog);
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InteractionType {
+    Stairs,
+    Eat,
+}
+
 #[derive(Component)]
 pub struct Interactable {
     pub action: String,
     pub description: Option<String>,
+    pub kind: InteractionType,
 }
 
 impl Default for Interactable {
@@ -495,6 +512,25 @@ impl Default for Interactable {
         Self {
             action: "Use".to_string(),
             description: None,
+            kind: InteractionType::Stairs,
+        }
+    }
+}
+
+pub(crate) fn handle_eat(
+    mut events: MessageReader<EatEvent>,
+    player_query: Single<(&mut Player, &mut Creature)>,
+    food_query: Query<&delivery::Food>,
+    mut commands: Commands,
+) {
+    let (mut player, mut creature) = player_query.into_inner();
+    for event in events.read() {
+        if let Ok(food) = food_query.get(event.0) {
+            let food_item = delivery::FOODS[food.food_idx];
+            player.hunger = (player.hunger + food_item.hunger).clamp(0, 100);
+            player.strength += food_item.strength;
+            creature.hp = (creature.hp + food_item.hp).clamp(0, creature.max_hp);
+            commands.entity(event.0).despawn();
         }
     }
 }
@@ -681,6 +717,9 @@ fn handle_player_move(
     player: Single<(Entity, &mut MapPos, &PlayerIntent, &mut Player)>,
     mut mobs: Query<&mut MapPos, (With<Creature>, Without<Player>)>,
     stairs: Query<&Stairs, (Without<Player>, Without<Creature>)>,
+    interactables: Query<&Interactable>,
+    mut msg_stairs_clicked: MessageWriter<StairsClicked>,
+    mut msg_eat: MessageWriter<EatEvent>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     pos_to_creature: Res<PosToCreature>,
     turn_counter: Res<TurnCounter>,
@@ -747,6 +786,18 @@ fn handle_player_move(
             }
         }
         PlayerIntent::Wait => {}
+        PlayerIntent::Interact(entity) => {
+            if let Ok(interactable) = interactables.get(*entity) {
+                match interactable.kind {
+                    InteractionType::Stairs => {
+                        msg_stairs_clicked.write(StairsClicked);
+                    }
+                    InteractionType::Eat => {
+                        msg_eat.write(EatEvent(*entity));
+                    }
+                }
+            }
+        }
         PlayerIntent::UseStairs => {
             if let Some(Stairs { destination }) = stairs
                 .iter_many(pos_to_interactable.0.get(&*pos).unwrap_or(&vec![]))
@@ -1269,8 +1320,6 @@ fn update_nearby_mobs(
 fn sidebar(
     mut contexts: EguiContexts,
     player: Single<(&Player, &MapPos)>,
-    pos_to_interactable: Res<PosToInteractable>,
-    interactables: Query<Option<&Stairs>>,
     nearby_mobs: Res<NearbyMobs>,
     examine_results: Res<examine::ExamineResults>,
     world_assets: If<Res<WorldAssets>>,
@@ -1278,9 +1327,8 @@ fn sidebar(
     player_abilities: Res<PlayerAbilities>,
     input_mode: Res<InputMode>,
     mut msg_ability_clicked: MessageWriter<AbilityClicked>,
-    mut msg_stairs_clicked: MessageWriter<StairsClicked>,
 ) {
-    let (player, player_pos) = player.into_inner();
+    let (player, _) = player.into_inner();
     let heart = world_assets
         .get_urizen_egui_image(&mut contexts, &atlas_assets, 7700)
         .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));

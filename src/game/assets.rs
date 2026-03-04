@@ -76,14 +76,6 @@ impl WorldAssets {
         get_egui_image_from_sprite(contexts, atlas_assets, &self.get_urizen_sprite(index))
     }
 
-    pub(crate) fn get_urizen_sprite_mask(&self) -> Handle<Image> {
-        self.urizen_mask.clone()
-    }
-
-    pub(crate) fn get_urizen_layout(&self) -> Handle<TextureAtlasLayout> {
-        self.urizen_layout.clone()
-    }
-
     pub(crate) fn get_solid_mask(&self) -> Handle<Image> {
         self.solid_mask.clone()
     }

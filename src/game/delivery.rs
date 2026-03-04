@@ -1,7 +1,8 @@
 use crate::game::DamageType;
 use crate::game::{
-    CORPSE_Z, Corpse, DamageInstance, GameWorld, HIGHLIGHT_Z, PendingDamage, Player, PosToCreature,
-    animation::DamageAnimationMessage, assets::WorldAssets, map,
+    CORPSE_Z, Corpse, DamageInstance, GameWorld, HIGHLIGHT_Z, Interactable, InteractionType,
+    PendingDamage, Player, PosToCreature, animation::DamageAnimationMessage, assets::WorldAssets,
+    map,
 };
 use bevy::prelude::*;
 
@@ -135,6 +136,11 @@ pub(crate) fn process_deliveries(
                     Food {
                         food_idx: delivery.food_idx,
                     },
+                    Interactable {
+                        action: "Eat".to_string(),
+                        description: None,
+                        kind: InteractionType::Eat,
+                    },
                     sprite,
                     map_pos,
                     transform,
@@ -151,57 +157,6 @@ pub(crate) fn process_deliveries(
     }
     for i in to_remove.into_iter().rev() {
         active_delivery.deliveries.remove(i);
-    }
-}
-
-use bevy_egui::EguiContexts;
-use bevy_egui::egui;
-
-pub(crate) fn draw_eat_popup(
-    mut contexts: EguiContexts,
-    player_query: Single<(
-        Entity,
-        &map::MapPos,
-        &mut Player,
-        &mut crate::game::Creature,
-    )>,
-    food_query: Query<(Entity, &map::MapPos, &Food)>,
-    mut commands: Commands,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    q_camera: Single<(&Camera, &GlobalTransform), With<Camera2d>>,
-) {
-    let (_player_entity, player_pos, mut player, mut creature) = player_query.into_inner();
-    let (camera, camera_transform) = *q_camera;
-
-    for (food_entity, food_pos, food) in food_query.iter() {
-        if food_pos.0 == player_pos.0 {
-            let food_item = FOODS[food.food_idx];
-
-            // Get screen position
-            let world_pos = player_pos.to_vec3(crate::game::PLAYER_Z);
-            let Ok(viewport_pos) = camera.world_to_viewport(camera_transform, world_pos) else {
-                continue;
-            };
-
-            let Ok(ctx) = contexts.ctx_mut() else {
-                return;
-            };
-
-            crate::game::draw_world_popup(
-                ctx,
-                viewport_pos,
-                format!("Eat {}? (e)", food_item.name),
-                Some(food_item.effects.to_string()),
-                player.brainrot,
-            );
-
-            if keyboard_input.just_pressed(KeyCode::KeyE) {
-                player.hunger = (player.hunger + food_item.hunger).clamp(0, 100);
-                player.strength += food_item.strength;
-                creature.hp = (creature.hp + food_item.hp).clamp(0, creature.max_hp);
-                commands.entity(food_entity).despawn();
-            }
-        }
     }
 }
 
