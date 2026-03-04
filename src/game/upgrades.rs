@@ -75,6 +75,7 @@ pub(crate) fn handle_upgrades(
     for UpgradeMessage { upgrade } in msg_upgrade.read() {
         player.pending_upgrades -= 1;
         player.upgrade_options.clear();
+        player.upgrades.push(*upgrade);
         let upgrade = &upgrades[*upgrade];
         for effect in &upgrade.effects {
             match effect {
