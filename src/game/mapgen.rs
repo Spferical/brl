@@ -1,9 +1,9 @@
 use crate::game::{
-    Creature, DropsCorpse, Mob, MobAttrs, MobBundle, PLAYER_Z, Player, TILE_Z,
+    Creature, DropsCorpse, Mob, MobAttrs, MobBundle, PLAYER_Z, Player, Stairs, TILE_Z,
     assets::WorldAssets,
     camera::CameraFollow,
     lighting::Occluder,
-    map::{self, MapPos},
+    map::{self, MapPos, Tile},
     signal,
 };
 use bevy::{platform::collections::HashMap, prelude::*};
@@ -117,14 +117,6 @@ impl MobKind {
             },
         }
     }
-}
-
-#[derive(Component)]
-pub struct Tile;
-
-#[derive(Component)]
-pub struct Stairs {
-    pub(crate) destination: MapPos,
 }
 
 pub struct LevelDraft {
@@ -320,7 +312,6 @@ pub(crate) fn spawn_stairs(
     let color = Color::srgb(0.4, 0.4, 0.4);
     commands.entity(world).with_children(|parent| {
         parent.spawn((
-            Tile,
             Name::new("Up Stairs"),
             up_pos,
             Transform::from_translation(up_pos.to_vec3(TILE_Z)),
@@ -330,7 +321,6 @@ pub(crate) fn spawn_stairs(
             assets.get_ascii_sprite('<', color),
         ));
         parent.spawn((
-            Tile,
             Name::new("Down Stairs"),
             down_pos,
             Transform::from_translation(down_pos.to_vec3(TILE_Z)),

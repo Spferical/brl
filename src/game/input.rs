@@ -69,6 +69,9 @@ fn check_ability_keys(keyboard_input: &ButtonInput<Key>) -> Option<usize> {
 #[derive(Message)]
 pub struct AbilityClicked(pub Ability);
 
+#[derive(Message)]
+pub struct StairsClicked;
+
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlayerIntent {
     Move(MapPos),
@@ -88,6 +91,7 @@ pub(crate) enum InputMode {
 pub(crate) fn handle_input(
     window: Single<&Window>,
     mut msg_ability_clicked: MessageReader<AbilityClicked>,
+    mut msg_stairs_clicked: MessageReader<StairsClicked>,
     mut msg_cursor: MessageReader<CursorMoved>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     keyboard_input: Res<ButtonInput<Key>>,
@@ -143,6 +147,9 @@ pub(crate) fn handle_input(
 
     let mut intent = None;
 
+    if msg_stairs_clicked.read().last().is_some() {
+        intent = Some(PlayerIntent::UseStairs);
+    }
     match *mode {
         InputMode::Normal => {
             if let Some(direction) = check_direction_keys(&keyboard_input) {

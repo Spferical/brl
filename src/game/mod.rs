@@ -23,9 +23,8 @@ use crate::{
         animation::{DamageAnimationMessage, MoveAnimation, spawn_damage_animations},
         assets::WorldAssets,
         debug::{DebugSettings, redo_faction_map},
-        input::{AbilityClicked, InputMode, PlayerIntent},
-        map::{MapPos, PosToCreature, TILE_HEIGHT, TILE_WIDTH},
-        mapgen::{Stairs, Tile},
+        input::{AbilityClicked, InputMode, PlayerIntent, StairsClicked},
+        map::{MapPos, PosToCreature, PosToInteractable, TILE_HEIGHT, TILE_WIDTH, Tile},
     },
     screens::Screen,
 };
@@ -63,6 +62,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<PlayerMoved>();
     app.init_resource::<FactionMap>();
     app.init_resource::<PosToCreature>();
+    app.init_resource::<PosToInteractable>();
     app.init_resource::<NearbyMobs>();
     app.init_resource::<DebugSettings>();
     app.init_resource::<examine::ExaminePos>();
@@ -79,6 +79,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_state::<mobile_apps::DungeonDashScreen>();
     app.add_message::<DamageAnimationMessage>();
     app.add_message::<input::AbilityClicked>();
+    app.add_message::<input::StairsClicked>();
     app.add_systems(
         Update,
         (
@@ -109,6 +110,7 @@ pub(super) fn plugin(app: &mut App) {
         Turn,
         (
             map::update_walk_blocked_map,
+            map::update_pos_to_interactable,
             handle_player_move,
             (
                 (
@@ -440,6 +442,16 @@ fn update_player_abilities(player: Single<&Player>, mut abilities: ResMut<Player
     abilities.add_or_remove(player.rizz >= 10, Ability::Mog);
 }
 
+#[derive(Component, Default)]
+#[require(ObscuresTile)]
+struct Interactable;
+
+#[derive(Component)]
+#[require(Interactable)]
+pub struct Stairs {
+    pub(crate) destination: MapPos,
+}
+
 #[derive(Component)]
 #[require(ObscuresTile)]
 struct Corpse;
@@ -556,13 +568,14 @@ fn handle_player_move(
     mut commands: Commands,
     player: Single<(Entity, &mut MapPos, &PlayerIntent, &mut Player)>,
     mut mobs: Query<&mut MapPos, (With<Creature>, Without<Player>)>,
-    stairs: Query<(&MapPos, &Stairs), (Without<Player>, Without<Creature>)>,
+    stairs: Query<&Stairs, (Without<Player>, Without<Creature>)>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     pos_to_creature: Res<PosToCreature>,
     turn_counter: Res<TurnCounter>,
     mut damage: ResMut<PendingDamage>,
     mut moved: ResMut<PlayerMoved>,
     mut screen_shake: ResMut<camera::ScreenShake>,
+    pos_to_interactable: Res<PosToInteractable>,
 ) {
     let (player_entity, mut pos, intent, mut player_stats) = player.into_inner();
     commands.entity(player_entity).remove::<PlayerIntent>();
@@ -623,26 +636,23 @@ fn handle_player_move(
         }
         PlayerIntent::Wait => {}
         PlayerIntent::UseStairs => {
-            moved.0 = false;
-            for (stairs_pos, Stairs { destination }) in stairs {
-                if *stairs_pos == *pos {
-                    let old_pos = *pos;
-                    *pos = *destination;
-                    commands.entity(player_entity).insert(MoveAnimation {
-                        from: old_pos.to_vec3(PLAYER_Z),
-                        to: pos.to_vec3(PLAYER_Z),
-                        timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
+            if let Some(Stairs { destination }) = stairs
+                .iter_many(pos_to_interactable.0.get(&*pos).unwrap_or(&vec![]))
+                .next()
+            {
+                let old_pos = *pos;
+                *pos = *destination;
+                commands.entity(player_entity).insert(MoveAnimation {
+                    from: old_pos.to_vec3(PLAYER_Z),
+                    to: pos.to_vec3(PLAYER_Z),
+                    timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
 
-                        ease: EaseFunction::SineInOut,
-                        rotation: None,
-                        sway,
-                    });
-
-                    moved.0 = true;
-                    break;
-                }
-            }
-            if !moved.0 {
+                    ease: EaseFunction::SineInOut,
+                    rotation: None,
+                    sway,
+                });
+                moved.0 = true;
+            } else {
                 return;
             }
         }
@@ -1155,7 +1165,9 @@ fn update_nearby_mobs(
 
 fn sidebar(
     mut contexts: EguiContexts,
-    player: Single<&Player>,
+    player: Single<(&Player, &MapPos)>,
+    pos_to_interactable: Res<PosToInteractable>,
+    interactables: Query<Option<&Stairs>>,
     nearby_mobs: Res<NearbyMobs>,
     examine_results: Res<examine::ExamineResults>,
     world_assets: If<Res<WorldAssets>>,
@@ -1163,7 +1175,9 @@ fn sidebar(
     player_abilities: Res<PlayerAbilities>,
     input_mode: Res<InputMode>,
     mut msg_ability_clicked: MessageWriter<AbilityClicked>,
+    mut msg_stairs_clicked: MessageWriter<StairsClicked>,
 ) {
+    let (player, player_pos) = player.into_inner();
     let heart = world_assets
         .get_urizen_egui_image(&mut contexts, &atlas_assets, 7700)
         .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
@@ -1280,6 +1294,22 @@ fn sidebar(
                             FontSelection::Default,
                             Align::LEFT,
                         ));
+
+                        for _stairs in interactables.iter_many(pos_to_interactable.get(*player_pos))
+                        {
+                            if ui
+                                .button(apply_brainrot_ui(
+                                    "Use stairs",
+                                    player.brainrot,
+                                    ui.style(),
+                                    FontSelection::Default,
+                                    Align::LEFT,
+                                ))
+                                .clicked()
+                            {
+                                msg_stairs_clicked.write(StairsClicked);
+                            };
+                        }
 
                         for (i, ability) in player_abilities.abilities.iter().enumerate() {
                             let ability_key = (i + 1) % 10;

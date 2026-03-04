@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::game::Creature;
+use crate::game::{Creature, Interactable};
 
 pub(crate) const TILE_WIDTH: f32 = 24.0;
 pub(crate) const TILE_HEIGHT: f32 = 24.0;
@@ -66,6 +66,9 @@ impl MapPos {
 }
 
 #[derive(Component)]
+pub struct Tile;
+
+#[derive(Component)]
 pub struct BlocksMovement;
 
 #[derive(Default, Resource, Deref, DerefMut)]
@@ -93,5 +96,24 @@ pub(crate) fn update_pos_to_creature(
         if pos_to_creature.0.insert(pos.0, entity).is_some() {
             warn!("Overlapping mobs at {}", pos.0);
         }
+    }
+}
+
+#[derive(Resource, Default)]
+pub(crate) struct PosToInteractable(pub HashMap<MapPos, Vec<Entity>>);
+
+impl PosToInteractable {
+    pub(crate) fn get<'a>(&'a self, pos: MapPos) -> impl Iterator<Item = Entity> + 'a {
+        self.0.get(&pos).into_iter().flat_map(|v| v.iter()).copied()
+    }
+}
+
+pub(crate) fn update_pos_to_interactable(
+    mut pos_to_interactable: ResMut<PosToInteractable>,
+    interactable: Query<(Entity, &MapPos), With<Interactable>>,
+) {
+    pos_to_interactable.0.clear();
+    for (entity, pos) in interactable {
+        pos_to_interactable.0.entry(*pos).or_default().push(entity);
     }
 }
