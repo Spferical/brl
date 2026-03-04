@@ -24,6 +24,7 @@ use crate::{
         debug::{DebugSettings, redo_faction_map},
         input::{AbilityClicked, EatEvent, InputMode, PlayerIntent, StairsClicked},
         map::{MapPos, PosToCreature, PosToInteractable, TILE_HEIGHT, TILE_WIDTH},
+        phone::PhoneState,
     },
     screens::Screen,
 };
@@ -1923,6 +1924,7 @@ pub fn enter(
     assets: Res<assets::WorldAssets>,
     q_camera: Single<Entity, With<Camera2d>>,
     mut msg_notification: MessageWriter<phone::NotificationEvent>,
+    mut phone: ResMut<PhoneState>,
 ) {
     let world = (
         GameWorld,
@@ -1935,6 +1937,7 @@ pub fn enter(
     examine::init_examine_highlight(world, &mut commands, &assets);
     lighting::enable_lighting(&mut commands, *q_camera);
     mapgen::gen_map(world, commands, assets);
+    *phone = PhoneState::default();
 
     // Upgrade app is index 3 in `get_apps()`
     msg_notification.write(phone::NotificationEvent(3));
