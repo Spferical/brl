@@ -7,12 +7,8 @@ use crate::game::{
     signal,
 };
 use bevy::{platform::collections::HashMap, prelude::*};
-use rand::{
-    Rng,
-    seq::{IndexedRandom, IteratorRandom},
-};
+use rand::{Rng, seq::IndexedRandom};
 use rand_8::SeedableRng;
-use rogue_algebra::Pos;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum TileKind {
@@ -159,6 +155,7 @@ impl LevelDraft {
         all_floors.choose_multiple(rng, n).copied().collect()
     }
 
+    #[allow(unused)]
     fn fill_rect(&mut self, rect: rogue_algebra::Rect, tk: TileKind) {
         for p in rect {
             self.tiles.insert(p, tk);
@@ -267,8 +264,6 @@ fn draft_level_mapgen_rs(
 
 #[derive(Debug, Clone, Copy)]
 pub struct CarveRoomOpts {
-    wall: TileKind,
-    floor: TileKind,
     max_width: i32,
     max_height: i32,
     min_width: i32,
@@ -292,49 +287,6 @@ impl From<CarveRoomOpts> for BspSplitOpts {
             min_height: opts.min_height,
         }
     }
-}
-
-pub fn carve_rooms_bsp(
-    draft: &mut LevelDraft,
-    rect: rogue_algebra::Rect,
-    opts: &CarveRoomOpts,
-    rng: &mut impl Rng,
-) -> Vec<rogue_algebra::Rect> {
-    let tree = gen_bsp_tree(rect, (*opts).into(), rng);
-    let room_graph = tree.into_room_graph();
-    for room in room_graph.iter() {
-        draft.fill_rect(room, opts.floor);
-        for adj in room_graph.get_adj(room).unwrap() {
-            let wall = get_connecting_wall(room, *adj).unwrap();
-            let has_door = wall
-                .into_iter()
-                .any(|pos| draft.tiles.get(&pos).unwrap_or(&TileKind::Floor) == &TileKind::Floor);
-            if !has_door {
-                draft.tiles.insert(wall.choose(rng), opts.floor);
-            }
-        }
-    }
-    room_graph.iter().collect()
-}
-
-pub fn pick_random_bsp_doors(
-    rooms: &[rogue_algebra::Rect],
-    loopiness: f32,
-    rng: &mut impl Rng,
-) -> Vec<Pos> {
-    let mut doors = vec![];
-    for _ in 0..((rooms.len() - 1) as f32 * loopiness) as u32 {
-        loop {
-            let rand_room1 = rooms.choose(rng).unwrap();
-            let rand_room2 = rooms.choose(rng).unwrap();
-            if let Some(wall) = get_connecting_wall(*rand_room1, *rand_room2) {
-                let pos = wall.choose(rng);
-                doors.push(pos);
-                break;
-            }
-        }
-    }
-    doors
 }
 
 fn get_connecting_wall(
@@ -402,6 +354,7 @@ struct RoomGraph {
     pub room_adj: HashMap<rogue_algebra::Rect, Vec<rogue_algebra::Rect>>,
 }
 
+#[allow(unused)]
 impl RoomGraph {
     fn get_adj(&self, rect: rogue_algebra::Rect) -> Option<&[rogue_algebra::Rect]> {
         self.room_adj.get(&rect).map(Vec::as_slice)
@@ -517,8 +470,6 @@ fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
     let max_height = rng.random_range(4..=rect.width().min(8));
     let min_height = max_height / 2 - 1;
     let bsp_opts = CarveRoomOpts {
-        wall: TileKind::Wall,
-        floor: TileKind::Floor,
         max_width,
         max_height,
         min_width,
