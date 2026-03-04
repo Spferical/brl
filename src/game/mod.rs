@@ -554,7 +554,7 @@ fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut
 
 fn handle_player_move(
     mut commands: Commands,
-    player: Single<(Entity, &mut MapPos, &PlayerIntent, &Player)>,
+    player: Single<(Entity, &mut MapPos, &PlayerIntent, &mut Player)>,
     mut mobs: Query<&mut MapPos, (With<Creature>, Without<Player>)>,
     stairs: Query<(&MapPos, &Stairs), (Without<Player>, Without<Creature>)>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
@@ -564,7 +564,7 @@ fn handle_player_move(
     mut moved: ResMut<PlayerMoved>,
     mut screen_shake: ResMut<camera::ScreenShake>,
 ) {
-    let (player_entity, mut pos, intent, player_stats) = player.into_inner();
+    let (player_entity, mut pos, intent, mut player_stats) = player.into_inner();
     commands.entity(player_entity).remove::<PlayerIntent>();
 
     let p = ((player_stats.brainrot as f32 - 60.0) / 30.0).clamp(0.0, 1.0);
@@ -651,6 +651,8 @@ fn handle_player_move(
                 let old_pos = *pos;
                 *pos = *map_pos;
                 moved.0 = true;
+                let dist = (pos.0).manhattan_distance(old_pos.0);
+                player_stats.hunger += dist as i32;
                 commands.entity(player_entity).insert(MoveAnimation {
                     from: old_pos.to_vec3(PLAYER_Z),
                     to: pos.to_vec3(PLAYER_Z),
