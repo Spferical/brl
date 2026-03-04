@@ -102,7 +102,8 @@ pub(super) fn plugin(app: &mut App) {
                 phone::toggle_phone,
                 phone::update_phone,
                 phone::handle_notifications,
-            ),
+            )
+                .chain(),
             chat::update_streaming_stats,
             chat::update_money_timer,
             chat::update_chat,
@@ -164,6 +165,7 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Update,
         (apply_brainrot_to_world_text, apply_brainrot_visual_effects)
+            .chain()
             .run_if(in_state(Screen::Gameplay)),
     );
     app.add_systems(
@@ -177,6 +179,7 @@ pub(super) fn plugin(app: &mut App) {
             chat::draw_chat,
             draw_interactable_popup,
         )
+            .chain()
             .run_if(in_state(Screen::Gameplay)),
     );
 }
