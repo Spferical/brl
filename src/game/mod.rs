@@ -165,6 +165,7 @@ pub(super) fn plugin(app: &mut App) {
         (
             sidebar,
             left_sidebar,
+            draw_hunger_warning,
             chat::draw_streaming_indicator,
             phone::draw_phone,
             chat::draw_chat,
@@ -436,6 +437,25 @@ pub struct Player {
     pub max_depth: i32,
 }
 
+impl Player {
+    pub fn apply_hunger_damage(&mut self, creature: &mut Creature, amount: i32) {
+        self.hunger += amount;
+        if self.hunger > 100 {
+            let overflow = self.hunger - 100;
+            self.hunger = 100;
+            self.apply_strength_damage(creature, overflow);
+        }
+    }
+
+    pub fn apply_strength_damage(&mut self, creature: &mut Creature, amount: i32) {
+        self.strength -= amount;
+        if self.strength < 0 {
+            creature.hp += self.strength;
+            self.strength = 0;
+        }
+    }
+}
+
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub enum Ability {
     Sprint,
@@ -675,6 +695,7 @@ impl Mob {
             DamageType::Psychic => self.attrs.psychic_resist,
             DamageType::Aura => self.attrs.aura_resist,
             DamageType::Boredom => self.attrs.boredom_resist,
+            DamageType::Hunger | DamageType::Strength => Resist::Normal,
         }
     }
 }
@@ -698,12 +719,8 @@ fn increment_turn_counter(mut counter: ResMut<TurnCounter>) {
 
 fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut Creature)>) {
     let (mut player, mut creature) = player.into_inner();
-    if turn_counter.0.is_multiple_of(10) {
-        if player.hunger >= 100 {
-            creature.hp -= 1;
-        }
-        player.hunger += 1;
-        player.hunger = player.hunger.clamp(0, 100);
+    if turn_counter.0.is_multiple_of(5) {
+        player.apply_hunger_damage(&mut creature, 1);
 
         if player.boredom >= 100 {
             creature.hp -= 1;
@@ -715,7 +732,7 @@ fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut
 
 fn handle_player_move(
     mut commands: Commands,
-    player: Single<(Entity, &mut MapPos, &PlayerIntent, &mut Player)>,
+    player: Single<(Entity, &mut MapPos, &PlayerIntent, &mut Player, &mut Creature)>,
     mut mobs: Query<&mut MapPos, (With<Creature>, Without<Player>)>,
     stairs: Query<&Stairs, (Without<Player>, Without<Creature>)>,
     interactables: Query<&Interactable>,
@@ -730,7 +747,7 @@ fn handle_player_move(
     mut screen_shake: ResMut<camera::ScreenShake>,
     pos_to_interactable: Res<PosToInteractable>,
 ) {
-    let (player_entity, mut pos, intent, mut player_stats) = player.into_inner();
+    let (player_entity, mut pos, intent, mut player_stats, mut creature) = player.into_inner();
     commands.entity(player_entity).remove::<PlayerIntent>();
 
     let p = ((player_stats.brainrot as f32 - 60.0) / 30.0).clamp(0.0, 1.0);
@@ -835,7 +852,7 @@ fn handle_player_move(
                 *pos = *map_pos;
                 moved.0 = true;
                 let dist = (pos.0).manhattan_distance(old_pos.0);
-                player_stats.hunger += dist as i32;
+                player_stats.apply_hunger_damage(&mut creature, dist as i32);
                 commands.entity(player_entity).insert(MoveAnimation {
                     from: old_pos.to_vec3(PLAYER_Z),
                     to: pos.to_vec3(PLAYER_Z),
@@ -938,6 +955,8 @@ pub(crate) enum DamageType {
     Psychic,
     Aura,
     Boredom,
+    Hunger,
+    Strength,
 }
 
 pub struct DamageInstance {
@@ -1009,6 +1028,12 @@ fn apply_damage(
                             creature.hp -= player.boredom - 100;
                             player.boredom = 100;
                         }
+                    }
+                    DamageType::Hunger => {
+                        player.apply_hunger_damage(&mut creature, amount);
+                    }
+                    DamageType::Strength => {
+                        player.apply_strength_damage(&mut creature, amount);
                     }
                 },
                 None => {
@@ -1445,6 +1470,7 @@ fn sidebar(
                                         (DamageType::Boredom, Resist::Strong) => {
                                             Some(("Focused", egui::Color32::DARK_BLUE))
                                         }
+                                        _ => None,
                                     }
                                 }
                                 for damage_type in [
@@ -1873,4 +1899,46 @@ pub fn exit(
 ) {
     commands.entity(game_world.single().unwrap()).despawn();
     lighting::disable_lighting(&mut commands, *q_camera);
+}
+
+fn draw_hunger_warning(
+    mut contexts: EguiContexts,
+    player: Single<(&Player, &Creature)>,
+) {
+    let (player, _creature) = player.into_inner();
+    if player.hunger < 100 {
+        return;
+    }
+
+    let Ok(ctx) = contexts.ctx_mut() else {
+        return;
+    };
+    let text = if player.brainrot > 80 {
+        if player.strength == 0 {
+            "HUNGERMAXXING FR"
+        } else {
+            "HUNGERMAXXING"
+        }
+    } else {
+        if player.strength == 0 {
+            "STARVING TO DEATH"
+        } else {
+            "STARVING"
+        }
+    };
+
+    egui::Area::new(egui::Id::new("hunger_warning"))
+        .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -20.0))
+        .show(ctx, |ui| {
+            ui.label(apply_brainrot_ui(
+                egui::RichText::new(text)
+                    .color(egui::Color32::RED)
+                    .size(56.0)
+                    .strong(),
+                player.brainrot,
+                ui.style(),
+                egui::FontSelection::Default,
+                egui::Align::Center,
+            ));
+        });
 }
