@@ -31,6 +31,7 @@ tracing = { version = "0.1", features = [
 
 [target.wasm32-unknown-unknown.dependencies]
 getrandom = { version = "0.3", features = ["wasm_js"] }
+getrandom_2 = { package = "getrandom", version = "0.2", features = ["js"] }
 
 [features]
 # Default to a native dev build.
