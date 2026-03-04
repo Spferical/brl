@@ -537,6 +537,18 @@ fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
             }
         }
     }
+    // Add doors for extra loops.
+    for _ in 0..room_graph.len() {
+        loop {
+            let room1 = room_graph.choose(rng).expect("no rooms in offices");
+            let room2 = room_graph.choose(rng).expect("no rooms in offices");
+            if let Some(wall) = get_connecting_wall(room1, room2) {
+                let door = wall.choose(rng);
+                doors.push(door);
+                break;
+            }
+        }
+    }
 
     let mut tiles = HashMap::new();
     for p in rect {
