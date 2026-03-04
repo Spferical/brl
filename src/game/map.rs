@@ -1,4 +1,9 @@
-use bevy::{platform::collections::HashSet, prelude::*};
+use bevy::{
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
+};
+
+use crate::game::Creature;
 
 pub(crate) const TILE_WIDTH: f32 = 24.0;
 pub(crate) const TILE_HEIGHT: f32 = 24.0;
@@ -73,5 +78,20 @@ pub(crate) fn update_walk_blocked_map(
     map.clear();
     for MapPos(pos) in q_blocks.iter() {
         map.insert(*pos);
+    }
+}
+
+#[derive(Resource, Default)]
+pub(crate) struct PosToCreature(pub HashMap<IVec2, Entity>);
+
+pub(crate) fn update_pos_to_creature(
+    mut pos_to_creature: ResMut<PosToCreature>,
+    creatures: Query<(Entity, &MapPos), With<Creature>>,
+) {
+    pos_to_creature.0.clear();
+    for (entity, pos) in creatures {
+        if pos_to_creature.0.insert(pos.0, entity).is_some() {
+            warn!("Overlapping mobs at {}", pos.0);
+        }
     }
 }

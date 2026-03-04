@@ -24,7 +24,7 @@ use crate::{
         assets::WorldAssets,
         debug::{DebugSettings, redo_faction_map},
         input::{AbilityClicked, InputMode, PlayerIntent},
-        map::{MapPos, TILE_HEIGHT, TILE_WIDTH},
+        map::{MapPos, PosToCreature, TILE_HEIGHT, TILE_WIDTH},
         mapgen::{Stairs, Tile},
     },
     screens::Screen,
@@ -122,21 +122,21 @@ pub(super) fn plugin(app: &mut App) {
                 // kill mobs from any player damage
                 (apply_damage, prune_dead).chain(),
                 // environment
-                update_pos_to_creature,
+                map::update_pos_to_creature,
                 process_spawners,
-                update_pos_to_creature,
+                map::update_pos_to_creature,
                 // bullets
                 (check_bullet_collision, move_bullets, check_bullet_collision).chain(),
                 // mobs get a turn
                 build_faction_map,
                 process_mob_turn,
-                update_pos_to_creature,
+                map::update_pos_to_creature,
                 check_bullet_collision,
                 // damage
                 apply_damage,
                 spawn_damage_animations,
                 prune_dead,
-                update_pos_to_creature,
+                map::update_pos_to_creature,
                 // end-of-turn bookkeeping
                 obscure_tiles,
                 update_nearby_mobs,
@@ -743,21 +743,6 @@ fn process_spawners(
             let transform = Transform::from_translation(pos.to_vec3(TILE_Z));
             let new_mob = commands.spawn((spawn.clone(), *pos, transform)).id();
             commands.entity(world_entity).add_child(new_mob);
-        }
-    }
-}
-
-#[derive(Resource, Default)]
-struct PosToCreature(HashMap<IVec2, Entity>);
-
-fn update_pos_to_creature(
-    mut pos_to_creature: ResMut<PosToCreature>,
-    creatures: Query<(Entity, &MapPos), With<Creature>>,
-) {
-    pos_to_creature.0.clear();
-    for (entity, pos) in creatures {
-        if pos_to_creature.0.insert(pos.0, entity).is_some() {
-            warn!("Overlapping mobs at {}", pos.0);
         }
     }
 }
