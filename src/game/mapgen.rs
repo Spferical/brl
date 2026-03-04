@@ -24,11 +24,33 @@ enum MobKind {
     Influencer,
     Normie,
     Amogus,
+    Capybara,
 }
 
 impl MobKind {
     fn get_bundle(&self, assets: &WorldAssets) -> MobBundle {
         match self {
+            MobKind::Capybara => MobBundle {
+                name: Name::new("Capybara"),
+                creature: Creature {
+                    hp: 2,
+                    max_hp: 2,
+                    faction: -1,
+                },
+                mob: Mob {
+                    melee_damage: 1,
+                    target: None,
+                    ranged: false,
+                    attrs: MobAttrs {
+                        psychic_resist: Resist::Weak,
+                        boredom_resist: Resist::Strong,
+                        ..Default::default()
+                    },
+                },
+                sprite: assets.get_ascii_sprite('c', Color::srgb(0.5, 0.3, 0.3)),
+                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+            },
+
             MobKind::GiantFrog => MobBundle {
                 name: Name::new("Giant Frog"),
                 creature: Creature {
@@ -194,7 +216,7 @@ impl LevelDraft {
             .collect::<Vec<rogue_algebra::Pos>>();
         for pos in floors.choose_multiple(rng, num_mobs) {
             use MobKind::*;
-            let mob_kinds = [GiantFrog, GymBro, Influencer, Normie, Amogus];
+            let mob_kinds = [GiantFrog, GymBro, Influencer, Normie, Amogus, Capybara];
             self.mobs.insert(*pos, *mob_kinds.choose(rng).unwrap());
         }
         self
