@@ -74,13 +74,56 @@ pub struct BlocksMovement;
 #[derive(Default, Resource, Deref, DerefMut)]
 pub struct WalkBlockedMap(pub HashSet<IVec2>);
 
+#[derive(Default, Resource, Deref, DerefMut)]
+pub struct SightBlockedMap(pub HashSet<IVec2>);
+
+#[derive(Default, Resource, Deref, DerefMut)]
+pub struct PlayerVisibilityMap(pub HashSet<IVec2>);
+
 pub(crate) fn update_walk_blocked_map(
     mut map: ResMut<WalkBlockedMap>,
+    mut sight_map: ResMut<SightBlockedMap>,
     q_blocks: Query<&MapPos, With<BlocksMovement>>,
+    q_added: Query<(), Added<BlocksMovement>>,
 ) {
-    map.clear();
-    for MapPos(pos) in q_blocks.iter() {
-        map.insert(*pos);
+    if !q_added.is_empty() {
+        map.clear();
+        sight_map.clear();
+        for MapPos(pos) in q_blocks.iter() {
+            map.insert(*pos);
+            sight_map.insert(*pos);
+        }
+    }
+}
+
+pub(crate) fn update_player_visibility(
+    mut player_vis_map: ResMut<PlayerVisibilityMap>,
+    q_player: Query<&MapPos, (With<crate::game::Player>, Changed<MapPos>)>,
+    sight_blocked_map: Res<SightBlockedMap>,
+) {
+    if let Some(player_pos) = q_player.iter().next() {
+        player_vis_map.clear();
+        for pos in rogue_algebra::fov::calculate_fov(player_pos.0.into(), 99, |pos| {
+            sight_blocked_map.contains(&IVec2::from(pos))
+        }) {
+            player_vis_map.insert(IVec2::from(pos));
+        }
+    }
+}
+
+pub(crate) fn apply_hard_fov_to_tiles(
+    player_vis_map: Res<PlayerVisibilityMap>,
+    mut q_tiles: Query<(&MapPos, &mut Visibility), Without<crate::game::Player>>,
+) {
+    for (pos, mut vis) in q_tiles.iter_mut() {
+        let target_vis = if player_vis_map.contains(&pos.0) {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        };
+        if *vis != target_vis {
+            *vis = target_vis;
+        }
     }
 }
 

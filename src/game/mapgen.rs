@@ -38,6 +38,7 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 1,
+                    target: None,
                     ranged: false,
                     attrs: MobAttrs {
                         based: true,
@@ -58,6 +59,7 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 1,
+                    target: None,
                     ranged: false,
                     attrs: MobAttrs {
                         physical_resist: Resist::Strong,
@@ -76,6 +78,7 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 1,
+                    target: None,
                     ranged: false,
                     attrs: MobAttrs {
                         mog_risk: true,
@@ -95,6 +98,7 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 1,
+                    target: None,
                     ranged: false,
                     attrs: MobAttrs {
                         basic: true,
@@ -113,6 +117,7 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 4,
+                    target: None,
                     ranged: false,
                     attrs: MobAttrs {
                         sus: true,

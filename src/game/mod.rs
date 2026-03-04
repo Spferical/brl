@@ -55,6 +55,8 @@ pub(super) fn plugin(app: &mut App) {
     app.insert_resource(ClearColor(Color::BLACK));
     app.load_resource::<assets::WorldAssets>();
     app.init_resource::<map::WalkBlockedMap>();
+    app.init_resource::<map::SightBlockedMap>();
+    app.init_resource::<map::PlayerVisibilityMap>();
     app.init_resource::<camera::ScreenShake>();
     app.init_resource::<PlayerAbilities>();
     app.init_resource::<PendingDamage>();
@@ -86,6 +88,9 @@ pub(super) fn plugin(app: &mut App) {
         (
             lighting::on_add_occluder,
             lighting::on_add_player,
+            map::update_walk_blocked_map,
+            map::update_player_visibility,
+            map::apply_hard_fov_to_tiles.run_if(resource_changed::<map::PlayerVisibilityMap>),
             input::handle_input.run_if(is_player_alive.and(phone::is_phone_closed)),
             handle_eat,
             targeting::update_valid_targets,
@@ -114,7 +119,6 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Turn,
         (
-            map::update_walk_blocked_map,
             map::update_pos_to_interactable,
             handle_player_move,
             (
@@ -674,6 +678,7 @@ struct Mob {
     melee_damage: i32,
     ranged: bool,
     attrs: MobAttrs,
+    target: Option<IVec2>,
 }
 
 impl Mob {
@@ -1146,6 +1151,8 @@ fn process_mob_turn(
     player_q: Query<Entity, With<Player>>,
     mut screen_shake: ResMut<camera::ScreenShake>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
+    sight_blocked_map: Res<map::SightBlockedMap>,
+    all_creatures: Query<&Creature>,
 ) {
     enum Action {
         Move(MapPos),
@@ -1159,10 +1166,42 @@ fn process_mob_turn(
     // Determine mob intentions.
     let mut mob_moves = HashMap::new();
     let mut claimed_locations = HashSet::new();
-    for (entity, pos, creature, mob) in mobs.iter() {
+    for (entity, pos, creature, mut mob) in mobs.iter_mut() {
         if creature.is_dead() {
             continue;
         }
+
+        let fov = rogue_algebra::fov::calculate_fov(pos.0.into(), 10, |p| {
+            sight_blocked_map.contains(&IVec2::from(p))
+        });
+
+        let mut sees_enemy = false;
+        let mut target_pos = None;
+        for visible_pos in fov {
+            let visible_ivec = IVec2::from(visible_pos);
+            if let Some(other_entity) = pos_to_creature.0.get(&visible_ivec) {
+                if let Ok(other_creature) = all_creatures.get(*other_entity) {
+                    if other_creature.faction != creature.faction {
+                        sees_enemy = true;
+                        target_pos = Some(visible_ivec);
+                        break;
+                    }
+                }
+            }
+        }
+
+        if sees_enemy {
+            mob.target = target_pos;
+        } else if let Some(t) = mob.target {
+            if pos.0 == t {
+                mob.target = None;
+            }
+        }
+
+        if mob.target.is_none() {
+            continue;
+        }
+
         // follow dijkstra map
         let dijkstra_map = faction_map
             .dijkstra_map_per_faction
@@ -1337,6 +1376,7 @@ fn update_nearby_mobs(
     player: Query<&MapPos, With<Player>>,
     mobs: Query<(&MapPos, &Creature, Option<&Mob>, &Text2d, &TextColor), Without<Player>>,
     pos_to_creature: Res<PosToCreature>,
+    player_vis_map: Res<map::PlayerVisibilityMap>,
 ) {
     nearby_mobs.mobs.clear();
     let player_pos = *player.single().unwrap();
@@ -1344,6 +1384,7 @@ fn update_nearby_mobs(
     let reachable = |p: MapPos| p.adjacent();
     for path in rogue_algebra::path::bfs_paths(&[player_pos], maxdist, reachable) {
         if let Some(pos) = path.last()
+            && player_vis_map.contains(&pos.0)
             && let Some(mob) = pos_to_creature.0.get(&pos.0)
             && let Ok((pos, creature, mob, text, color)) = mobs.get(*mob)
         {
