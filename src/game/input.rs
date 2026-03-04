@@ -1,6 +1,7 @@
 use std::sync::LazyLock;
 
 use bevy::{input::keyboard::Key, platform::collections::HashMap, prelude::*};
+use bevy_egui::EguiContexts;
 
 use crate::game::{
     Ability, Player, PlayerAbilities, Turn, examine::ExaminePos, map::MapPos,
@@ -89,6 +90,7 @@ pub(crate) enum InputMode {
 }
 
 pub(crate) fn handle_input(
+    mut ctx: EguiContexts,
     window: Single<&Window>,
     mut msg_ability_clicked: MessageReader<AbilityClicked>,
     mut msg_stairs_clicked: MessageReader<StairsClicked>,
@@ -107,6 +109,10 @@ pub(crate) fn handle_input(
     let mouse_pos = window.cursor_position();
     let tile_clicked = if let Some(mouse_pos) = mouse_pos
         && mouse_button_input.just_pressed(MouseButton::Left)
+        && !ctx
+            .ctx_mut()
+            .map(|ctx| ctx.is_pointer_over_area())
+            .unwrap_or(false)
     {
         camera
             .viewport_to_world(camera_transform, mouse_pos)
@@ -147,10 +153,10 @@ pub(crate) fn handle_input(
 
     let mut intent = None;
 
-    if msg_stairs_clicked.read().last().is_some() {
-        intent = Some(PlayerIntent::UseStairs);
-    }
     match *mode {
+        _ if msg_stairs_clicked.read().last().is_some() => {
+            intent = Some(PlayerIntent::UseStairs);
+        }
         InputMode::Normal => {
             if let Some(direction) = check_direction_keys(&keyboard_input) {
                 intent = Some(PlayerIntent::Move(MapPos(player.1.0 + direction)));
