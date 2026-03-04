@@ -57,6 +57,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<map::WalkBlockedMap>();
     app.init_resource::<map::SightBlockedMap>();
     app.init_resource::<map::PlayerVisibilityMap>();
+    app.init_resource::<map::PlayerMemoryMap>();
     app.init_resource::<camera::ScreenShake>();
     app.init_resource::<PlayerAbilities>();
     app.init_resource::<PendingDamage>();

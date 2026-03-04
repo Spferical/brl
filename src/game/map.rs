@@ -80,6 +80,9 @@ pub struct SightBlockedMap(pub HashSet<IVec2>);
 #[derive(Default, Resource, Deref, DerefMut)]
 pub struct PlayerVisibilityMap(pub HashSet<IVec2>);
 
+#[derive(Default, Resource, Deref, DerefMut)]
+pub struct PlayerMemoryMap(pub HashSet<IVec2>);
+
 pub(crate) fn update_walk_blocked_map(
     mut map: ResMut<WalkBlockedMap>,
     mut sight_map: ResMut<SightBlockedMap>,
@@ -98,6 +101,7 @@ pub(crate) fn update_walk_blocked_map(
 
 pub(crate) fn update_player_visibility(
     mut player_vis_map: ResMut<PlayerVisibilityMap>,
+    mut player_memory_map: ResMut<PlayerMemoryMap>,
     q_player: Query<&MapPos, (With<crate::game::Player>, Changed<MapPos>)>,
     sight_blocked_map: Res<SightBlockedMap>,
 ) {
@@ -107,16 +111,27 @@ pub(crate) fn update_player_visibility(
             sight_blocked_map.contains(&IVec2::from(pos))
         }) {
             player_vis_map.insert(IVec2::from(pos));
+            player_memory_map.insert(IVec2::from(pos));
         }
     }
 }
 
 pub(crate) fn apply_hard_fov_to_tiles(
     player_vis_map: Res<PlayerVisibilityMap>,
-    mut q_tiles: Query<(&MapPos, &mut Visibility), Without<crate::game::Player>>,
+    player_memory_map: Res<PlayerMemoryMap>,
+    mut q_tiles: Query<
+        (&MapPos, &mut Visibility, Has<crate::game::Creature>),
+        Without<crate::game::Player>,
+    >,
 ) {
-    for (pos, mut vis) in q_tiles.iter_mut() {
-        let target_vis = if player_vis_map.contains(&pos.0) {
+    for (pos, mut vis, is_creature) in q_tiles.iter_mut() {
+        let is_visible = if is_creature {
+            player_vis_map.contains(&pos.0)
+        } else {
+            player_memory_map.contains(&pos.0)
+        };
+
+        let target_vis = if is_visible {
             Visibility::Inherited
         } else {
             Visibility::Hidden
