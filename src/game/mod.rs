@@ -1212,15 +1212,22 @@ fn sidebar(
                                 if mob.melee_damage % 2 == 1 {
                                     ui.add(half_sword.clone());
                                 }
-                                if mob.attrs.based {
-                                    ui.label(apply_brainrot_ui(
-                                        RichText::new("Based")
-                                            .background_color(egui::Color32::PURPLE),
-                                        player.brainrot,
-                                        ui.style(),
-                                        FontSelection::Default,
-                                        Align::LEFT,
-                                    ));
+                                for (attr, name, color) in [
+                                    (mob.attrs.based, "Based", egui::Color32::PURPLE),
+                                    (mob.attrs.basic, "Basic", egui::Color32::DARK_GRAY),
+                                    (mob.attrs.mog_risk, "Mog Risk", egui::Color32::DARK_RED),
+                                    (mob.attrs.sus, "Sus", egui::Color32::RED),
+                                    (mob.attrs.sus, "Sus", egui::Color32::RED),
+                                ] {
+                                    if attr {
+                                        ui.label(apply_brainrot_ui(
+                                            RichText::new(name).background_color(color),
+                                            player.brainrot,
+                                            ui.style(),
+                                            FontSelection::Default,
+                                            Align::LEFT,
+                                        ));
+                                    }
                                 }
                             }
                         });
