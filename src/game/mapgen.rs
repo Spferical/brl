@@ -27,6 +27,15 @@ enum MobKind {
     Capybara,
 }
 
+const MOBS: &[MobKind] = &[
+    MobKind::GiantFrog,
+    MobKind::GymBro,
+    MobKind::Influencer,
+    MobKind::Normie,
+    MobKind::Amogus,
+    MobKind::Capybara,
+];
+
 impl MobKind {
     fn get_bundle(&self, assets: &WorldAssets) -> MobBundle {
         match self {
@@ -215,9 +224,7 @@ impl LevelDraft {
             .copied()
             .collect::<Vec<rogue_algebra::Pos>>();
         for pos in floors.choose_multiple(rng, num_mobs) {
-            use MobKind::*;
-            let mob_kinds = [GiantFrog, GymBro, Influencer, Normie, Amogus, Capybara];
-            self.mobs.insert(*pos, *mob_kinds.choose(rng).unwrap());
+            self.mobs.insert(*pos, *MOBS.choose(rng).unwrap());
         }
         self
     }
