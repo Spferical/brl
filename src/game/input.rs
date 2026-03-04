@@ -182,14 +182,13 @@ pub(crate) fn handle_input(
             } else if keyboard_input.just_pressed(Key::Character("x".into())) {
                 *mode = InputMode::Examine(player_pos.0);
                 examine_pos.pos = Some(*player_pos);
-            } else if keyboard_input.just_pressed(Key::Character("e".into())) {
-                if let Some(entity) = pos_to_interactable
+            } else if keyboard_input.just_pressed(Key::Character("e".into()))
+                && let Some(entity) = pos_to_interactable
                     .0
                     .get(player_pos)
                     .and_then(|v| v.first())
-                {
-                    intent = Some(PlayerIntent::Interact(*entity));
-                }
+            {
+                intent = Some(PlayerIntent::Interact(*entity));
             }
         }
         InputMode::Examine(pos) => {

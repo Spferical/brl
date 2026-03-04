@@ -473,7 +473,7 @@ impl Player {
     }
     fn add_or_remove_ability(&mut self, condition: bool, ability: Ability) {
         let ability_idx = self.abilities.iter().position(|a| *a == ability);
-        if condition && !ability_idx.is_some() {
+        if condition && ability_idx.is_none() {
             self.abilities.push(ability);
         } else if let Some(idx) = ability_idx {
             self.abilities.remove(idx);
@@ -1176,23 +1176,22 @@ fn process_mob_turn(
         let mut target_pos = None;
         for visible_pos in fov {
             let visible_ivec = IVec2::from(visible_pos);
-            if let Some(other_entity) = pos_to_creature.0.get(&visible_ivec) {
-                if let Ok(other_creature) = all_creatures.get(*other_entity) {
-                    if other_creature.faction != creature.faction {
-                        sees_enemy = true;
-                        target_pos = Some(visible_ivec);
-                        break;
-                    }
-                }
+            if let Some(other_entity) = pos_to_creature.0.get(&visible_ivec)
+                && let Ok(other_creature) = all_creatures.get(*other_entity)
+                && other_creature.faction != creature.faction
+            {
+                sees_enemy = true;
+                target_pos = Some(visible_ivec);
+                break;
             }
         }
 
         if sees_enemy {
             mob.target = target_pos;
-        } else if let Some(t) = mob.target {
-            if pos.0 == t {
-                mob.target = None;
-            }
+        } else if let Some(t) = mob.target
+            && pos.0 == t
+        {
+            mob.target = None;
         }
 
         if mob.target.is_none() {
@@ -1957,12 +1956,10 @@ fn draw_hunger_warning(mut contexts: EguiContexts, player: Single<(&Player, &Cre
         } else {
             "HUNGERMAXXING"
         }
+    } else if player.strength == 0 {
+        "STARVING TO DEATH"
     } else {
-        if player.strength == 0 {
-            "STARVING TO DEATH"
-        } else {
-            "STARVING"
-        }
+        "STARVING"
     };
 
     egui::Area::new(egui::Id::new("hunger_warning"))
