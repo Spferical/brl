@@ -163,9 +163,50 @@ pub(super) fn plugin(app: &mut App) {
             phone::draw_phone,
             chat::draw_chat,
             delivery::draw_eat_popup,
+            draw_interactable_popup,
         )
             .run_if(in_state(Screen::Gameplay)),
     );
+}
+
+pub(crate) fn draw_interactable_popup(
+    mut contexts: EguiContexts,
+    player_query: Single<(&MapPos, &Player)>,
+    interactable_query: Query<(&MapPos, &Name, &Interactable, Option<&Stairs>)>,
+    mut msg_stairs_clicked: MessageWriter<StairsClicked>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    q_camera: Single<(&Camera, &GlobalTransform), With<Camera2d>>,
+) {
+    let (player_pos, player) = player_query.into_inner();
+    let (camera, camera_transform) = *q_camera;
+
+    for (pos, name, interactable, stairs) in interactable_query.iter() {
+        if pos.0 == player_pos.0 {
+            // Get screen position
+            let world_pos = player_pos.to_vec3(PLAYER_Z);
+            let Ok(viewport_pos) = camera.world_to_viewport(camera_transform, world_pos) else {
+                continue;
+            };
+
+            let Ok(ctx) = contexts.ctx_mut() else {
+                return;
+            };
+
+            draw_world_popup(
+                ctx,
+                viewport_pos,
+                format!("{} {}? (e)", interactable.action, name),
+                interactable.description.clone(),
+                player.brainrot,
+            );
+
+            if keyboard_input.just_pressed(KeyCode::KeyE) {
+                if stairs.is_some() {
+                    msg_stairs_clicked.write(StairsClicked);
+                }
+            }
+        }
+    }
 }
 
 pub fn apply_brainrot_ui(
@@ -439,13 +480,66 @@ fn update_player_abilities(player: Single<&Player>, mut abilities: ResMut<Player
     abilities.add_or_remove(player.rizz >= 10, Ability::Mog);
 }
 
-#[derive(Component, Default)]
-struct Interactable;
+#[derive(Component)]
+pub struct Interactable {
+    pub action: String,
+    pub description: Option<String>,
+}
+
+impl Default for Interactable {
+    fn default() -> Self {
+        Self {
+            action: "Use".to_string(),
+            description: None,
+        }
+    }
+}
 
 #[derive(Component)]
 #[require(Interactable)]
 pub struct Stairs {
     pub(crate) destination: MapPos,
+}
+
+pub(crate) fn draw_world_popup(
+    ctx: &egui::Context,
+    viewport_pos: Vec2,
+    title: String,
+    description: Option<String>,
+    brainrot: i32,
+) {
+    egui::Area::new(egui::Id::new(&title))
+        .fixed_pos(egui::pos2(viewport_pos.x - 100.0, viewport_pos.y - 120.0))
+        .show(ctx, |ui| {
+            egui::Frame::window(ui.style())
+                .fill(egui::Color32::from_rgba_premultiplied(30, 30, 30, 240))
+                .show(ui, |ui| {
+                    ui.set_width(200.0);
+                    ui.vertical_centered(|ui| {
+                        ui.label(apply_brainrot_ui(
+                            egui::RichText::new(title)
+                                .size(18.0)
+                                .strong()
+                                .color(egui::Color32::WHITE),
+                            brainrot,
+                            ui.style(),
+                            egui::FontSelection::Default,
+                            egui::Align::Center,
+                        ));
+                        if let Some(desc) = description {
+                            ui.label(apply_brainrot_ui(
+                                egui::RichText::new(desc)
+                                    .size(14.0)
+                                    .color(egui::Color32::LIGHT_GRAY),
+                                brainrot,
+                                ui.style(),
+                                egui::FontSelection::Default,
+                                egui::Align::Center,
+                            ));
+                        }
+                    });
+                });
+        });
 }
 
 #[derive(Component)]
@@ -1350,22 +1444,6 @@ fn sidebar(
                             FontSelection::Default,
                             Align::LEFT,
                         ));
-
-                        for _stairs in interactables.iter_many(pos_to_interactable.get(*player_pos))
-                        {
-                            if ui
-                                .button(apply_brainrot_ui(
-                                    "Use stairs",
-                                    player.brainrot,
-                                    ui.style(),
-                                    FontSelection::Default,
-                                    Align::LEFT,
-                                ))
-                                .clicked()
-                            {
-                                msg_stairs_clicked.write(StairsClicked);
-                            };
-                        }
 
                         for (i, ability) in player_abilities.abilities.iter().enumerate() {
                             let ability_key = (i + 1) % 10;

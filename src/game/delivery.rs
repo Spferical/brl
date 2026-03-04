@@ -187,36 +187,13 @@ pub(crate) fn draw_eat_popup(
                 return;
             };
 
-            egui::Area::new(egui::Id::new("eat_popup"))
-                .fixed_pos(egui::pos2(viewport_pos.x - 100.0, viewport_pos.y - 120.0))
-                .show(ctx, |ui| {
-                    egui::Frame::window(ui.style())
-                        .fill(egui::Color32::from_rgba_premultiplied(30, 30, 30, 240))
-                        .show(ui, |ui| {
-                            ui.set_width(200.0);
-                            ui.vertical_centered(|ui| {
-                                ui.label(crate::game::apply_brainrot_ui(
-                                    egui::RichText::new(format!("Eat {}? (e)", food_item.name))
-                                        .size(18.0)
-                                        .strong()
-                                        .color(egui::Color32::WHITE),
-                                    player.brainrot,
-                                    ui.style(),
-                                    egui::FontSelection::Default,
-                                    egui::Align::Center,
-                                ));
-                                ui.label(crate::game::apply_brainrot_ui(
-                                    egui::RichText::new(food_item.effects)
-                                        .size(14.0)
-                                        .color(egui::Color32::LIGHT_GRAY),
-                                    player.brainrot,
-                                    ui.style(),
-                                    egui::FontSelection::Default,
-                                    egui::Align::Center,
-                                ));
-                            });
-                        });
-                });
+            crate::game::draw_world_popup(
+                ctx,
+                viewport_pos,
+                format!("Eat {}? (e)", food_item.name),
+                Some(food_item.effects.to_string()),
+                player.brainrot,
+            );
 
             if keyboard_input.just_pressed(KeyCode::KeyE) {
                 player.hunger = (player.hunger + food_item.hunger).clamp(0, 100);
