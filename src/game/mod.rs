@@ -732,7 +732,13 @@ fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut
 
 fn handle_player_move(
     mut commands: Commands,
-    player: Single<(Entity, &mut MapPos, &PlayerIntent, &mut Player, &mut Creature)>,
+    player: Single<(
+        Entity,
+        &mut MapPos,
+        &PlayerIntent,
+        &mut Player,
+        &mut Creature,
+    )>,
     mut mobs: Query<&mut MapPos, (With<Creature>, Without<Player>)>,
     stairs: Query<&Stairs, (Without<Player>, Without<Creature>)>,
     interactables: Query<&Interactable>,
@@ -1901,10 +1907,7 @@ pub fn exit(
     lighting::disable_lighting(&mut commands, *q_camera);
 }
 
-fn draw_hunger_warning(
-    mut contexts: EguiContexts,
-    player: Single<(&Player, &Creature)>,
-) {
+fn draw_hunger_warning(mut contexts: EguiContexts, player: Single<(&Player, &Creature)>) {
     let (player, _creature) = player.into_inner();
     if player.hunger < 100 {
         return;
