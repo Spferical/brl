@@ -385,6 +385,7 @@ pub struct Player {
 pub enum Ability {
     Sprint,
     ShoulderCheck,
+    Mog,
 }
 
 impl std::fmt::Display for Ability {
@@ -392,6 +393,7 @@ impl std::fmt::Display for Ability {
         f.write_str(match self {
             Ability::Sprint => "Sprint",
             Ability::ShoulderCheck => "Shoulder Check",
+            Ability::Mog => "Mog",
         })
     }
 }
@@ -411,6 +413,7 @@ impl Ability {
         match self {
             Ability::Sprint => AbilityTarget::ReachableTile { maxdist: 5 },
             Ability::ShoulderCheck => AbilityTarget::NearbyMob { maxdist: 1 },
+            Ability::Mog => AbilityTarget::NearbyMob { maxdist: 5 },
         }
     }
 }
@@ -434,6 +437,7 @@ impl PlayerAbilities {
 fn update_player_abilities(player: Single<&Player>, mut abilities: ResMut<PlayerAbilities>) {
     abilities.add_or_remove(player.strength >= 10, Ability::Sprint);
     abilities.add_or_remove(player.strength >= 20, Ability::ShoulderCheck);
+    abilities.add_or_remove(player.rizz >= 10, Ability::Mog);
 }
 
 #[derive(Component)]
@@ -702,6 +706,24 @@ fn handle_player_move(
                     });
                 }
             }
+            Ability::Mog => {
+                let new_pos = map_pos;
+                let old_pos = pos;
+                if let Some(mob_entity) = pos_to_creature.0.get(&new_pos.0) {
+                    damage.0.push(DamageInstance {
+                        entity: *mob_entity,
+                        amount: 2,
+                        ty: DamageType::Aura,
+                    });
+                    commands
+                        .entity(player_entity)
+                        .insert(animation::AttackAnimation {
+                            direction: (new_pos.0 - old_pos.0).as_vec2(),
+                            timer: Timer::new(Duration::from_millis(150), TimerMode::Once),
+                            base_translation: old_pos.to_vec3(PLAYER_Z),
+                        });
+                }
+            }
         },
     }
     moved.0 = true;
@@ -810,6 +832,8 @@ fn apply_damage(
                     }
                     DamageType::Boredom => {
                         player.boredom += amount;
+                        player.brainrot -= amount;
+                        player.brainrot = player.brainrot.clamp(0, 100);
                         if player.boredom > 100 {
                             creature.hp -= player.boredom - 100;
                             player.boredom = 100;
@@ -1216,7 +1240,6 @@ fn sidebar(
                                     (mob.attrs.based, "Based", egui::Color32::PURPLE),
                                     (mob.attrs.basic, "Basic", egui::Color32::DARK_GRAY),
                                     (mob.attrs.mog_risk, "Mog Risk", egui::Color32::DARK_RED),
-                                    (mob.attrs.sus, "Sus", egui::Color32::RED),
                                     (mob.attrs.sus, "Sus", egui::Color32::RED),
                                 ] {
                                     if attr {
