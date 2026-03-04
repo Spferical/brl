@@ -7,10 +7,14 @@ use crate::game::{
     signal,
 };
 use bevy::{platform::collections::HashMap, prelude::*};
-use rand::{Rng, seq::IndexedRandom};
+use rand::{
+    Rng,
+    seq::{IndexedRandom, IteratorRandom},
+};
 use rand_8::SeedableRng;
+use rogue_algebra::Pos;
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum TileKind {
     Floor,
     Wall,
@@ -126,8 +130,6 @@ impl MobKind {
 }
 
 pub struct LevelDraft {
-    width: u32,
-    height: u32,
     start: rogue_algebra::Pos,
     #[allow(unused)]
     end: rogue_algebra::Pos,
@@ -136,12 +138,35 @@ pub struct LevelDraft {
 }
 
 impl LevelDraft {
-    fn with_walls(mut self) -> Self {
+    fn get_containing_rect(&self) -> rogue_algebra::Rect {
         let min_x = self.tiles.keys().map(|k| k.x).min().expect("Empty level");
         let max_x = self.tiles.keys().map(|k| k.x).max().expect("Empty level");
         let min_y = self.tiles.keys().map(|k| k.y).min().expect("Empty level");
         let max_y = self.tiles.keys().map(|k| k.y).max().expect("Empty level");
-        let containing_rect = rogue_algebra::Rect::new(min_x, max_x, min_y, max_y).expand(1);
+        rogue_algebra::Rect::new(min_x, max_x, min_y, max_y)
+    }
+
+    fn get_random_floors(&self, n: usize, rng: &mut impl Rng) -> Vec<rogue_algebra::Pos> {
+        let all_floors = self
+            .tiles
+            .iter()
+            .filter(|(_p, t)| **t == TileKind::Floor)
+            .map(|(p, _t)| *p)
+            .collect::<Vec<_>>();
+        if all_floors.len() < n {
+            panic!("get_random_floors: not enough floors");
+        }
+        all_floors.choose_multiple(rng, n).copied().collect()
+    }
+
+    fn fill_rect(&mut self, rect: rogue_algebra::Rect, tk: TileKind) {
+        for p in rect {
+            self.tiles.insert(p, tk);
+        }
+    }
+
+    fn with_walls(mut self) -> Self {
+        let containing_rect = self.get_containing_rect().expand(1);
         // Fill in with walls
         for edge in [
             containing_rect.left_edge(),
@@ -233,12 +258,304 @@ fn draft_level_mapgen_rs(
     }
 
     LevelDraft {
-        width: buf.width as u32,
-        height: buf.height as u32,
         start: start_pos,
         end: furthest_tile,
         tiles,
         mobs: HashMap::new(),
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct CarveRoomOpts {
+    wall: TileKind,
+    floor: TileKind,
+    max_width: i32,
+    max_height: i32,
+    min_width: i32,
+    min_height: i32,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct BspSplitOpts {
+    max_width: i32,
+    max_height: i32,
+    min_width: i32,
+    min_height: i32,
+}
+
+impl From<CarveRoomOpts> for BspSplitOpts {
+    fn from(opts: CarveRoomOpts) -> Self {
+        Self {
+            max_width: opts.max_width,
+            max_height: opts.max_height,
+            min_width: opts.min_width,
+            min_height: opts.min_height,
+        }
+    }
+}
+
+pub fn carve_rooms_bsp(
+    draft: &mut LevelDraft,
+    rect: rogue_algebra::Rect,
+    opts: &CarveRoomOpts,
+    rng: &mut impl Rng,
+) -> Vec<rogue_algebra::Rect> {
+    let tree = gen_bsp_tree(rect, (*opts).into(), rng);
+    let room_graph = tree.into_room_graph();
+    for room in room_graph.iter() {
+        draft.fill_rect(room, opts.floor);
+        for adj in room_graph.get_adj(room).unwrap() {
+            let wall = get_connecting_wall(room, *adj).unwrap();
+            let has_door = wall
+                .into_iter()
+                .any(|pos| draft.tiles.get(&pos).unwrap_or(&TileKind::Floor) == &TileKind::Floor);
+            if !has_door {
+                draft.tiles.insert(wall.choose(rng), opts.floor);
+            }
+        }
+    }
+    room_graph.iter().collect()
+}
+
+pub fn pick_random_bsp_doors(
+    rooms: &[rogue_algebra::Rect],
+    loopiness: f32,
+    rng: &mut impl Rng,
+) -> Vec<Pos> {
+    let mut doors = vec![];
+    for _ in 0..((rooms.len() - 1) as f32 * loopiness) as u32 {
+        loop {
+            let rand_room1 = rooms.choose(rng).unwrap();
+            let rand_room2 = rooms.choose(rng).unwrap();
+            if let Some(wall) = get_connecting_wall(*rand_room1, *rand_room2) {
+                let pos = wall.choose(rng);
+                doors.push(pos);
+                break;
+            }
+        }
+    }
+    doors
+}
+
+fn get_connecting_wall(
+    room1: rogue_algebra::Rect,
+    room2: rogue_algebra::Rect,
+) -> Option<rogue_algebra::Rect> {
+    // one-tile-wall between them
+    for (room1, room2) in &[(room1, room2), (room2, room1)] {
+        // room2 right of room1
+        if room1.x2 + 2 == room2.x1 {
+            let y1 = room1.y1.max(room2.y1);
+            let y2 = room1.y2.min(room2.y2);
+            if y1 <= y2 {
+                return Some(rogue_algebra::Rect {
+                    x1: room1.x2 + 1,
+                    x2: room1.x2 + 1,
+                    y1,
+                    y2,
+                });
+            }
+        }
+        // room2 under room1
+        if room1.y2 + 2 == room2.y1 {
+            let x1 = room1.x1.max(room2.x1);
+            let x2 = room1.x2.min(room2.x2);
+            if x1 <= x2 {
+                return Some(rogue_algebra::Rect {
+                    x1,
+                    x2,
+                    y1: room1.y2 + 1,
+                    y2: room1.y2 + 1,
+                });
+            }
+        }
+    }
+    None
+}
+
+#[derive(Debug)]
+pub enum BspTree {
+    Split(Box<BspTree>, Box<BspTree>),
+    Room(rogue_algebra::Rect),
+}
+
+impl BspTree {
+    fn into_room_graph(self) -> RoomGraph {
+        match self {
+            BspTree::Room(rect) => {
+                let mut graph = RoomGraph::new();
+                graph.add_room(rect);
+                graph
+            }
+            BspTree::Split(tree1, tree2) => {
+                let mut rooms1 = tree1.into_room_graph();
+                let rooms2 = tree2.into_room_graph();
+                // now figure out how to bridge the trees
+                rooms1.extend_bridged(rooms2);
+                rooms1
+            }
+        }
+    }
+}
+
+struct RoomGraph {
+    pub room_adj: HashMap<rogue_algebra::Rect, Vec<rogue_algebra::Rect>>,
+}
+
+impl RoomGraph {
+    fn get_adj(&self, rect: rogue_algebra::Rect) -> Option<&[rogue_algebra::Rect]> {
+        self.room_adj.get(&rect).map(Vec::as_slice)
+    }
+    fn choose(&self, rng: &mut impl Rng) -> Option<rogue_algebra::Rect> {
+        if self.room_adj.is_empty() {
+            return None;
+        }
+        let idx = rng.random_range(0..self.room_adj.len());
+        self.room_adj.keys().nth(idx).copied()
+    }
+    fn len(&self) -> usize {
+        self.room_adj.len()
+    }
+    fn remove_room(&mut self, rect: rogue_algebra::Rect) {
+        self.room_adj.retain(|r, _| *r != rect);
+    }
+    fn find_spatially_adjacent(&self, rect: rogue_algebra::Rect) -> Option<rogue_algebra::Rect> {
+        for room in self.room_adj.keys() {
+            if let Some(_wall) = get_connecting_wall(rect, *room) {
+                return Some(*room);
+            }
+        }
+        None
+    }
+    fn extend_bridged(&mut self, mut other: RoomGraph) {
+        let mut bridged = false;
+        'loop1: for (room1, ref mut adj1) in &mut self.room_adj {
+            for (room2, ref mut adj2) in &mut other.room_adj {
+                if get_connecting_wall(*room1, *room2).is_some() {
+                    bridged = true;
+                    adj1.push(*room2);
+                    adj2.push(*room1);
+                    break 'loop1;
+                }
+            }
+        }
+        assert!(bridged);
+        self.room_adj.extend(other.room_adj);
+    }
+    fn new() -> Self {
+        Self {
+            room_adj: HashMap::new(),
+        }
+    }
+    fn add_room(&mut self, room: rogue_algebra::Rect) {
+        self.room_adj.insert(room, vec![]);
+    }
+    fn add_connection(&mut self, room1: rogue_algebra::Rect, room2: rogue_algebra::Rect) {
+        assert!(get_connecting_wall(room1, room2).is_some());
+        assert!(self.room_adj.contains_key(&room1));
+        assert!(self.room_adj.contains_key(&room2));
+        self.room_adj.get_mut(&room2).unwrap().push(room1);
+        self.room_adj.get_mut(&room1).unwrap().push(room2);
+    }
+    fn add_connection_oneway(&mut self, room1: rogue_algebra::Rect, room2: rogue_algebra::Rect) {
+        assert!(get_connecting_wall(room1, room2).is_some());
+        assert!(self.room_adj.contains_key(&room1));
+        self.room_adj.get_mut(&room1).unwrap().push(room2);
+    }
+
+    fn iter(&'_ self) -> impl Iterator<Item = rogue_algebra::Rect> + '_ {
+        self.room_adj.keys().copied()
+    }
+}
+
+// returns (rooms, walls between connected rooms in the bsp tree)
+pub fn gen_bsp_tree(rect: rogue_algebra::Rect, opts: BspSplitOpts, rng: &mut impl Rng) -> BspTree {
+    #[derive(Clone, Copy, Debug)]
+    enum Split {
+        X,
+        Y,
+        None,
+    }
+    assert!(opts.min_width * 2 < opts.max_width);
+    assert!(opts.min_height * 2 < opts.max_height);
+    let too_wide = (rect.x2 - rect.x1) > opts.max_width;
+    let too_tall = (rect.y2 - rect.y1) > opts.max_height;
+    let split = match (too_wide, too_tall) {
+        (true, true) => *[Split::X, Split::Y].choose(rng).unwrap(),
+        (true, false) => Split::X,
+        (false, true) => Split::Y,
+        _ => Split::None,
+    };
+    match split {
+        Split::X => {
+            let split_x =
+                rng.random_range(rect.x1 + opts.min_width + 1..(rect.x2 - opts.min_width - 1));
+            let left = rogue_algebra::Rect::new(rect.x1, split_x - 1, rect.y1, rect.y2);
+            let right = rogue_algebra::Rect::new(split_x + 1, rect.x2, rect.y1, rect.y2);
+            BspTree::Split(
+                Box::new(gen_bsp_tree(left, opts, rng)),
+                Box::new(gen_bsp_tree(right, opts, rng)),
+            )
+        }
+        Split::Y => {
+            let split_y =
+                rng.random_range(rect.y1 + opts.min_height + 1..(rect.y2 - opts.min_height));
+            let top = rogue_algebra::Rect::new(rect.x1, rect.x2, rect.y1, split_y - 1);
+            let bottom = rogue_algebra::Rect::new(rect.x1, rect.x2, split_y + 1, rect.y2);
+            BspTree::Split(
+                Box::new(gen_bsp_tree(top, opts, rng)),
+                Box::new(gen_bsp_tree(bottom, opts, rng)),
+            )
+        }
+        Split::None => BspTree::Room(rect),
+    }
+}
+
+fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
+    let max_width = rng.random_range(4..=rect.width().min(8));
+    let min_width = max_width / 2 - 1;
+    let max_height = rng.random_range(4..=rect.width().min(8));
+    let min_height = max_height / 2 - 1;
+    let bsp_opts = CarveRoomOpts {
+        wall: TileKind::Wall,
+        floor: TileKind::Floor,
+        max_width,
+        max_height,
+        min_width,
+        min_height,
+    };
+    let tree = gen_bsp_tree(rect, bsp_opts.into(), rng);
+    let room_graph = tree.into_room_graph();
+    let rooms = room_graph.iter().collect::<Vec<rogue_algebra::Rect>>();
+    let mut doors = vec![];
+    for room in room_graph.iter() {
+        for room2 in room_graph.get_adj(room).into_iter().flatten().copied() {
+            if room.topleft() < room2.topleft()
+                && let Some(wall) = get_connecting_wall(room, room2)
+            {
+                doors.push(wall.choose(rng));
+            }
+        }
+    }
+
+    let mut tiles = HashMap::new();
+    for p in rect {
+        tiles.insert(p, TileKind::Wall);
+    }
+    for room in rooms.iter() {
+        for pos in *room {
+            tiles.insert(pos, TileKind::Floor);
+        }
+    }
+    for door in doors {
+        tiles.insert(door, TileKind::Floor);
+    }
+
+    LevelDraft {
+        start: rooms[0].center(),
+        end: rooms.iter().last().unwrap().center(),
+        tiles,
+        mobs: Default::default(),
     }
 }
 
@@ -251,12 +568,7 @@ pub(crate) fn spawn_level(
     draft: &LevelDraft,
     offset: rogue_algebra::Offset,
 ) {
-    let signal_map = signal::generate_signal_map(
-        draft.width as i32,
-        draft.height as i32,
-        rng.random(),
-        IVec2::from(offset),
-    );
+    let signal_map = signal::generate_signal_map(draft.get_containing_rect(), rng.random());
 
     let level_entity = commands
         .spawn((
@@ -345,8 +657,8 @@ pub(crate) fn spawn_stairs(
     world: Entity,
     commands: &mut Commands,
     assets: &WorldAssets,
-    up_pos: rogue_algebra::Pos,
     down_pos: rogue_algebra::Pos,
+    up_pos: rogue_algebra::Pos,
 ) {
     let up_pos = MapPos(IVec2::from(up_pos));
     let down_pos = MapPos(IVec2::from(down_pos));
@@ -401,9 +713,7 @@ pub(crate) fn spawn_stairs(
     });
 }
 
-pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAssets>) {
-    let rng = &mut rand::rng();
-
+pub(crate) fn draft_level_mapgen_simple(rng: &mut impl Rng) -> LevelDraft {
     let mut mapgen_builder = mapgen::MapBuilder::new(80, 50);
     mapgen_builder
         .with(mapgen::SimpleRooms::new())
@@ -414,13 +724,13 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
         ))
         .with(mapgen::CullUnreachable::new())
         .with(mapgen::DistantExit::new());
-    let level_1_draft = draft_level_mapgen_rs(
+    draft_level_mapgen_rs(
         mapgen_builder,
         &mut rand_8::rngs::StdRng::from_seed(rng.random()),
     )
-    .with_walls()
-    .sprinkle_mobs(rng, 8);
+}
 
+pub(crate) fn draft_level_mapgen_drunk(rng: &mut impl Rng) -> LevelDraft {
     let mut mapgen_builder = mapgen::MapBuilder::new(80, 50);
     mapgen_builder
         .with(mapgen::DrunkardsWalk::open_halls())
@@ -430,43 +740,57 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
         ))
         .with(mapgen::CullUnreachable::new())
         .with(mapgen::DistantExit::new());
-    let level_2_draft = draft_level_mapgen_rs(
+    draft_level_mapgen_rs(
         mapgen_builder,
         &mut rand_8::rngs::StdRng::from_seed(rng.random()),
     )
-    .with_walls()
-    .sprinkle_mobs(rng, 8);
+}
 
-    spawn_level(
-        "Level 1".into(),
-        rng,
-        world,
-        &mut commands,
-        &assets,
-        &level_1_draft,
+pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAssets>) {
+    let rng = &mut rand::rng();
+
+    let level_1_draft = gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+        .with_walls()
+        .sprinkle_mobs(rng, 10);
+    let player_pos = MapPos(IVec2::from(level_1_draft.start));
+
+    let l2_drafts = [
+        draft_level_mapgen_drunk(rng)
+            .with_walls()
+            .sprinkle_mobs(rng, 10),
+        draft_level_mapgen_simple(rng)
+            .with_walls()
+            .sprinkle_mobs(rng, 10),
+        gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+            .with_walls()
+            .sprinkle_mobs(rng, 10),
+    ];
+
+    let mut stair_locs = vec![];
+    let mut l1_exits = vec![level_1_draft.end];
+    l1_exits.extend(level_1_draft.get_random_floors(2, rng));
+
+    let mut levels = vec![(
         rogue_algebra::Offset::ZERO,
-    );
-    let level_2_offset = rogue_algebra::NORTH * 1000;
-    spawn_level(
-        "Level 2".into(),
-        rng,
-        world,
-        &mut commands,
-        &assets,
-        &level_2_draft,
-        level_2_offset,
-    );
+        "Level 1".to_string(),
+        level_1_draft,
+    )];
 
-    spawn_stairs(
-        world,
-        &mut commands,
-        &assets,
-        level_2_draft.start + level_2_offset,
-        level_1_draft.start,
-    );
+    for (i, level) in l2_drafts.into_iter().enumerate() {
+        let offset = rogue_algebra::Offset::new(i as i32 * 200, 200);
+        stair_locs.push((l1_exits[i], level.start + offset));
+        levels.push((offset, format!("Level 2-{i}"), level));
+    }
+
+    for (offset, name, level) in levels {
+        spawn_level(name, rng, world, &mut commands, &assets, &level, offset);
+    }
+
+    for (p1, p2) in stair_locs {
+        spawn_stairs(world, &mut commands, &assets, p1, p2);
+    }
 
     let player_sprite = assets.get_ascii_sprite('@', Color::WHITE);
-    let player_pos = MapPos(IVec2::from(level_1_draft.start));
     let player = (
         Player {
             brainrot: 85,
