@@ -505,6 +505,18 @@ struct MobAttrs {
     basic: bool,
     mog_risk: bool,
     sus: bool,
+    aura_resist: Resist,
+    physical_resist: Resist,
+    psychic_resist: Resist,
+    boredom_resist: Resist,
+}
+
+#[derive(Default, Clone, Copy, Debug, Reflect)]
+enum Resist {
+    Weak,
+    #[default]
+    Normal,
+    Strong,
 }
 
 // NPC-specific fields.
@@ -526,6 +538,15 @@ impl Mob {
             DamageType::Boredom
         } else {
             DamageType::Physical
+        }
+    }
+
+    fn get_damage_resist(&self, ty: DamageType) -> Resist {
+        match ty {
+            DamageType::Physical => self.attrs.physical_resist,
+            DamageType::Psychic => self.attrs.psychic_resist,
+            DamageType::Aura => self.attrs.aura_resist,
+            DamageType::Boredom => self.attrs.boredom_resist,
         }
     }
 }
@@ -759,6 +780,7 @@ fn process_spawners(
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum DamageType {
     Physical,
     Psychic,
@@ -806,10 +828,10 @@ fn check_bullet_collision(
 fn apply_damage(
     mut damage: ResMut<PendingDamage>,
     mut animation: MessageWriter<DamageAnimationMessage>,
-    mut creature: Query<(&mut Creature, Option<&mut Player>)>,
+    mut creature: Query<(&mut Creature, Option<&mut Player>, Option<&Mob>)>,
 ) {
     for DamageInstance { entity, amount, ty } in damage.0.drain(..) {
-        if let Ok((mut creature, player)) = creature.get_mut(entity) {
+        if let Ok((mut creature, player, mob)) = creature.get_mut(entity) {
             match player {
                 Some(mut player) => match ty {
                     DamageType::Physical => creature.hp -= amount,
@@ -838,7 +860,14 @@ fn apply_damage(
                     }
                 },
                 None => {
-                    creature.hp -= amount;
+                    let resist = mob
+                        .map(|m| m.get_damage_resist(ty))
+                        .unwrap_or(Resist::Normal);
+                    creature.hp -= match resist {
+                        Resist::Weak => amount * 2,
+                        Resist::Normal => amount,
+                        Resist::Strong => amount / 2,
+                    };
                 }
             }
         }
@@ -1240,10 +1269,61 @@ fn sidebar(
                                 for (attr, name, color) in [
                                     (mob.attrs.based, "Based", egui::Color32::PURPLE),
                                     (mob.attrs.basic, "Basic", egui::Color32::DARK_GRAY),
-                                    (mob.attrs.mog_risk, "Mog Risk", egui::Color32::DARK_RED),
+                                    (mob.attrs.mog_risk, "Mog Risk", egui::Color32::DARK_GREEN),
                                     (mob.attrs.sus, "Sus", egui::Color32::RED),
                                 ] {
                                     if attr {
+                                        ui.label(apply_brainrot_ui(
+                                            RichText::new(name).background_color(color),
+                                            player.brainrot,
+                                            ui.style(),
+                                            FontSelection::Default,
+                                            Align::LEFT,
+                                        ));
+                                    }
+                                }
+                                fn resist_name(
+                                    ty: DamageType,
+                                    resist: Resist,
+                                ) -> Option<(&'static str, egui::Color32)>
+                                {
+                                    match (ty, resist) {
+                                        (_, Resist::Normal) => None,
+                                        (DamageType::Physical, Resist::Weak) => {
+                                            Some(("Weak", egui::Color32::DARK_RED))
+                                        }
+                                        (DamageType::Physical, Resist::Strong) => {
+                                            Some(("Unit", egui::Color32::DARK_BLUE))
+                                        }
+                                        (DamageType::Psychic, Resist::Weak) => {
+                                            Some(("Cooked", egui::Color32::DARK_RED))
+                                        }
+                                        (DamageType::Psychic, Resist::Strong) => {
+                                            Some(("Locked in", egui::Color32::DARK_BLUE))
+                                        }
+                                        (DamageType::Aura, Resist::Weak) => {
+                                            Some(("Cringe", egui::Color32::DARK_RED))
+                                        }
+                                        (DamageType::Aura, Resist::Strong) => {
+                                            Some(("Snatched", egui::Color32::DARK_BLUE))
+                                        }
+                                        (DamageType::Boredom, Resist::Weak) => {
+                                            Some(("NPC", egui::Color32::DARK_RED))
+                                        }
+                                        (DamageType::Boredom, Resist::Strong) => {
+                                            Some(("Focused", egui::Color32::DARK_BLUE))
+                                        }
+                                    }
+                                }
+                                for damage_type in [
+                                    DamageType::Physical,
+                                    DamageType::Psychic,
+                                    DamageType::Aura,
+                                    DamageType::Boredom,
+                                ] {
+                                    if let Some((name, color)) =
+                                        resist_name(damage_type, mob.get_damage_resist(damage_type))
+                                    {
                                         ui.label(apply_brainrot_ui(
                                             RichText::new(name).background_color(color),
                                             player.brainrot,

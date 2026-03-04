@@ -1,5 +1,5 @@
 use crate::game::{
-    Creature, DropsCorpse, Mob, MobAttrs, MobBundle, PLAYER_Z, Player, Stairs, TILE_Z,
+    Creature, DropsCorpse, Mob, MobAttrs, MobBundle, PLAYER_Z, Player, Resist, Stairs, TILE_Z,
     assets::WorldAssets,
     camera::CameraFollow,
     lighting::Occluder,
@@ -31,8 +31,8 @@ impl MobKind {
             MobKind::GiantFrog => MobBundle {
                 name: Name::new("Giant Frog"),
                 creature: Creature {
-                    hp: 1,
-                    max_hp: 1,
+                    hp: 2,
+                    max_hp: 2,
                     faction: -1,
                 },
                 mob: Mob {
@@ -40,6 +40,8 @@ impl MobKind {
                     ranged: false,
                     attrs: MobAttrs {
                         based: true,
+                        aura_resist: Resist::Weak,
+                        psychic_resist: Resist::Weak,
                         ..Default::default()
                     },
                 },
@@ -56,7 +58,10 @@ impl MobKind {
                 mob: Mob {
                     melee_damage: 1,
                     ranged: false,
-                    attrs: MobAttrs::default(),
+                    attrs: MobAttrs {
+                        physical_resist: Resist::Strong,
+                        ..Default::default()
+                    },
                 },
                 sprite: assets.get_ascii_sprite('g', Color::srgb(0.8, 0.3, 0.3)),
                 corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
@@ -73,6 +78,7 @@ impl MobKind {
                     ranged: false,
                     attrs: MobAttrs {
                         mog_risk: true,
+                        aura_resist: Resist::Weak,
                         ..Default::default()
                     },
                 },
