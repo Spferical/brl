@@ -1932,19 +1932,30 @@ fn sidebar(
 }
 
 fn stat_label(ui: &mut egui::Ui, name: &str, brainrot: i32, is_bad: bool, time: f32) {
+    let base_size = ui
+        .style()
+        .text_styles
+        .get(&egui::TextStyle::Body)
+        .map(|f| f.size)
+        .unwrap_or(14.0);
+
     if !is_bad {
-        ui.label(apply_brainrot_ui(
-            name,
-            brainrot,
-            ui.style(),
-            FontSelection::Default,
-            Align::LEFT,
-        ));
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            ui.add_space(5.0);
+            ui.label(apply_brainrot_ui(
+                RichText::new(name).size(base_size),
+                brainrot,
+                ui.style(),
+                FontSelection::Default,
+                Align::LEFT,
+            ));
+        });
         return;
     }
 
     ui.horizontal(|ui| {
-        animation::jumping_text(ui, name, brainrot, time, 14.0, None);
+        animation::jumping_text(ui, name, brainrot, time, base_size, None);
     });
 }
 
