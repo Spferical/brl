@@ -7,7 +7,10 @@ use crate::game::{
     map::{self, MapPos, Tile},
     signal,
 };
-use bevy::{platform::collections::HashMap, prelude::*};
+use bevy::{
+    platform::collections::{HashMap, HashSet},
+    prelude::*,
+};
 use rand::{Rng, seq::IndexedRandom};
 use rand_8::SeedableRng;
 
@@ -286,33 +289,41 @@ impl MobKind {
 }
 
 pub struct LevelDraft {
-    start: rogue_algebra::Pos,
-    #[allow(unused)]
-    end: rogue_algebra::Pos,
+    entrances: Vec<rogue_algebra::Pos>,
+    exits: Vec<rogue_algebra::Pos>,
     tiles: HashMap<rogue_algebra::Pos, TileKind>,
     mobs: HashMap<rogue_algebra::Pos, MobKind>,
 }
 
 impl LevelDraft {
+    fn add_random_stairs(&mut self, min_entrances: usize, min_exits: usize, rng: &mut impl Rng) {
+        let mut all_floors = self
+            .tiles
+            .iter()
+            .filter(|(_p, t)| **t == TileKind::Floor)
+            .map(|(p, _t)| *p)
+            .collect::<HashSet<_>>();
+        for e in self.entrances.iter().chain(self.exits.iter()) {
+            all_floors.remove(e);
+        }
+        let all_floors = all_floors.into_iter().collect::<Vec<_>>();
+        let needed_entrances = min_entrances.saturating_sub(self.entrances.len());
+        let needed_exits = min_exits.saturating_sub(self.entrances.len());
+        let new_stairs: Vec<rogue_algebra::Pos> = all_floors
+            .choose_multiple(rng, needed_entrances + needed_exits)
+            .copied()
+            .collect();
+        self.entrances
+            .extend(new_stairs[0..needed_entrances].iter().cloned());
+        self.exits
+            .extend(new_stairs[needed_entrances..].iter().cloned());
+    }
     fn get_containing_rect(&self) -> rogue_algebra::Rect {
         let min_x = self.tiles.keys().map(|k| k.x).min().expect("Empty level");
         let max_x = self.tiles.keys().map(|k| k.x).max().expect("Empty level");
         let min_y = self.tiles.keys().map(|k| k.y).min().expect("Empty level");
         let max_y = self.tiles.keys().map(|k| k.y).max().expect("Empty level");
         rogue_algebra::Rect::new(min_x, max_x, min_y, max_y)
-    }
-
-    fn get_random_floors(&self, n: usize, rng: &mut impl Rng) -> Vec<rogue_algebra::Pos> {
-        let all_floors = self
-            .tiles
-            .iter()
-            .filter(|(_p, t)| **t == TileKind::Floor)
-            .map(|(p, _t)| *p)
-            .collect::<Vec<_>>();
-        if all_floors.len() < n {
-            panic!("get_random_floors: not enough floors");
-        }
-        all_floors.choose_multiple(rng, n).copied().collect()
     }
 
     #[allow(unused)]
@@ -413,8 +424,8 @@ fn draft_level_mapgen_rs(
     }
 
     LevelDraft {
-        start: start_pos,
-        end: furthest_tile,
+        entrances: vec![start_pos],
+        exits: vec![furthest_tile],
         tiles,
         mobs: HashMap::new(),
     }
@@ -672,9 +683,14 @@ fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
         tiles.insert(door, TileKind::Floor);
     }
 
+    let stairs = rooms
+        .choose_multiple(rng, 6)
+        .map(|room| room.center())
+        .collect::<Vec<_>>();
+
     LevelDraft {
-        start: rooms[0].center(),
-        end: rooms.iter().last().unwrap().center(),
+        entrances: stairs[0..3].iter().cloned().collect(),
+        exits: stairs[3..].iter().cloned().collect(),
         tiles,
         mobs: Default::default(),
     }
@@ -883,34 +899,87 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
     let level_1_draft = gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
         .with_walls()
         .sprinkle_mobs(rng, 10);
-    let player_pos = MapPos(IVec2::from(level_1_draft.start));
+    let player_pos = MapPos(IVec2::from(level_1_draft.entrances[0]));
 
-    let l2_drafts = [
-        draft_level_mapgen_drunk(rng)
-            .with_walls()
-            .sprinkle_mobs(rng, 10),
-        draft_level_mapgen_simple(rng)
-            .with_walls()
-            .sprinkle_mobs(rng, 10),
-        gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
-            .with_walls()
-            .sprinkle_mobs(rng, 10),
+    let mut level_drafts_per_depth = vec![
+        vec![level_1_draft],
+        vec![
+            draft_level_mapgen_drunk(rng)
+                .with_walls()
+                .sprinkle_mobs(rng, 10),
+            gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+                .with_walls()
+                .sprinkle_mobs(rng, 10),
+        ],
+        vec![
+            gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+                .with_walls()
+                .sprinkle_mobs(rng, 20),
+            gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+                .with_walls()
+                .sprinkle_mobs(rng, 20),
+        ],
+        vec![
+            draft_level_mapgen_simple(rng)
+                .with_walls()
+                .sprinkle_mobs(rng, 30),
+            draft_level_mapgen_simple(rng)
+                .with_walls()
+                .sprinkle_mobs(rng, 30),
+        ],
+        vec![
+            draft_level_mapgen_simple(rng)
+                .with_walls()
+                .sprinkle_mobs(rng, 40),
+            draft_level_mapgen_simple(rng)
+                .with_walls()
+                .sprinkle_mobs(rng, 40),
+        ],
+        vec![
+            draft_level_mapgen_simple(rng)
+                .with_walls()
+                .sprinkle_mobs(rng, 50),
+            draft_level_mapgen_simple(rng)
+                .with_walls()
+                .sprinkle_mobs(rng, 50),
+        ],
     ];
 
     let mut stair_locs = vec![];
-    let mut l1_exits = vec![level_1_draft.end];
-    l1_exits.extend(level_1_draft.get_random_floors(2, rng));
-
-    let mut levels = vec![(
-        rogue_algebra::Offset::ZERO,
-        "Level 1".to_string(),
-        level_1_draft,
-    )];
-
-    for (i, level) in l2_drafts.into_iter().enumerate() {
-        let offset = rogue_algebra::Offset::new(i as i32 * 200, 200);
-        stair_locs.push((l1_exits[i], level.start + offset));
-        levels.push((offset, format!("Level 2-{i}"), level));
+    for depth in 0..level_drafts_per_depth.len() {
+        let num_higher_levels = if depth > 0 {
+            level_drafts_per_depth[depth - 1].len()
+        } else {
+            0
+        };
+        let num_lower_levels = level_drafts_per_depth
+            .get(depth + 1)
+            .map(|drafts| drafts.len())
+            .unwrap_or(0);
+        for level in &mut level_drafts_per_depth[depth] {
+            level.add_random_stairs(num_higher_levels, num_lower_levels, rng);
+        }
+    }
+    for depth in 0..level_drafts_per_depth.len() - 1 {
+        for (i, level) in level_drafts_per_depth[depth].iter().enumerate() {
+            let upper_offset = rogue_algebra::Offset::new(i as i32 * 200, depth as i32 * 200);
+            for (j, deeper_level) in level_drafts_per_depth[depth + 1].iter().enumerate() {
+                let lower_offset =
+                    rogue_algebra::Offset::new(j as i32 * 200, (depth + 1) as i32 * 200);
+                stair_locs.push((
+                    level.exits[j] + upper_offset,
+                    deeper_level.entrances[i] + lower_offset,
+                ));
+            }
+        }
+    }
+    let mut levels = vec![];
+    for (depth, level_drafts) in level_drafts_per_depth.into_iter().enumerate() {
+        for (i, level) in level_drafts.into_iter().enumerate() {
+            // note: we measure depth reached by y value for progression
+            let offset = rogue_algebra::Offset::new(i as i32 * 200, depth as i32 * 200);
+            levels.push((offset, format!("Level {depth}-{i}"), level));
+        }
     }
 
     for (offset, name, level) in levels {
