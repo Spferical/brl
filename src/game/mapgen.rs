@@ -941,8 +941,8 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             subscriptions: vec![],
         },
         Creature {
-            hp: 6,
-            max_hp: 6,
+            hp: 10,
+            max_hp: 10,
             faction: 0,
         },
         Name::new("Player"),

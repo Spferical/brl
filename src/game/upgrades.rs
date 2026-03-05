@@ -124,7 +124,7 @@ pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
     vec![
         Upgrade {
             name: "Cardio",
-            effects: vec![Effect::AttrChange(Attr::MaxHp, 5)],
+            effects: vec![Effect::AttrChange(Attr::MaxHp, 10)],
         },
         Upgrade {
             name: "Trust Fund",
@@ -136,7 +136,7 @@ pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
         },
         Upgrade {
             name: "Organic",
-            effects: vec![Effect::AttrChange(Attr::MaxHp, 5)],
+            effects: vec![Effect::AttrChange(Attr::MaxHp, 10)],
         },
         Upgrade {
             name: "Protein Goblin",
