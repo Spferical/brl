@@ -5,7 +5,7 @@ use crate::game::apply_brainrot_ui;
 use crate::game::assets::WorldAssets;
 use crate::game::chat::StreamingState;
 use crate::game::delivery::FOODS;
-use crate::game::phone::PhoneState;
+use crate::game::phone::{PhoneScreen, PhoneState};
 use crate::game::upgrades::{UPGRADES, UpgradeMessage};
 use crate::game::{Creature, Player};
 
@@ -46,6 +46,7 @@ pub trait MobileApp: Send + Sync {
         next_dd_screen: &mut NextState<DungeonDashScreen>,
         dd_selection: &mut DungeonDashSelection,
         msg_upgrade: &mut MessageWriter<UpgradeMessage>,
+        next_phone_screen: &mut NextState<PhoneScreen>,
     );
 }
 
@@ -77,6 +78,7 @@ impl MobileApp for Crawlr {
         _next_dd_screen: &mut NextState<DungeonDashScreen>,
         _dd_selection: &mut DungeonDashSelection,
         _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
+        _next_phone_screen: &mut NextState<PhoneScreen>,
     ) {
     }
 }
@@ -109,6 +111,7 @@ impl MobileApp for DungeonDash {
         next_dd_screen: &mut NextState<DungeonDashScreen>,
         dd_selection: &mut DungeonDashSelection,
         _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
+        _next_phone_screen: &mut NextState<PhoneScreen>,
     ) {
         let menu_alpha = ui.ctx().animate_bool_with_time(
             egui::Id::new("dd_menu_alpha"),
@@ -616,6 +619,7 @@ impl MobileApp for UndergroundTV {
         _next_dd_screen: &mut NextState<DungeonDashScreen>,
         _dd_selection: &mut DungeonDashSelection,
         _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
+        _next_phone_screen: &mut NextState<PhoneScreen>,
     ) {
         ui.add_space(ui.available_height() * 0.4);
         let is_low_signal = player.signal <= 2;
@@ -684,6 +688,7 @@ impl MobileApp for Upgrade {
         _next_dd_screen: &mut NextState<DungeonDashScreen>,
         _dd_selection: &mut DungeonDashSelection,
         msg_upgrade: &mut MessageWriter<UpgradeMessage>,
+        next_phone_screen: &mut NextState<PhoneScreen>,
     ) {
         ui.add_space(40.0 * scale);
         ui.label(apply_brainrot_ui(
@@ -759,6 +764,7 @@ impl MobileApp for Upgrade {
                     msg_upgrade.write(UpgradeMessage {
                         upgrade: *upgrade_idx,
                     });
+                    next_phone_screen.set(PhoneScreen::Home);
                 }
 
                 ui.add_space(16.0 * scale);

@@ -559,6 +559,7 @@ pub fn draw_phone(
                                 &mut next_dd_screen,
                                 &mut dd_selection,
                                 &mut msg_upgrade,
+                                &mut next_screen,
                             );
                         }
                     }
