@@ -134,6 +134,7 @@ pub(super) fn plugin(app: &mut App) {
                     increment_turn_counter,
                     chat::update_streaming_turn,
                     tick_meters,
+                    handle_subscriptions,
                     signal::update_player_signal,
                     delivery::process_deliveries,
                 )
@@ -454,9 +455,21 @@ pub struct Player {
     pub upgrades: Vec<usize>,
     pub pending_upgrades: usize,
     pub upgrade_options: Vec<usize>,
+    pub subscriptions: Vec<Subscription>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect)]
+pub enum Subscription {
+    DungeonDashPlatinum,
+    UndergroundTVPro,
+    FiveGLTE,
 }
 
 impl Player {
+    pub fn has_subscription(&self, sub: Subscription) -> bool {
+        self.subscriptions.contains(&sub)
+    }
+
     pub fn apply_hunger_damage(&mut self, creature: &mut Creature, amount: i32) {
         self.hunger += amount;
         if self.hunger > 100 {
@@ -741,6 +754,19 @@ fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut
         }
         player.boredom += 1;
         player.boredom = player.boredom.clamp(0, 100);
+    }
+}
+
+fn handle_subscriptions(turn_counter: Res<TurnCounter>, mut player: Single<&mut Player>) {
+    if turn_counter.0 > 0 && turn_counter.0 % 100 == 0 {
+        for sub in player.subscriptions.clone() {
+            let cost = match sub {
+                Subscription::DungeonDashPlatinum => 20,
+                Subscription::UndergroundTVPro => 50,
+                Subscription::FiveGLTE => 5,
+            };
+            player.money -= cost;
+        }
     }
 }
 

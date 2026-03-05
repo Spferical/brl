@@ -815,6 +815,7 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             upgrades: vec![],
             pending_upgrades: 1,
             upgrade_options: vec![],
+            subscriptions: vec![],
         },
         Creature {
             hp: 6,

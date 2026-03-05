@@ -46,6 +46,11 @@ pub fn update_player_signal(
 ) {
     let (mut player, pos) = player.into_inner();
 
+    if player.has_subscription(crate::game::Subscription::FiveGLTE) {
+        player.signal = 5;
+        return;
+    }
+
     for signal_map in signal_maps.iter() {
         if let Some(&bars) = signal_map.bars.get(&pos.0) {
             player.signal = bars;

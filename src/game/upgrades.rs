@@ -4,7 +4,7 @@ use std::sync::LazyLock;
 use bevy::prelude::*;
 use rand::seq::IndexedRandom;
 
-use crate::game::{Ability, Creature, Player};
+use crate::game::{Ability, Creature, Player, Subscription};
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum Attr {
@@ -33,6 +33,7 @@ impl std::fmt::Display for Attr {
 pub(crate) enum Effect {
     AttrChange(Attr, i32),
     GainAbility(Ability),
+    Subscription(Subscription),
 }
 
 impl std::fmt::Display for Effect {
@@ -40,6 +41,19 @@ impl std::fmt::Display for Effect {
         match self {
             Effect::AttrChange(attr, amt) => write!(f, "+{amt} {attr}"),
             Effect::GainAbility(ability) => write!(f, "Learn {ability}: {}", ability.describe()),
+            Effect::Subscription(sub) => match sub {
+                Subscription::DungeonDashPlatinum => write!(
+                    f,
+                    "DungeonDash Platinum Subscription: -75% food cost, 5 turn delivery, $20/100 turns"
+                ),
+                Subscription::UndergroundTVPro => write!(
+                    f,
+                    "UndergroundTV Pro Subscription: 3x viewer growth, $50/100 turns"
+                ),
+                Subscription::FiveGLTE => {
+                    write!(f, "5G LTE Subscription: Guaranteed signal, $5/100 turns")
+                }
+            },
         }
     }
 }
@@ -91,6 +105,7 @@ pub(crate) fn handle_upgrades(
                     Attr::Boredom => player.boredom += amt,
                 },
                 Effect::GainAbility(ability) => player.abilities.push(*ability),
+                Effect::Subscription(sub) => player.subscriptions.push(*sub),
             }
         }
     }
@@ -150,6 +165,18 @@ pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
         Upgrade {
             name: "Memelord",
             effects: vec![Effect::AttrChange(Attr::Brainrot, 50)],
+        },
+        Upgrade {
+            name: "DungeonDash Platinum",
+            effects: vec![Effect::Subscription(Subscription::DungeonDashPlatinum)],
+        },
+        Upgrade {
+            name: "UndergroundTV Pro",
+            effects: vec![Effect::Subscription(Subscription::UndergroundTVPro)],
+        },
+        Upgrade {
+            name: "5G LTE",
+            effects: vec![Effect::Subscription(Subscription::FiveGLTE)],
         },
     ]
 });

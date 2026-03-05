@@ -228,12 +228,19 @@ impl DungeonDash {
             ui.add_space((available_height - total_height) / 2.0);
         }
 
+        let has_platinum = player.has_subscription(crate::game::Subscription::DungeonDashPlatinum);
+
         egui::ScrollArea::vertical()
             .id_salt("dungeon_dash_food_list")
             .show(ui, |ui| {
                 ui.vertical_centered(|ui| {
                     let width = ui.available_width() * 0.9;
                     for (i, food) in FOODS.iter().enumerate() {
+                        let mut food_price = food.price;
+                        if has_platinum {
+                            food_price = (food_price as f32 * 0.25) as i32;
+                        }
+
                         let height = 120.0 * scale;
                         let (rect, response) =
                             ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
@@ -277,7 +284,7 @@ impl DungeonDash {
                                         ui.add_space(16.0 * scale);
                                         ui.add(
                                             egui::Label::new(apply_brainrot_ui(
-                                                RichText::new(format!("${}", food.price))
+                                                RichText::new(format!("${}", food_price))
                                                     .size(44.0 * scale)
                                                     .color(Color32::BLACK),
                                                 player.brainrot,
@@ -340,11 +347,21 @@ impl DungeonDash {
         };
 
         let food = FOODS[food_idx];
-        let service_fee = (food.price as f32 * 0.3) as i32;
-        let dungeon_tax = (food.price as f32 * 0.1) as i32;
-        let delivery_fee = (food.price as f32 * 0.3) as i32;
-        let subtotal = food.price + service_fee + dungeon_tax + delivery_fee;
-        let tip = (subtotal as f32 * (dd_selection.tip_percentage as f32 / 100.0)) as i32;
+        let has_platinum = player.has_subscription(crate::game::Subscription::DungeonDashPlatinum);
+        let mut food_price = food.price;
+        if has_platinum {
+            food_price = (food_price as f32 * 0.25) as i32;
+        }
+
+        let service_fee = (food_price as f32 * 0.3) as i32;
+        let dungeon_tax = (food_price as f32 * 0.1) as i32;
+        let delivery_fee = (food_price as f32 * 0.3) as i32;
+        let subtotal = food_price + service_fee + dungeon_tax + delivery_fee;
+        let tip = if has_platinum {
+            0
+        } else {
+            (subtotal as f32 * (dd_selection.tip_percentage as f32 / 100.0)) as i32
+        };
         let total = subtotal + tip;
 
         let elapsed = ui.input(|i| i.time) - dd_selection.checkout_start_time;
@@ -376,7 +393,7 @@ impl DungeonDash {
             ui.add_space(40.0 * scale);
 
             let lines = [
-                (food.name.to_string(), format!("${}", food.price)),
+                (food.name.to_string(), format!("${}", food_price)),
                 ("Service Fee (30%)".to_string(), format!("${}", service_fee)),
                 ("Dungeon Tax (10%)".to_string(), format!("${}", dungeon_tax)),
                 (
@@ -427,7 +444,7 @@ impl DungeonDash {
             // 5. Tip Label
             let tip_label_delay = 5.0 * step;
             let tip_label_alpha = if elapsed >= tip_label_delay { 1.0 } else { 0.0 };
-            if tip_label_alpha > 0.0 {
+            if tip_label_alpha > 0.0 && !has_platinum {
                 let color = Color32::from_rgba_unmultiplied(
                     0,
                     0,
@@ -453,7 +470,7 @@ impl DungeonDash {
             // 6. Tip Radio Buttons
             let tip_radio_delay = 6.0 * step;
             let tip_radio_alpha = if elapsed >= tip_radio_delay { 1.0 } else { 0.0 };
-            if tip_radio_alpha > 0.0 {
+            if tip_radio_alpha > 0.0 && !has_platinum {
                 let color = Color32::from_rgba_unmultiplied(
                     0,
                     0,
@@ -545,10 +562,14 @@ impl DungeonDash {
             if est_alpha > 0.0 {
                 let color =
                     Color32::from_rgba_unmultiplied(80, 80, 80, (alpha as f32 * est_alpha) as u8);
-                let estimate = match dd_selection.tip_percentage {
-                    25 => "5-10 turns",
-                    20 => "10-30 turns",
-                    _ => "20-50 turns",
+                let estimate = if has_platinum {
+                    "5 turns"
+                } else {
+                    match dd_selection.tip_percentage {
+                        25 => "5-10 turns",
+                        20 => "10-30 turns",
+                        _ => "20-50 turns",
+                    }
                 };
                 ui.add_space(20.0 * scale);
                 ui.label(apply_brainrot_ui(
@@ -606,10 +627,16 @@ impl DungeonDash {
                     }
 
                     use rand::Rng;
-                    let turns_remaining = match dd_selection.tip_percentage {
-                        25 => rand::rng().random_range(5..=10),
-                        20 => rand::rng().random_range(10..=30),
-                        _ => rand::rng().random_range(20..=50),
+                    let turns_remaining = if player
+                        .has_subscription(crate::game::Subscription::DungeonDashPlatinum)
+                    {
+                        5
+                    } else {
+                        match dd_selection.tip_percentage {
+                            25 => rand::rng().random_range(5..=10),
+                            20 => rand::rng().random_range(10..=30),
+                            _ => rand::rng().random_range(20..=50),
+                        }
                     };
 
                     active_delivery

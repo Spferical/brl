@@ -197,6 +197,10 @@ pub fn update_streaming_turn(
             let rizz = player.rizz as f32;
             let mut gain = 0.00566 * (0.0978 * rizz).exp();
 
+            if player.has_subscription(crate::game::Subscription::UndergroundTVPro) {
+                gain *= 3.0;
+            }
+
             // Taper after 2000 viewers
             if streaming_state.viewers > 2000 {
                 let overflow = (streaming_state.viewers - 2000) as f32;
