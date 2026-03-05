@@ -813,6 +813,23 @@ impl MobileApp for UndergroundTV {
                 streaming_state.viewers_fractional = 0.0;
             }
         }
+
+        ui.add_space(20.0 * scale);
+        ui.add(
+            egui::Label::new(apply_brainrot_ui(
+                RichText::new(
+                    "Hint: Entertain the crowd and maybe you'll get donos from your subs :)",
+                )
+                .size(32.0 * scale)
+                .color(Color32::from_rgba_unmultiplied(80, 80, 80, alpha)),
+                player.brainrot,
+                ui.style(),
+                egui::FontSelection::Default,
+                egui::Align::Center,
+            ))
+            .selectable(false)
+            .sense(egui::Sense::empty()),
+        );
     }
 }
 
