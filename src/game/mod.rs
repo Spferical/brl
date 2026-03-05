@@ -1402,13 +1402,13 @@ fn prune_dead(
 
 #[derive(Default, Resource)]
 struct NearbyMobs {
-    mobs: Vec<(MapPos, Creature, Option<Mob>, String, Color)>,
+    mobs: Vec<(MapPos, Creature, Option<Mob>, String, Color, Name)>,
 }
 
 fn update_nearby_mobs(
     mut nearby_mobs: ResMut<NearbyMobs>,
     player: Query<&MapPos, With<Player>>,
-    mobs: Query<(&MapPos, &Creature, Option<&Mob>, &Text2d, &TextColor), Without<Player>>,
+    mobs: Query<(&MapPos, &Creature, Option<&Mob>, &Text2d, &TextColor, &Name), Without<Player>>,
     pos_to_creature: Res<PosToCreature>,
     player_vis_map: Res<map::PlayerVisibilityMap>,
 ) {
@@ -1420,7 +1420,7 @@ fn update_nearby_mobs(
         if let Some(pos) = path.last()
             && player_vis_map.contains(&pos.0)
             && let Some(mob) = pos_to_creature.0.get(&pos.0)
-            && let Ok((pos, creature, mob, text, color)) = mobs.get(*mob)
+            && let Ok((pos, creature, mob, text, color, name)) = mobs.get(*mob)
         {
             nearby_mobs.mobs.push((
                 *pos,
@@ -1428,6 +1428,7 @@ fn update_nearby_mobs(
                 mob.cloned(),
                 text.0.clone(),
                 color.0,
+                name.clone(),
             ));
         }
     }
@@ -1466,112 +1467,172 @@ fn sidebar(
             ui.group(|ui| {
                 ui.set_min_height(400.0);
 
-                for (pos, creature, mob, text, color) in nearby_mobs.mobs.iter() {
+                for (pos, creature, mob, text, color, name) in nearby_mobs.mobs.iter() {
                     let highlight = Some(*pos) == examine_pos;
                     let mut frame = egui::Frame::new().inner_margin(Margin::same(4));
                     if highlight {
                         frame = frame.fill(ui.style().visuals.code_bg_color);
                     }
                     frame.show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            let [r, g, b, a] = color.to_srgba().to_u8_array();
-                            let c32 = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
-                            ui.label(apply_brainrot_ui(
-                                RichText::new(text)
-                                    .size(TILE_HEIGHT)
-                                    .color(c32)
-                                    .background_color(if highlight {
-                                        ui.style().visuals.code_bg_color
-                                    } else {
-                                        egui::Color32::TRANSPARENT
-                                    }),
-                                player.brainrot,
-                                ui.style(),
-                                FontSelection::Default,
-                                Align::LEFT,
-                            ));
-                            for _ in 0..creature.hp / 2 {
-                                ui.add(heart.clone());
-                            }
-                            if creature.hp % 2 == 1 {
-                                ui.add(half_heart.clone());
-                            }
-                            if let Some(mob) = mob {
-                                for _ in 0..mob.melee_damage / 2 {
-                                    ui.add(sword.clone());
+                        ui.vertical(|ui| {
+                            ui.add(
+                                egui::Label::new(apply_brainrot_ui(
+                                    RichText::new(name.as_str()).strong(),
+                                    player.brainrot,
+                                    ui.style(),
+                                    FontSelection::Default,
+                                    Align::LEFT,
+                                ))
+                                .selectable(false),
+                            );
+                            ui.horizontal(|ui| {
+                                let [r, g, b, a] = color.to_srgba().to_u8_array();
+                                let c32 = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
+                                ui.add(
+                                    egui::Label::new(apply_brainrot_ui(
+                                        RichText::new(text)
+                                            .size(TILE_HEIGHT)
+                                            .color(c32)
+                                            .background_color(if highlight {
+                                                ui.style().visuals.code_bg_color
+                                            } else {
+                                                egui::Color32::TRANSPARENT
+                                            }),
+                                        player.brainrot,
+                                        ui.style(),
+                                        FontSelection::Default,
+                                        Align::LEFT,
+                                    ))
+                                    .selectable(false),
+                                );
+                                for _ in 0..creature.hp / 2 {
+                                    ui.add(heart.clone());
                                 }
-                                if mob.melee_damage % 2 == 1 {
-                                    ui.add(half_sword.clone());
+                                if creature.hp % 2 == 1 {
+                                    ui.add(half_heart.clone());
                                 }
-                                for (attr, name, color) in [
-                                    (mob.attrs.based, "Based", egui::Color32::PURPLE),
-                                    (mob.attrs.basic, "Basic", egui::Color32::DARK_GRAY),
-                                    (mob.attrs.mog_risk, "Mog Risk", egui::Color32::DARK_GREEN),
-                                    (mob.attrs.sus, "Sus", egui::Color32::RED),
-                                ] {
-                                    if attr {
-                                        ui.label(apply_brainrot_ui(
-                                            RichText::new(name).background_color(color),
-                                            player.brainrot,
-                                            ui.style(),
-                                            FontSelection::Default,
-                                            Align::LEFT,
-                                        ));
+                                if let Some(mob) = mob {
+                                    for _ in 0..mob.melee_damage / 2 {
+                                        ui.add(sword.clone());
                                     }
-                                }
-                                fn resist_name(
-                                    ty: DamageType,
-                                    resist: Resist,
-                                ) -> Option<(&'static str, egui::Color32)>
-                                {
-                                    match (ty, resist) {
-                                        (_, Resist::Normal) => None,
-                                        (DamageType::Physical, Resist::Weak) => {
-                                            Some(("Weak", egui::Color32::DARK_RED))
-                                        }
-                                        (DamageType::Physical, Resist::Strong) => {
-                                            Some(("Unit", egui::Color32::DARK_BLUE))
-                                        }
-                                        (DamageType::Psychic, Resist::Weak) => {
-                                            Some(("Cooked", egui::Color32::DARK_RED))
-                                        }
-                                        (DamageType::Psychic, Resist::Strong) => {
-                                            Some(("Locked in", egui::Color32::DARK_BLUE))
-                                        }
-                                        (DamageType::Aura, Resist::Weak) => {
-                                            Some(("Cringe", egui::Color32::DARK_RED))
-                                        }
-                                        (DamageType::Aura, Resist::Strong) => {
-                                            Some(("Snatched", egui::Color32::DARK_BLUE))
-                                        }
-                                        (DamageType::Boredom, Resist::Weak) => {
-                                            Some(("NPC", egui::Color32::DARK_RED))
-                                        }
-                                        (DamageType::Boredom, Resist::Strong) => {
-                                            Some(("Focused", egui::Color32::DARK_BLUE))
-                                        }
-                                        _ => None,
+                                    if mob.melee_damage % 2 == 1 {
+                                        ui.add(half_sword.clone());
                                     }
-                                }
-                                for damage_type in [
-                                    DamageType::Physical,
-                                    DamageType::Psychic,
-                                    DamageType::Aura,
-                                    DamageType::Boredom,
-                                ] {
-                                    if let Some((name, color)) =
-                                        resist_name(damage_type, mob.get_damage_resist(damage_type))
+                                    for (attr, name, color, tooltip) in [
+                                        (
+                                            mob.attrs.based,
+                                            "Based",
+                                            egui::Color32::PURPLE,
+                                            "Deals psychic damage",
+                                        ),
+                                        (
+                                            mob.attrs.basic,
+                                            "Basic",
+                                            egui::Color32::DARK_GRAY,
+                                            "Deals boredom damage",
+                                        ),
+                                        (
+                                            mob.attrs.mog_risk,
+                                            "Mog Risk",
+                                            egui::Color32::DARK_GREEN,
+                                            "Deals aura damage",
+                                        ),
+                                        (
+                                            mob.attrs.sus,
+                                            "Sus",
+                                            egui::Color32::RED,
+                                            "Can teleport when attacking",
+                                        ),
+                                    ] {
+                                        if attr {
+                                            ui.add(
+                                                egui::Label::new(apply_brainrot_ui(
+                                                    RichText::new(name).background_color(color),
+                                                    player.brainrot,
+                                                    ui.style(),
+                                                    FontSelection::Default,
+                                                    Align::LEFT,
+                                                ))
+                                                .selectable(false),
+                                            )
+                                            .on_hover_text(tooltip);
+                                        }
+                                    }
+                                    fn resist_name(
+                                        ty: DamageType,
+                                        resist: Resist,
+                                    ) -> Option<(&'static str, egui::Color32, &'static str)>
                                     {
-                                        ui.label(apply_brainrot_ui(
-                                            RichText::new(name).background_color(color),
-                                            player.brainrot,
-                                            ui.style(),
-                                            FontSelection::Default,
-                                            Align::LEFT,
-                                        ));
+                                        match (ty, resist) {
+                                            (_, Resist::Normal) => None,
+                                            (DamageType::Physical, Resist::Weak) => Some((
+                                                "Weak",
+                                                egui::Color32::DARK_RED,
+                                                "Takes double physical damage",
+                                            )),
+                                            (DamageType::Physical, Resist::Strong) => Some((
+                                                "Unit",
+                                                egui::Color32::DARK_BLUE,
+                                                "Takes half physical damage",
+                                            )),
+                                            (DamageType::Psychic, Resist::Weak) => Some((
+                                                "Cooked",
+                                                egui::Color32::DARK_RED,
+                                                "Takes double psychic damage",
+                                            )),
+                                            (DamageType::Psychic, Resist::Strong) => Some((
+                                                "Locked in",
+                                                egui::Color32::DARK_BLUE,
+                                                "Takes half psychic damage",
+                                            )),
+                                            (DamageType::Aura, Resist::Weak) => Some((
+                                                "Cringe",
+                                                egui::Color32::DARK_RED,
+                                                "Takes double aura damage",
+                                            )),
+                                            (DamageType::Aura, Resist::Strong) => Some((
+                                                "Snatched",
+                                                egui::Color32::DARK_BLUE,
+                                                "Takes half aura damage",
+                                            )),
+                                            (DamageType::Boredom, Resist::Weak) => Some((
+                                                "NPC",
+                                                egui::Color32::DARK_RED,
+                                                "Takes double boredom damage",
+                                            )),
+                                            (DamageType::Boredom, Resist::Strong) => Some((
+                                                "Focused",
+                                                egui::Color32::DARK_BLUE,
+                                                "Takes half boredom damage",
+                                            )),
+                                            _ => None,
+                                        }
+                                    }
+                                    for damage_type in [
+                                        DamageType::Physical,
+                                        DamageType::Psychic,
+                                        DamageType::Aura,
+                                        DamageType::Boredom,
+                                    ] {
+                                        if let Some((name, color, tooltip)) = resist_name(
+                                            damage_type,
+                                            mob.get_damage_resist(damage_type),
+                                        ) {
+                                            ui.add(
+                                                egui::Label::new(apply_brainrot_ui(
+                                                    RichText::new(name).background_color(color),
+                                                    player.brainrot,
+                                                    ui.style(),
+                                                    FontSelection::Default,
+                                                    Align::LEFT,
+                                                ))
+                                                .selectable(false),
+                                            )
+                                            .on_hover_text(tooltip);
+                                        }
                                     }
                                 }
-                            }
+                            });
                         });
                     });
                 }
