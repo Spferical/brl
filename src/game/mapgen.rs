@@ -1004,6 +1004,7 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
             last_gain_amount: 0,
             max_depth: 0,
             abilities: vec![],
+            ability_cooldowns: HashMap::default(),
             upgrades: vec![],
             pending_upgrades: 1,
             upgrade_options: vec![],

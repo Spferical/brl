@@ -53,6 +53,12 @@ impl std::fmt::Display for Effect {
                 Subscription::FiveGLTE => {
                     write!(f, "5G LTE Subscription: Guaranteed signal, $5/100 turns")
                 }
+                Subscription::DungeonFitness => {
+                    write!(
+                        f,
+                        "Dungeon Fitness Membership: Passively gain Strength (up to a point), $80/100 turns"
+                    )
+                }
             },
         }
     }
@@ -181,6 +187,14 @@ pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
         Upgrade {
             name: "5G LTE",
             effects: vec![Effect::Subscription(Subscription::FiveGLTE)],
+        },
+        Upgrade {
+            name: "Dungeon Fitness Membership",
+            effects: vec![Effect::Subscription(Subscription::DungeonFitness)],
+        },
+        Upgrade {
+            name: "Library Card",
+            effects: vec![Effect::GainAbility(Ability::ReadBook)],
         },
     ]
 });

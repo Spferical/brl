@@ -454,6 +454,7 @@ pub struct Player {
     pub last_gain_amount: i32,
     pub max_depth: i32,
     pub abilities: Vec<Ability>,
+    pub ability_cooldowns: HashMap<Ability, u32>,
 
     pub upgrades: Vec<usize>,
     pub pending_upgrades: usize,
@@ -466,6 +467,7 @@ pub enum Subscription {
     DungeonDashPlatinum,
     UndergroundTVPro,
     FiveGLTE,
+    DungeonFitness,
 }
 
 impl Player {
@@ -510,6 +512,7 @@ pub enum Ability {
     ShoulderCheck,
     Mog,
     Cook,
+    ReadBook,
 }
 
 impl std::fmt::Display for Ability {
@@ -519,6 +522,7 @@ impl std::fmt::Display for Ability {
             Ability::ShoulderCheck => "Shoulder Check",
             Ability::Mog => "Mog",
             Ability::Cook => "Cook",
+            Ability::ReadBook => "Read Book",
         })
     }
 }
@@ -540,6 +544,9 @@ impl Ability {
             Ability::ShoulderCheck => "Damage and swap positions with an adjacent enemy.",
             Ability::Mog => "Deal aura damage to an adjacent enemy.",
             Ability::Cook => "Cook a corpse you are standing on. Requires < 10 brainrot.",
+            Ability::ReadBook => {
+                "Reduce brainrot. Might be a little boring. (Borrow period: 10 turns)"
+            }
         }
     }
     pub(crate) fn target(&self) -> AbilityTarget {
@@ -547,7 +554,7 @@ impl Ability {
             Ability::Sprint => AbilityTarget::ReachableTile { maxdist: 5 },
             Ability::ShoulderCheck => AbilityTarget::NearbyMob { maxdist: 1 },
             Ability::Mog => AbilityTarget::NearbyMob { maxdist: 5 },
-            Ability::Cook => AbilityTarget::NoTarget,
+            Ability::Cook | Ability::ReadBook => AbilityTarget::NoTarget,
         }
     }
 }
@@ -781,6 +788,14 @@ fn increment_turn_counter(mut counter: ResMut<TurnCounter>) {
 
 fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut Creature)>) {
     let (mut player, mut creature) = player.into_inner();
+
+    // Decrement cooldowns
+    for cooldown in player.ability_cooldowns.values_mut() {
+        if *cooldown > 0 {
+            *cooldown -= 1;
+        }
+    }
+
     if turn_counter.0.is_multiple_of(5) {
         player.apply_hunger_damage(&mut creature, 1);
 
@@ -789,6 +804,10 @@ fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut
         }
         player.boredom += 1;
         player.boredom = player.boredom.clamp(0, 100);
+
+        if player.has_subscription(Subscription::DungeonFitness) && player.strength < 60 {
+            player.strength += 1;
+        }
     }
 }
 
@@ -799,6 +818,7 @@ fn handle_subscriptions(turn_counter: Res<TurnCounter>, mut player: Single<&mut 
                 Subscription::DungeonDashPlatinum => 20,
                 Subscription::UndergroundTVPro => 50,
                 Subscription::FiveGLTE => 5,
+                Subscription::DungeonFitness => 80,
             };
             player.money -= cost;
         }
@@ -1072,6 +1092,22 @@ fn handle_player_move(
 
                         commands.entity(corpse_entity).despawn();
                     }
+                }
+            }
+            Ability::ReadBook => {
+                if *player_stats
+                    .ability_cooldowns
+                    .get(&Ability::ReadBook)
+                    .unwrap_or(&0)
+                    == 0
+                {
+                    let boredom_increase = if player_stats.brainrot < 30 { 5 } else { 10 };
+                    player_stats.brainrot = (player_stats.brainrot - 20).max(0);
+                    player_stats.boredom = (player_stats.boredom + boredom_increase).min(100);
+                    player_stats.ability_cooldowns.insert(Ability::ReadBook, 10);
+                } else {
+                    moved.0 = false;
+                    return;
                 }
             }
         },
@@ -1836,18 +1872,22 @@ fn sidebar(
                             } else {
                                 format!("{ability_key}: {ability}")
                             };
-                            if ui
-                                .button(apply_brainrot_ui(
-                                    label,
-                                    player.brainrot,
-                                    ui.style(),
-                                    FontSelection::Default,
-                                    Align::LEFT,
-                                ))
-                                .clicked()
-                            {
-                                msg_ability_clicked.write(AbilityClicked(*ability));
+                            let cooldown = player.ability_cooldowns.get(ability).unwrap_or(&0);
+                            let label = if *cooldown > 0 {
+                                format!("{label} ({cooldown})")
+                            } else {
+                                label
                             };
+                            let button = egui::Button::new(apply_brainrot_ui(
+                                label,
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                            if ui.add_enabled(*cooldown == 0, button).clicked() {
+                                msg_ability_clicked.write(AbilityClicked(*ability));
+                            }
                         }
                     }
                     InputMode::Examine(_) => {
