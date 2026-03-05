@@ -498,6 +498,10 @@ impl Player {
             self.abilities.remove(idx);
         }
     }
+
+    fn melee_damage(&self) -> i32 {
+        (self.strength / 5).min(1)
+    }
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, Reflect)]
@@ -886,7 +890,7 @@ fn handle_player_move(
             if let Some(entity) = pos_to_creature.0.get(&new_pos.0) {
                 damage.0.push(DamageInstance {
                     entity: *entity,
-                    amount: 2,
+                    amount: player.melee_damage(),
                     ty: DamageType::Physical,
                 });
                 commands
