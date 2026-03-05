@@ -73,6 +73,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<targeting::ValidTargets>();
     app.init_resource::<phone::PhoneState>();
     app.init_resource::<mobile_apps::DungeonDashSelection>();
+    app.init_resource::<mobile_apps::CockatriceState>();
     app.init_resource::<delivery::ActiveDelivery>();
     app.init_resource::<chat::StreamingState>();
     app.init_resource::<chat::ChatHistory>();
@@ -101,6 +102,7 @@ pub(super) fn plugin(app: &mut App) {
                 phone::set_notification,
                 phone::toggle_phone,
                 phone::update_phone,
+                mobile_apps::update_cockatrice,
             )
                 .chain(),
             chat::update_streaming_stats,
@@ -681,7 +683,7 @@ enum Resist {
 
 // NPC-specific fields.
 #[derive(Component, Clone, Debug, Reflect)]
-struct Mob {
+pub(crate) struct Mob {
     melee_damage: i32,
     ranged: bool,
     attrs: MobAttrs,

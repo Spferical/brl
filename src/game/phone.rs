@@ -8,20 +8,24 @@ use rand::Rng;
 use crate::game::{Creature, Player, apply_brainrot_ui};
 use crate::game::{assets::WorldAssets, upgrades::UpgradeMessage};
 
+use crate::game::mobile_apps::{self, AppId, DungeonDashScreen, DungeonDashSelection};
+
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PhoneScreen {
     #[default]
     Home,
-    App(usize),
+    App(AppId),
 }
+
+use std::collections::HashMap;
 
 #[derive(Resource, Default)]
 pub struct PhoneState {
     pub is_open: bool,
     pub slide_progress: f32,
-    pub click_progress: [f32; 4],
+    pub click_progress: HashMap<AppId, f32>,
     pub app_open_progress: f32,
-    pub last_opened_app: Option<usize>,
+    pub last_opened_app: Option<AppId>,
     pub app_launch_progress: f32,
     pub bump_timer: f32,
     pub bump_progress: f32,
@@ -29,11 +33,11 @@ pub struct PhoneState {
     pub creep_progress: f32,
     pub is_creeping: bool,
     pub is_hovered: bool,
-    pub unread_notification: Option<usize>,
+    pub unread_notification: Option<AppId>,
 }
 
 impl PhoneState {
-    fn set_notification(&mut self, notif: Option<usize>) {
+    fn set_notification(&mut self, notif: Option<AppId>) {
         if self.unread_notification.is_none()
             && notif.is_some()
             && !self.is_open
@@ -47,7 +51,7 @@ impl PhoneState {
 
 pub fn set_notification(mut phone_state: ResMut<PhoneState>, player: Single<&Player>) {
     if player.pending_upgrades > 0 {
-        phone_state.set_notification(Some(3));
+        phone_state.set_notification(Some(AppId::Upgrade));
     } else {
         phone_state.set_notification(None);
     }
@@ -163,7 +167,7 @@ pub fn update_phone(
     }
 
     let click_speed = 3.0 * time.delta_secs();
-    for click_p in phone_state.click_progress.iter_mut() {
+    for click_p in phone_state.click_progress.values_mut() {
         if *click_p > 0.0 {
             *click_p += click_speed;
             if *click_p >= 1.0 {
@@ -209,8 +213,6 @@ pub fn update_phone(
     }
 }
 
-use crate::game::mobile_apps::{self, DungeonDashScreen, DungeonDashSelection};
-
 pub fn draw_phone(
     mut contexts: EguiContexts,
     player_query: Single<(&mut Player, &mut Creature, &crate::game::map::MapPos)>,
@@ -225,6 +227,7 @@ pub fn draw_phone(
     mut next_dd_screen: ResMut<NextState<DungeonDashScreen>>,
     mut dd_selection: ResMut<DungeonDashSelection>,
     mut msg_upgrade: MessageWriter<UpgradeMessage>,
+    mut cockatrice_state: ResMut<mobile_apps::CockatriceState>,
 ) {
     let (mut player, mut creature, player_pos) = player_query.into_inner();
     let texture_id = contexts.add_image(EguiTextureHandle::Weak(assets.phone.id()));
@@ -232,7 +235,8 @@ pub fn draw_phone(
     let app_icons: Vec<Option<egui::TextureId>> = apps
         .iter()
         .map(|app| {
-            app.icon(&assets)
+            app.1
+                .icon(&assets)
                 .map(|handle| contexts.add_image(EguiTextureHandle::Weak(handle.id())))
         })
         .collect();
@@ -350,9 +354,10 @@ pub fn draw_phone(
 
                 let mut visible_idx = 0;
                 for (i, app) in apps.iter().enumerate() {
-                    if !app.show_on_home_screen() {
+                    if !app.1.show_on_home_screen() {
                         continue;
                     }
+                    let app_id = app.0;
                     let row = visible_idx / 3;
                     let col = visible_idx % 3;
                     visible_idx += 1;
@@ -379,11 +384,15 @@ pub fn draw_phone(
                     let hover_scale = 1.0 + hover_t * 0.1;
 
                     if response.clicked() && *current_screen.get() == PhoneScreen::Home {
-                        phone_state.click_progress[i] = 0.01;
-                        next_screen.set(PhoneScreen::App(i));
+                        phone_state.click_progress.insert(app_id, 0.01);
+                        next_screen.set(PhoneScreen::App(app_id));
                     }
 
-                    let click_p = phone_state.click_progress[i];
+                    let click_p = phone_state
+                        .click_progress
+                        .get(&app_id)
+                        .copied()
+                        .unwrap_or(0.0);
                     let click_scale = if click_p > 0.0 {
                         1.0 - (click_p * std::f32::consts::PI * 2.0).sin() * 0.15
                     } else {
@@ -419,7 +428,7 @@ pub fn draw_phone(
                         ui.painter().add(icon_mesh);
                     }
 
-                    let wrapped_name = textwrap::fill(app.name(), 15);
+                    let wrapped_name = textwrap::fill(app.1.name(), 15);
                     let text_job = apply_brainrot_ui(
                         RichText::new(wrapped_name).size(25.0 * scale_x),
                         player.brainrot,
@@ -519,7 +528,8 @@ pub fn draw_phone(
                     Color32::from_rgba_unmultiplied(230, 230, 230, app_alpha),
                 );
 
-                if let Some(i) = phone_state.last_opened_app {
+                if let Some(app_id) = phone_state.last_opened_app {
+                    let i = apps.iter().position(|a| a.0 == app_id).unwrap();
                     let app = &apps[i];
 
                     if phone_state.app_launch_progress > 0.5 {
@@ -531,6 +541,7 @@ pub fn draw_phone(
                                 .max_rect(phone_screen_rect)
                                 .layout(egui::Layout::top_down(egui::Align::Center)),
                         );
+                        child_ui.set_clip_rect(phone_screen_rect);
 
                         if player.signal <= 1 {
                             child_ui.add_space(child_ui.available_height() * 0.4);
@@ -544,7 +555,7 @@ pub fn draw_phone(
                                 egui::Align::Center,
                             ));
                         } else {
-                            app.draw_content(
+                            app.1.draw_content(
                                 &mut child_ui,
                                 &mut phone_state,
                                 &mut streaming_state,
@@ -560,6 +571,7 @@ pub fn draw_phone(
                                 &mut dd_selection,
                                 &mut msg_upgrade,
                                 &mut next_screen,
+                                &mut cockatrice_state,
                             );
                         }
                     }
@@ -579,7 +591,7 @@ pub fn draw_phone(
                         let splash_name = if player.signal <= 1 {
                             "No Network Connection"
                         } else {
-                            app.splash_name()
+                            app.1.splash_name()
                         };
 
                         let large_icon_size = icon_size * 2.0;

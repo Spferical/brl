@@ -9,6 +9,40 @@ use crate::game::phone::{PhoneScreen, PhoneState};
 use crate::game::upgrades::{UPGRADES, UpgradeMessage};
 use crate::game::{Creature, Player};
 
+const FROG_HANDLES: &[&str] = &["@Hopper", "@Ribbit", "@SwampKing"];
+const GYM_BRO_HANDLES: &[&str] = &["@LiftHeavy", "@ProteinShake", "@DoYouEvenLift"];
+const INFLUENCER_HANDLES: &[&str] = &["@LikeAndSubscribe", "@SponCon", "@TrendSetter"];
+const NORMIE_HANDLES: &[&str] = &["@JustAGuy", "@AverageJoe", "@JohnDoe"];
+const AMOGUS_HANDLES: &[&str] = &["@Sus", "@Imposter", "@RedIsSus"];
+const CAPYBARA_HANDLES: &[&str] = &["@ChillVibes", "@WaterDog", "@OkayPullUp"];
+
+const FROG_CONTENTS: &[&str] = &[
+    "Ribbit ribbit...",
+    "Looking for flies.",
+    "It is Wednesday, my dudes.",
+];
+const GYM_BRO_CONTENTS: &[&str] = &[
+    "Just hit a new PR! #gains",
+    "Don't skip leg day bro.",
+    "Where is my pre-workout?",
+];
+const INFLUENCER_CONTENTS: &[&str] = &[
+    "New unboxing video dropping soon!  ",
+    "Feeling blessed today.",
+    "Link in bio!  ",
+];
+const NORMIE_CONTENTS: &[&str] = &[
+    "What is going on?",
+    "I just want to go home.",
+    "Another day, another dollar.",
+];
+const AMOGUS_CONTENTS: &[&str] = &[
+    "Doing tasks in electrical.",
+    "I saw someone vent.",
+    "Blue is acting sus.",
+];
+const CAPYBARA_CONTENTS: &[&str] = &["Chilling.", "Water is nice.", "Pull up."];
+
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DungeonDashScreen {
     #[default]
@@ -21,6 +55,33 @@ pub struct DungeonDashSelection {
     pub selected_food: Option<usize>,
     pub tip_percentage: u32,
     pub checkout_start_time: f64,
+}
+
+#[derive(Clone)]
+pub struct Tweet {
+    pub handle: String,
+    pub content: String,
+    pub hours_ago: u32,
+    pub eggs: u32,
+    pub glyph: char,
+    pub color: Color32,
+}
+
+#[derive(Resource, Default)]
+pub struct CockatriceState {
+    pub tweets: Vec<Tweet>,
+    pub scroll_timer: f64,
+    pub initialized: bool,
+    pub turn_timer: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum AppId {
+    Crawlr,
+    DungeonDash,
+    UndergroundTV,
+    Cockatrice,
+    Upgrade,
 }
 
 pub trait MobileApp: Send + Sync {
@@ -47,6 +108,7 @@ pub trait MobileApp: Send + Sync {
         dd_selection: &mut DungeonDashSelection,
         msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         next_phone_screen: &mut NextState<PhoneScreen>,
+        cockatrice_state: &mut CockatriceState,
     );
 }
 
@@ -79,6 +141,7 @@ impl MobileApp for Crawlr {
         _dd_selection: &mut DungeonDashSelection,
         _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         _next_phone_screen: &mut NextState<PhoneScreen>,
+        _cockatrice_state: &mut CockatriceState,
     ) {
     }
 }
@@ -112,6 +175,7 @@ impl MobileApp for DungeonDash {
         dd_selection: &mut DungeonDashSelection,
         _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         _next_phone_screen: &mut NextState<PhoneScreen>,
+        _cockatrice_state: &mut CockatriceState,
     ) {
         let menu_alpha = ui.ctx().animate_bool_with_time(
             egui::Id::new("dd_menu_alpha"),
@@ -620,6 +684,7 @@ impl MobileApp for UndergroundTV {
         _dd_selection: &mut DungeonDashSelection,
         _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         _next_phone_screen: &mut NextState<PhoneScreen>,
+        _cockatrice_state: &mut CockatriceState,
     ) {
         ui.add_space(ui.available_height() * 0.4);
         let is_low_signal = player.signal <= 2;
@@ -657,6 +722,246 @@ impl MobileApp for UndergroundTV {
     }
 }
 
+pub struct Cockatrice;
+
+impl MobileApp for Cockatrice {
+    fn name(&self) -> &str {
+        "Cockatrice"
+    }
+    fn splash_name(&self) -> &str {
+        "Cockatrice"
+    }
+    fn icon(&self, assets: &WorldAssets) -> Option<Handle<Image>> {
+        Some(assets.phone_app_icons.cockatrice.clone())
+    }
+    fn draw_content(
+        &self,
+        ui: &mut egui::Ui,
+        _phone_state: &mut PhoneState,
+        _streaming_state: &mut StreamingState,
+        player: &mut Player,
+        _creature: &mut Creature,
+        _player_pos: &crate::game::map::MapPos,
+        _active_delivery: &mut crate::game::delivery::ActiveDelivery,
+        _walk_blocked_map: &crate::game::map::WalkBlockedMap,
+        scale: f32,
+        alpha: u8,
+        _dd_screen: &DungeonDashScreen,
+        _next_dd_screen: &mut NextState<DungeonDashScreen>,
+        _dd_selection: &mut DungeonDashSelection,
+        _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
+        _next_phone_screen: &mut NextState<PhoneScreen>,
+        cockatrice_state: &mut CockatriceState,
+    ) {
+        if cockatrice_state.tweets.is_empty() {
+            ui.add_space(ui.available_height() * 0.4);
+            ui.label(apply_brainrot_ui(
+                RichText::new("No posts yet...")
+                    .size(32.0 * scale)
+                    .color(Color32::from_rgba_unmultiplied(0, 0, 0, alpha)),
+                player.brainrot,
+                ui.style(),
+                egui::FontSelection::Default,
+                egui::Align::Center,
+            ));
+            return;
+        }
+
+        let container_width = ui.available_width() * 0.9;
+        let tweet_height = 300.0 * scale;
+        let tweet_spacing = 32.0 * scale;
+        let item_height = tweet_height + tweet_spacing;
+
+        let total_height = cockatrice_state.tweets.len() as f32 * item_height;
+        let scroll_speed = 100.0 * scale; // pixels per second
+        let scroll_offset = (cockatrice_state.scroll_timer as f32 * scroll_speed) % total_height;
+
+        ui.style_mut().spacing.item_spacing.y = 0.0;
+
+        egui::ScrollArea::vertical()
+            .id_salt("cockatrice_scroll")
+            .vertical_scroll_offset(scroll_offset)
+            .show(ui, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.add_space(16.0 * scale); // Top padding to match the previous look
+                    // Draw 2 copies so that when offset reaches total_height, the screen is still filled
+                    for _ in 0..2 {
+                        for tweet in &cockatrice_state.tweets {
+                            // We allocate a rect exactly the size of the *visible* tweet card
+                            let (rect, _) = ui.allocate_exact_size(
+                                egui::vec2(container_width, tweet_height),
+                                egui::Sense::hover(),
+                            );
+
+                            let fill = Color32::from_rgba_unmultiplied(250, 250, 245, alpha);
+                            ui.painter().rect_filled(rect, 4.0 * scale, fill);
+                            ui.painter().rect_stroke(
+                                rect,
+                                4.0 * scale,
+                                egui::Stroke::new(2.0, Color32::BLACK),
+                                egui::StrokeKind::Middle,
+                            );
+
+                            // create a child UI specifically tied to `rect` and NOT inheriting the cursor pos
+                            let mut child_ui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+
+                            child_ui.add_space(16.0 * scale);
+                            child_ui.horizontal(|child_ui| {
+                                child_ui.add_space(16.0 * scale);
+
+                                // Profile Icon
+                                let icon_size = 64.0 * scale;
+                                let (icon_rect, _) = child_ui.allocate_exact_size(
+                                    egui::vec2(icon_size, icon_size),
+                                    egui::Sense::hover(),
+                                );
+
+                                child_ui.painter().rect_filled(
+                                    icon_rect,
+                                    2.0 * scale,
+                                    Color32::from_rgba_unmultiplied(200, 200, 200, alpha),
+                                );
+                                child_ui.painter().rect_stroke(
+                                    icon_rect,
+                                    2.0 * scale,
+                                    egui::Stroke::new(2.0, Color32::BLACK),
+                                    egui::StrokeKind::Middle,
+                                );
+
+                                // Draw monster glyph as icon
+                                let text_job = apply_brainrot_ui(
+                                    RichText::new(tweet.glyph.to_string())
+                                        .size(48.0 * scale)
+                                        .color(Color32::from_rgba_unmultiplied(
+                                            tweet.color.r(),
+                                            tweet.color.g(),
+                                            tweet.color.b(),
+                                            (tweet.color.a() as f32 * (alpha as f32 / 255.0)) as u8,
+                                        )),
+                                    player.brainrot,
+                                    child_ui.style(),
+                                    egui::FontSelection::Default,
+                                    egui::Align::Center,
+                                )
+                                .into_layout_job(
+                                    child_ui.style(),
+                                    egui::FontSelection::Default,
+                                    egui::Align::Center,
+                                );
+                                let galley = child_ui.painter().layout_job((*text_job).clone());
+                                child_ui.painter().galley(
+                                    egui::pos2(
+                                        icon_rect.center().x - galley.size().x / 2.0,
+                                        icon_rect.center().y - galley.size().y / 2.0,
+                                    ),
+                                    galley,
+                                    Color32::from_rgba_unmultiplied(255, 255, 255, alpha),
+                                );
+
+                                child_ui.add_space(16.0 * scale);
+
+                                // Username and Time
+                                child_ui.vertical(|child_ui| {
+                                    child_ui.horizontal(|child_ui| {
+                                        child_ui.add(
+                                            egui::Label::new(apply_brainrot_ui(
+                                                RichText::new(&tweet.handle)
+                                                    .size(32.0 * scale)
+                                                    .color(Color32::from_rgba_unmultiplied(
+                                                        0, 50, 100, alpha,
+                                                    )),
+                                                player.brainrot,
+                                                child_ui.style(),
+                                                egui::FontSelection::Default,
+                                                egui::Align::LEFT,
+                                            ))
+                                            .selectable(false)
+                                            .sense(egui::Sense::empty()),
+                                        );
+
+                                        child_ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |child_ui| {
+                                                child_ui.add_space(16.0 * scale);
+                                                child_ui.add(
+                                                    egui::Label::new(apply_brainrot_ui(
+                                                        RichText::new(format!(
+                                                            "{}h",
+                                                            tweet.hours_ago
+                                                        ))
+                                                        .size(28.0 * scale)
+                                                        .color(Color32::from_rgba_unmultiplied(
+                                                            100, 100, 100, alpha,
+                                                        )),
+                                                        player.brainrot,
+                                                        child_ui.style(),
+                                                        egui::FontSelection::Default,
+                                                        egui::Align::RIGHT,
+                                                    ))
+                                                    .selectable(false)
+                                                    .sense(egui::Sense::empty()),
+                                                );
+                                            },
+                                        );
+                                    });
+                                });
+                            });
+
+                            child_ui.add_space(16.0 * scale);
+
+                            // Content
+                            child_ui.horizontal(|child_ui| {
+                                child_ui.add_space(20.0 * scale);
+                                child_ui.add(
+                                    egui::Label::new(apply_brainrot_ui(
+                                        RichText::new(&tweet.content)
+                                            .size(36.0 * scale)
+                                            .color(Color32::from_rgba_unmultiplied(0, 0, 0, alpha)),
+                                        player.brainrot,
+                                        child_ui.style(),
+                                        egui::FontSelection::Default,
+                                        egui::Align::LEFT,
+                                    ))
+                                    .wrap_mode(egui::TextWrapMode::Wrap)
+                                    .selectable(false)
+                                    .sense(egui::Sense::empty()),
+                                );
+                            });
+
+                            child_ui.add_space(24.0 * scale);
+
+                            // Footer (Eggs)
+                            child_ui.horizontal(|child_ui| {
+                                child_ui.add_space(20.0 * scale);
+                                child_ui.add(
+                                    egui::Label::new(apply_brainrot_ui(
+                                        RichText::new(format!("{} Eggs", tweet.eggs))
+                                            .size(24.0 * scale)
+                                            .color(Color32::from_rgba_unmultiplied(
+                                                80, 80, 80, alpha,
+                                            )),
+                                        player.brainrot,
+                                        child_ui.style(),
+                                        egui::FontSelection::Default,
+                                        egui::Align::LEFT,
+                                    ))
+                                    .selectable(false)
+                                    .sense(egui::Sense::empty()),
+                                );
+                            });
+
+                            // Ensure the gap between tweets is explicitly allocated
+                            ui.allocate_exact_size(
+                                egui::vec2(container_width, tweet_spacing),
+                                egui::Sense::hover(),
+                            );
+                        }
+                    }
+                });
+            });
+    }
+}
+
 pub struct Upgrade;
 
 impl MobileApp for Upgrade {
@@ -689,6 +994,7 @@ impl MobileApp for Upgrade {
         _dd_selection: &mut DungeonDashSelection,
         msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         next_phone_screen: &mut NextState<PhoneScreen>,
+        _cockatrice_state: &mut CockatriceState,
     ) {
         ui.add_space(40.0 * scale);
         ui.label(apply_brainrot_ui(
@@ -772,11 +1078,86 @@ impl MobileApp for Upgrade {
     }
 }
 
-pub fn get_apps() -> Vec<Box<dyn MobileApp>> {
+pub fn get_apps() -> Vec<(AppId, Box<dyn MobileApp>)> {
     vec![
-        Box::new(Crawlr),
-        Box::new(DungeonDash),
-        Box::new(UndergroundTV),
-        Box::new(Upgrade),
+        (AppId::Crawlr, Box::new(Crawlr)),
+        (AppId::DungeonDash, Box::new(DungeonDash)),
+        (AppId::UndergroundTV, Box::new(UndergroundTV)),
+        (AppId::Cockatrice, Box::new(Cockatrice)),
+        (AppId::Upgrade, Box::new(Upgrade)),
     ]
+}
+
+pub fn update_cockatrice(
+    time: Res<Time>,
+    mut state: ResMut<CockatriceState>,
+    mob_query: Query<(&Name, &Text2d, &TextColor), With<crate::game::Mob>>,
+    phone_state: Res<PhoneState>,
+    current_screen: Res<State<PhoneScreen>>,
+    mut commands: Commands,
+    player_query: Single<(Entity, &mut Player, &mut Creature)>,
+) {
+    if !state.initialized {
+        use rand::Rng;
+        let mut rng = rand::rng();
+        for (name, text, color) in mob_query.iter() {
+            let handle = match name.as_str() {
+                "Giant Frog" => FROG_HANDLES[rng.random_range(0..FROG_HANDLES.len())],
+                "Gym Bro" => GYM_BRO_HANDLES[rng.random_range(0..GYM_BRO_HANDLES.len())],
+                "Influencer" => INFLUENCER_HANDLES[rng.random_range(0..INFLUENCER_HANDLES.len())],
+                "Normie" => NORMIE_HANDLES[rng.random_range(0..NORMIE_HANDLES.len())],
+                "Amogus" => AMOGUS_HANDLES[rng.random_range(0..AMOGUS_HANDLES.len())],
+                "Capybara" => CAPYBARA_HANDLES[rng.random_range(0..CAPYBARA_HANDLES.len())],
+                _ => "@Monster",
+            };
+
+            let content = match name.as_str() {
+                "Giant Frog" => FROG_CONTENTS[rng.random_range(0..FROG_CONTENTS.len())],
+                "Gym Bro" => GYM_BRO_CONTENTS[rng.random_range(0..GYM_BRO_CONTENTS.len())],
+                "Influencer" => INFLUENCER_CONTENTS[rng.random_range(0..INFLUENCER_CONTENTS.len())],
+                "Normie" => NORMIE_CONTENTS[rng.random_range(0..NORMIE_CONTENTS.len())],
+                "Amogus" => AMOGUS_CONTENTS[rng.random_range(0..AMOGUS_CONTENTS.len())],
+                "Capybara" => CAPYBARA_CONTENTS[rng.random_range(0..CAPYBARA_CONTENTS.len())],
+                _ => "Rawr!",
+            };
+
+            let [r, g, b, a] = color.0.to_srgba().to_u8_array();
+            state.tweets.push(Tweet {
+                handle: handle.to_string(),
+                content: content.to_string(),
+                hours_ago: rng.random_range(1..24),
+                eggs: rng.random_range(0..1000),
+                glyph: text.0.chars().next().unwrap_or('?'),
+                color: Color32::from_rgba_unmultiplied(r, g, b, a),
+            });
+        }
+        use rand::seq::SliceRandom;
+        state.tweets.shuffle(&mut rng);
+        state.initialized = true;
+    }
+
+    if let PhoneScreen::App(AppId::Cockatrice) = current_screen.get() {
+        if phone_state.is_open {
+            let delta = time.delta_secs();
+            state.scroll_timer += delta as f64;
+            state.turn_timer += delta;
+
+            if state.turn_timer >= 2.0 {
+                state.turn_timer -= 2.0;
+
+                let (entity, mut player, creature) = player_query.into_inner();
+                if creature.hp > 0 {
+                    player.brainrot += 5;
+                    player.brainrot = player.brainrot.clamp(0, 100);
+                    player.boredom -= 10;
+                    player.boredom = player.boredom.clamp(0, 100);
+
+                    commands
+                        .entity(entity)
+                        .insert(crate::game::input::PlayerIntent::Wait);
+                    commands.run_schedule(crate::game::Turn);
+                }
+            }
+        }
+    }
 }
