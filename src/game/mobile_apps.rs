@@ -705,9 +705,8 @@ impl MobileApp for Upgrade {
         ui.vertical_centered(|ui| {
             let width = ui.available_width() * 0.9;
             for upgrade_idx in &player.upgrade_options {
-                #[allow(clippy::borrow_interior_mutable_const)]
                 let upgrade = &UPGRADES[*upgrade_idx];
-                let height = 120.0 * scale;
+                let height = 180.0 * scale;
                 let (rect, response) =
                     ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
 

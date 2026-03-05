@@ -510,6 +510,13 @@ pub enum AbilityTarget {
     NoTarget,
 }
 impl Ability {
+    fn describe(&self) -> &'static str {
+        match self {
+            Ability::Sprint => "Move multiple tiles in one turn. Costs hunger.",
+            Ability::ShoulderCheck => "Damage and swap positions with an adjacent enemy.",
+            Ability::Mog => "Deal aura damage to an adjacent enemy.",
+        }
+    }
     fn target(&self) -> AbilityTarget {
         match self {
             Ability::Sprint => AbilityTarget::ReachableTile { maxdist: 5 },

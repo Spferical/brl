@@ -39,7 +39,7 @@ impl std::fmt::Display for Effect {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Effect::AttrChange(attr, amt) => write!(f, "+{amt} {attr}"),
-            Effect::GainAbility(ability) => write!(f, "Learn '{ability}'"),
+            Effect::GainAbility(ability) => write!(f, "Learn {ability}: {}", ability.describe()),
         }
     }
 }
