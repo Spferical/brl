@@ -4,7 +4,7 @@ use bevy::{input::keyboard::Key, platform::collections::HashMap, prelude::*};
 use bevy_egui::EguiContexts;
 
 use crate::game::{
-    Ability, Player, Turn,
+    Ability, AbilityTarget, Player, Turn,
     examine::ExaminePos,
     map::{MapPos, PosToInteractable},
     targeting::ValidTargets,
@@ -135,14 +135,20 @@ pub(crate) fn handle_input(
             camera.viewport_to_world(camera_transform, *position).ok()
         })
         .map(|ray| MapPos::from_vec2(ray.origin.truncate()));
+    let mut intent = None;
+
     let selected_ability = msg_ability_clicked
         .read()
         .last()
         .map(|AbilityClicked(ability)| ability)
         .or_else(|| check_ability_keys(&keyboard_input).and_then(|idx| player.abilities.get(idx)));
     if let Some(ability) = selected_ability {
-        *mode = InputMode::Targeting(*ability, player_pos.0);
-        examine_pos.pos = Some(*player_pos);
+        if matches!(ability.target(), AbilityTarget::NoTarget) {
+            intent = Some(PlayerIntent::UseAbility(*ability, *player_pos));
+        } else {
+            *mode = InputMode::Targeting(*ability, player_pos.0);
+            examine_pos.pos = Some(*player_pos);
+        }
     }
 
     if keyboard_input.pressed(Key::Shift)
@@ -155,8 +161,6 @@ pub(crate) fn handle_input(
         *mode = InputMode::Targeting(*sprint, player_pos.0);
         examine_pos.pos = Some(*player_pos);
     }
-
-    let mut intent = None;
 
     match *mode {
         _ if msg_stairs_clicked.read().last().is_some() => {

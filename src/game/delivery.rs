@@ -130,9 +130,14 @@ pub(crate) fn process_deliveries(
             let map_pos = map::MapPos(delivery.target_pos);
             let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
             let sprite = assets.get_ascii_sprite('%', Color::srgb(0.5, 0.25, 0.0));
+            let food = FOODS[delivery.food_idx];
             let drop_id = commands
                 .spawn((
-                    Corpse,
+                    Corpse {
+                        nutrition: 0,
+                        name: food.name.to_string(),
+                        kind: crate::game::mapgen::MobKind::Normie,
+                    },
                     Food {
                         food_idx: delivery.food_idx,
                     },

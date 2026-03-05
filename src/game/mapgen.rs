@@ -1,6 +1,6 @@
 use crate::game::{
-    Creature, DropsCorpse, Interactable, InteractionType, Mob, MobAttrs, MobBundle, PLAYER_Z,
-    Player, Resist, Stairs, TILE_Z,
+    CookedMeal, Creature, DropsCorpse, Interactable, InteractionType, Mob, MobAttrs, MobBundle,
+    PLAYER_Z, Player, Resist, Stairs, TILE_Z,
     assets::WorldAssets,
     camera::CameraFollow,
     lighting::Occluder,
@@ -17,7 +17,7 @@ enum TileKind {
     Wall,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, Reflect, PartialEq, Eq)]
 pub(crate) enum MobKind {
     GiantFrog,
     GymBro,
@@ -38,6 +38,74 @@ const MOBS: &[MobKind] = &[
 ];
 
 impl MobKind {
+    pub(crate) fn get_cooked_meal(&self) -> (&'static str, CookedMeal) {
+        match self {
+            MobKind::GymBro => (
+                "Beefcake",
+                CookedMeal {
+                    hunger: 25,
+                    hp: 0,
+                    strength: 10,
+                    boredom: 0,
+                },
+            ),
+            MobKind::GiantFrog => (
+                "Frog Legs",
+                CookedMeal {
+                    hunger: 30,
+                    hp: 2,
+                    strength: 0,
+                    boredom: 0,
+                },
+            ),
+            MobKind::Influencer => (
+                "Cooked Influencer",
+                CookedMeal {
+                    hunger: 15,
+                    hp: 0,
+                    strength: 0,
+                    boredom: 20,
+                },
+            ),
+            MobKind::Normie => (
+                "Long Pork",
+                CookedMeal {
+                    hunger: 40,
+                    hp: 0,
+                    strength: 0,
+                    boredom: 0,
+                },
+            ),
+            MobKind::Amogus => (
+                "Beefus",
+                CookedMeal {
+                    hunger: 10,
+                    hp: 2,
+                    strength: 2,
+                    boredom: 0,
+                },
+            ),
+            MobKind::Capybara => (
+                "Carne de Chiguiro",
+                CookedMeal {
+                    hunger: 15,
+                    hp: 1,
+                    strength: 0,
+                    boredom: 30,
+                },
+            ),
+            MobKind::KlarnaKop => (
+                "4-Part Interest-Free Burrito",
+                CookedMeal {
+                    hunger: 20,
+                    hp: 2,
+                    strength: 0,
+                    boredom: 0,
+                },
+            ),
+        }
+    }
+
     pub(crate) fn get_bundle(&self, assets: &WorldAssets) -> MobBundle {
         match self {
             MobKind::Capybara => MobBundle {
@@ -58,7 +126,12 @@ impl MobKind {
                     },
                 },
                 sprite: assets.get_ascii_sprite('c', Color::srgb(0.5, 0.3, 0.3)),
-                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 10,
+                    name: "Capybara".to_string(),
+                    kind: *self,
+                },
             },
 
             MobKind::GiantFrog => MobBundle {
@@ -80,7 +153,12 @@ impl MobKind {
                     },
                 },
                 sprite: assets.get_ascii_sprite('f', Color::srgb(0.2, 0.8, 0.2)),
-                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 5,
+                    name: "Giant Frog".to_string(),
+                    kind: *self,
+                },
             },
             MobKind::GymBro => MobBundle {
                 name: Name::new("Gym Bro"),
@@ -99,7 +177,12 @@ impl MobKind {
                     },
                 },
                 sprite: assets.get_ascii_sprite('g', Color::srgb(0.8, 0.3, 0.3)),
-                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 15,
+                    name: "Gym Bro".to_string(),
+                    kind: *self,
+                },
             },
             MobKind::Influencer => MobBundle {
                 name: Name::new("Influencer"),
@@ -119,7 +202,12 @@ impl MobKind {
                     },
                 },
                 sprite: assets.get_ascii_sprite('i', Color::srgb(0.2, 0.5, 0.8)),
-                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 2,
+                    name: "Influencer".to_string(),
+                    kind: *self,
+                },
             },
             MobKind::Normie => MobBundle {
                 name: Name::new("Normie"),
@@ -138,7 +226,12 @@ impl MobKind {
                     },
                 },
                 sprite: assets.get_ascii_sprite('n', Color::srgb(0.5, 0.5, 0.5)),
-                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 3,
+                    name: "Normie".to_string(),
+                    kind: *self,
+                },
             },
             MobKind::Amogus => MobBundle {
                 name: Name::new("Amogus"),
@@ -157,7 +250,12 @@ impl MobKind {
                     },
                 },
                 sprite: assets.get_ascii_sprite('a', Color::srgb(1.0, 0.1, 0.1)),
-                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 1,
+                    name: "Amogus".to_string(),
+                    kind: *self,
+                },
             },
             MobKind::KlarnaKop => MobBundle {
                 name: Name::new("Klarna Kop"),
@@ -176,7 +274,12 @@ impl MobKind {
                     },
                 },
                 sprite: assets.get_ascii_sprite('k', Color::srgb(0.2, 0.2, 0.8)),
-                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 4,
+                    name: "Klarna Kop".to_string(),
+                    kind: *self,
+                },
             },
         }
     }

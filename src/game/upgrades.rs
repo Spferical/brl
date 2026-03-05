@@ -122,61 +122,65 @@ pub(crate) fn handle_upgrades(
 
 pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
     vec![
-        Upgrade {
-            name: "Cardio",
-            effects: vec![Effect::AttrChange(Attr::MaxHp, 5)],
-        },
-        Upgrade {
-            name: "Trust Fund",
-            effects: vec![Effect::AttrChange(Attr::Money, 20)],
-        },
-        Upgrade {
-            name: "Group Chat",
-            effects: vec![Effect::AttrChange(Attr::Boredom, -25)],
-        },
-        Upgrade {
-            name: "Organic",
-            effects: vec![Effect::AttrChange(Attr::MaxHp, 5)],
-        },
-        Upgrade {
-            name: "Protein Goblin",
-            effects: vec![Effect::AttrChange(Attr::Strength, 5)],
-        },
-        Upgrade {
-            name: "Grip Strengthener",
-            effects: vec![Effect::AttrChange(Attr::Strength, 5)],
-        },
-        Upgrade {
-            name: "Mewing",
-            effects: vec![Effect::AttrChange(Attr::Rizz, 5)],
-        },
-        Upgrade {
-            name: "Sprint",
-            effects: vec![Effect::GainAbility(Ability::Sprint)],
-        },
-        Upgrade {
-            name: "Shoulder Check",
-            effects: vec![Effect::GainAbility(Ability::ShoulderCheck)],
-        },
+        // Upgrade {
+        //     name: "Cardio",
+        //     effects: vec![Effect::AttrChange(Attr::MaxHp, 5)],
+        // },
+        // Upgrade {
+        //     name: "Trust Fund",
+        //     effects: vec![Effect::AttrChange(Attr::Money, 20)],
+        // },
+        // Upgrade {
+        //     name: "Group Chat",
+        //     effects: vec![Effect::AttrChange(Attr::Boredom, -25)],
+        // },
+        // Upgrade {
+        //     name: "Organic",
+        //     effects: vec![Effect::AttrChange(Attr::MaxHp, 5)],
+        // },
+        // Upgrade {
+        //     name: "Protein Goblin",
+        //     effects: vec![Effect::AttrChange(Attr::Strength, 5)],
+        // },
+        // Upgrade {
+        //     name: "Grip Strengthener",
+        //     effects: vec![Effect::AttrChange(Attr::Strength, 5)],
+        // },
+        // Upgrade {
+        //     name: "Mewing",
+        //     effects: vec![Effect::AttrChange(Attr::Rizz, 5)],
+        // },
+        // Upgrade {
+        //     name: "Sprint",
+        //     effects: vec![Effect::GainAbility(Ability::Sprint)],
+        // },
+        // Upgrade {
+        //     name: "Shoulder Check",
+        //     effects: vec![Effect::GainAbility(Ability::ShoulderCheck)],
+        // },
         Upgrade {
             name: "Mog",
             effects: vec![Effect::GainAbility(Ability::Mog)],
         },
         Upgrade {
+            name: "Cook",
+            effects: vec![Effect::GainAbility(Ability::Cook)],
+        },
+        Upgrade {
             name: "Memelord",
             effects: vec![Effect::AttrChange(Attr::Brainrot, 50)],
         },
-        Upgrade {
-            name: "DungeonDash Platinum",
-            effects: vec![Effect::Subscription(Subscription::DungeonDashPlatinum)],
-        },
-        Upgrade {
-            name: "UndergroundTV Pro",
-            effects: vec![Effect::Subscription(Subscription::UndergroundTVPro)],
-        },
-        Upgrade {
-            name: "5G LTE",
-            effects: vec![Effect::Subscription(Subscription::FiveGLTE)],
-        },
+        // Upgrade {
+        //     name: "DungeonDash Platinum",
+        //     effects: vec![Effect::Subscription(Subscription::DungeonDashPlatinum)],
+        // },
+        // Upgrade {
+        //     name: "UndergroundTV Pro",
+        //     effects: vec![Effect::Subscription(Subscription::UndergroundTVPro)],
+        // },
+        // Upgrade {
+        //     name: "5G LTE",
+        //     effects: vec![Effect::Subscription(Subscription::FiveGLTE)],
+        // },
     ]
 });

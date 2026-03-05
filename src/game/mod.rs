@@ -1,7 +1,7 @@
 use std::{f32::consts::PI, time::Duration};
 
 use bevy::{
-    ecs::schedule::ScheduleLabel,
+    ecs::{schedule::ScheduleLabel, system::SystemParam},
     platform::collections::{HashMap, HashSet},
     prelude::*,
 };
@@ -23,6 +23,7 @@ use crate::{
         debug::{DebugSettings, redo_faction_map},
         input::{AbilityClicked, EatEvent, InputMode, PlayerIntent, StairsClicked},
         map::{MapPos, PosToCreature, PosToInteractable, TILE_HEIGHT, TILE_WIDTH},
+        mapgen::MobKind,
         phone::PhoneState,
     },
     screens::Screen,
@@ -161,6 +162,7 @@ pub(super) fn plugin(app: &mut App) {
                 // end-of-turn bookkeeping
                 update_nearby_mobs,
                 redo_faction_map,
+                map::update_pos_to_interactable,
                 set_player_corpse.run_if(not(is_player_alive)),
             )
                 .chain()
@@ -503,6 +505,7 @@ pub enum Ability {
     Sprint,
     ShoulderCheck,
     Mog,
+    Cook,
 }
 
 impl std::fmt::Display for Ability {
@@ -511,6 +514,7 @@ impl std::fmt::Display for Ability {
             Ability::Sprint => "Sprint",
             Ability::ShoulderCheck => "Shoulder Check",
             Ability::Mog => "Mog",
+            Ability::Cook => "Cook",
         })
     }
 }
@@ -526,18 +530,20 @@ pub enum AbilityTarget {
     NoTarget,
 }
 impl Ability {
-    fn describe(&self) -> &'static str {
+    pub(crate) fn describe(&self) -> &'static str {
         match self {
             Ability::Sprint => "Move multiple tiles in one turn. Costs hunger.",
             Ability::ShoulderCheck => "Damage and swap positions with an adjacent enemy.",
             Ability::Mog => "Deal aura damage to an adjacent enemy.",
+            Ability::Cook => "Cook a corpse you are standing on. Requires < 10 brainrot.",
         }
     }
-    fn target(&self) -> AbilityTarget {
+    pub(crate) fn target(&self) -> AbilityTarget {
         match self {
             Ability::Sprint => AbilityTarget::ReachableTile { maxdist: 5 },
             Ability::ShoulderCheck => AbilityTarget::NearbyMob { maxdist: 1 },
             Ability::Mog => AbilityTarget::NearbyMob { maxdist: 5 },
+            Ability::Cook => AbilityTarget::NoTarget,
         }
     }
 }
@@ -565,19 +571,34 @@ impl Default for Interactable {
     }
 }
 
+#[derive(Component, Clone)]
+pub(crate) struct CookedMeal {
+    pub hunger: i32,
+    pub hp: i32,
+    pub strength: i32,
+    pub boredom: i32,
+}
+
 pub(crate) fn handle_eat(
     mut events: MessageReader<EatEvent>,
     player_query: Single<(&mut Player, &mut Creature)>,
-    food_query: Query<&delivery::Food>,
+    food_query: Query<(Option<&delivery::Food>, Option<&CookedMeal>)>,
     mut commands: Commands,
 ) {
     let (mut player, mut creature) = player_query.into_inner();
     for event in events.read() {
-        if let Ok(food) = food_query.get(event.0) {
-            let food_item = delivery::FOODS[food.food_idx];
-            player.hunger = (player.hunger + food_item.hunger).clamp(0, 100);
-            player.strength += food_item.strength;
-            creature.hp = (creature.hp + food_item.hp).clamp(0, creature.max_hp);
+        if let Ok((food, cooked)) = food_query.get(event.0) {
+            if let Some(food) = food {
+                let food_item = delivery::FOODS[food.food_idx];
+                player.hunger = (player.hunger + food_item.hunger).clamp(0, 100);
+                player.strength += food_item.strength;
+                creature.hp = (creature.hp + food_item.hp).clamp(0, creature.max_hp);
+            } else if let Some(cooked) = cooked {
+                player.hunger = (player.hunger - cooked.hunger).clamp(0, 100);
+                player.strength += cooked.strength;
+                player.boredom = (player.boredom - cooked.boredom).clamp(0, 100);
+                creature.hp = (creature.hp + cooked.hp).clamp(0, creature.max_hp);
+            }
             commands.entity(event.0).despawn();
         }
     }
@@ -631,18 +652,27 @@ pub(crate) fn draw_world_popup(
 }
 
 #[derive(Component)]
-struct Corpse;
+pub(crate) struct Corpse {
+    pub nutrition: i32,
+    pub name: String,
+    pub kind: MobKind,
+}
 
 #[derive(Component, Clone)]
-struct DropsCorpse(assets::AsciiSprite);
+pub(crate) struct DropsCorpse {
+    pub sprite: assets::AsciiSprite,
+    pub nutrition: i32,
+    pub name: String,
+    pub kind: MobKind,
+}
 
 #[derive(Clone, Bundle)]
-struct MobBundle {
-    name: Name,
-    creature: Creature,
-    mob: Mob,
-    sprite: assets::AsciiSprite,
-    corpse: DropsCorpse,
+pub(crate) struct MobBundle {
+    pub name: Name,
+    pub creature: Creature,
+    pub mob: Mob,
+    pub sprite: assets::AsciiSprite,
+    pub corpse: DropsCorpse,
 }
 
 #[derive(Component)]
@@ -676,19 +706,19 @@ fn is_player_alive(player: Single<&Creature, With<Player>>, settings: Res<DebugS
 }
 
 #[derive(Clone, Debug, Reflect, Default)]
-struct MobAttrs {
-    based: bool,
-    basic: bool,
-    mog_risk: bool,
-    sus: bool,
-    aura_resist: Resist,
-    physical_resist: Resist,
-    psychic_resist: Resist,
-    boredom_resist: Resist,
+pub(crate) struct MobAttrs {
+    pub based: bool,
+    pub basic: bool,
+    pub mog_risk: bool,
+    pub sus: bool,
+    pub aura_resist: Resist,
+    pub physical_resist: Resist,
+    pub psychic_resist: Resist,
+    pub boredom_resist: Resist,
 }
 
 #[derive(Default, Clone, Copy, Debug, Reflect)]
-enum Resist {
+pub(crate) enum Resist {
     Weak,
     #[default]
     Normal,
@@ -698,10 +728,10 @@ enum Resist {
 // NPC-specific fields.
 #[derive(Component, Clone, Debug, Reflect)]
 pub(crate) struct Mob {
-    melee_damage: i32,
-    ranged: bool,
-    attrs: MobAttrs,
-    target: Option<IVec2>,
+    pub melee_damage: i32,
+    pub ranged: bool,
+    pub attrs: MobAttrs,
+    pub target: Option<IVec2>,
 }
 
 impl Mob {
@@ -771,28 +801,58 @@ fn handle_subscriptions(turn_counter: Res<TurnCounter>, mut player: Single<&mut 
     }
 }
 
+#[derive(SystemParam)]
+struct PlayerMoveParams<'w, 's> {
+    commands: Commands<'w, 's>,
+    msg_stairs_clicked: MessageWriter<'w, StairsClicked>,
+    msg_eat: MessageWriter<'w, EatEvent>,
+    walk_blocked_map: Res<'w, map::WalkBlockedMap>,
+    pos_to_creature: Res<'w, PosToCreature>,
+    turn_counter: Res<'w, TurnCounter>,
+    damage: ResMut<'w, PendingDamage>,
+    moved: ResMut<'w, PlayerMoved>,
+    screen_shake: ResMut<'w, camera::ScreenShake>,
+    pos_to_interactable: Res<'w, PosToInteractable>,
+    assets: Res<'w, assets::WorldAssets>,
+    damage_animation: MessageWriter<'w, DamageAnimationMessage>,
+}
+
 fn handle_player_move(
-    mut commands: Commands,
-    player: Single<(
-        Entity,
-        &mut MapPos,
-        &PlayerIntent,
-        &mut Player,
-        &mut Creature,
-    )>,
-    mut mobs: Query<&mut MapPos, (With<Creature>, Without<Player>)>,
+    params: PlayerMoveParams,
+    player: Single<
+        (
+            Entity,
+            &mut MapPos,
+            &PlayerIntent,
+            &mut Player,
+            &mut Creature,
+        ),
+        With<Player>,
+    >,
+    mut mobs: Query<&mut MapPos, (With<Creature>, Without<Player>, Without<Corpse>)>,
     stairs: Query<&Stairs, (Without<Player>, Without<Creature>)>,
     interactables: Query<&Interactable>,
-    mut msg_stairs_clicked: MessageWriter<StairsClicked>,
-    mut msg_eat: MessageWriter<EatEvent>,
-    walk_blocked_map: Res<map::WalkBlockedMap>,
-    pos_to_creature: Res<PosToCreature>,
-    turn_counter: Res<TurnCounter>,
-    mut damage: ResMut<PendingDamage>,
-    mut moved: ResMut<PlayerMoved>,
-    mut screen_shake: ResMut<camera::ScreenShake>,
-    pos_to_interactable: Res<PosToInteractable>,
+    q_corpses: Query<
+        (Entity, &MapPos, &Corpse),
+        (With<Corpse>, Without<Player>, Without<Creature>),
+    >,
+    world: Single<Entity, With<GameWorld>>,
 ) {
+    let PlayerMoveParams {
+        mut commands,
+        mut msg_stairs_clicked,
+        mut msg_eat,
+        walk_blocked_map,
+        pos_to_creature,
+        turn_counter,
+        mut damage,
+        mut moved,
+        mut screen_shake,
+        pos_to_interactable,
+        assets,
+        mut damage_animation,
+    } = params;
+    let world_entity = world.into_inner();
     let (player_entity, mut pos, intent, mut player_stats, mut creature) = player.into_inner();
     commands.entity(player_entity).remove::<PlayerIntent>();
 
@@ -969,6 +1029,45 @@ fn handle_player_move(
                             timer: Timer::new(Duration::from_millis(150), TimerMode::Once),
                             base_translation: old_pos.to_vec3(PLAYER_Z),
                         });
+                }
+            }
+            Ability::Cook => {
+                if player_stats.brainrot < 10 {
+                    if let Some((corpse_entity, corpse_pos, corpse)) =
+                        q_corpses.iter().find(|(_, corpse_pos, corpse)| {
+                            corpse_pos.0 == pos.0 && corpse.nutrition > 0
+                        })
+                    {
+                        let (meal_name, meal_stats) = corpse.kind.get_cooked_meal();
+
+                        let transform = Transform::from_translation(corpse_pos.to_vec3(CORPSE_Z));
+                        let sprite = assets.get_ascii_sprite('%', Color::srgb(0.5, 0.25, 0.0));
+                        let meal_id = commands
+                            .spawn((
+                                Name::new(meal_name),
+                                Corpse {
+                                    nutrition: 0,
+                                    name: format!("Cooked {}", corpse.name),
+                                    kind: corpse.kind,
+                                },
+                                meal_stats,
+                                Interactable {
+                                    action: "Eat".to_string(),
+                                    description: Some(format!("A freshly cooked {}!", meal_name)),
+                                    kind: InteractionType::Eat,
+                                },
+                                sprite,
+                                *corpse_pos,
+                                transform,
+                                GlobalTransform::IDENTITY,
+                                InheritedVisibility::VISIBLE,
+                            ))
+                            .id();
+                        commands.entity(world_entity).add_child(meal_id);
+                        damage_animation.write(DamageAnimationMessage { entity: meal_id });
+
+                        commands.entity(corpse_entity).despawn();
+                    }
                 }
             }
         },
@@ -1425,10 +1524,25 @@ fn prune_dead(
 
             chat::handle_payout(player, &streaming_state, &mut chat);
 
-            if let Some(DropsCorpse(corpse_sprite)) = corpse {
+            if let Some(DropsCorpse {
+                sprite,
+                nutrition,
+                name,
+                kind,
+            }) = corpse
+            {
                 let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
                 let corpse_id = commands
-                    .spawn((Corpse, corpse_sprite.clone(), *map_pos, transform))
+                    .spawn((
+                        Corpse {
+                            nutrition: *nutrition,
+                            name: name.clone(),
+                            kind: *kind,
+                        },
+                        sprite.clone(),
+                        *map_pos,
+                        transform,
+                    ))
                     .id();
                 commands.entity(world_entity).add_child(corpse_id);
                 damage_animation.write(DamageAnimationMessage { entity: corpse_id });
