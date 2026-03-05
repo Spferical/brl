@@ -144,6 +144,7 @@ pub(super) fn plugin(app: &mut App) {
                 // environment
                 map::update_pos_to_creature,
                 process_spawners,
+                spawn_klarna_kop,
                 map::update_pos_to_creature,
                 // bullets
                 (check_bullet_collision, move_bullets, check_bullet_collision).chain(),
@@ -989,6 +990,42 @@ fn process_spawners(
             let transform = Transform::from_translation(pos.to_vec3(TILE_Z));
             let new_mob = commands.spawn((spawn.clone(), *pos, transform)).id();
             commands.entity(world_entity).add_child(new_mob);
+        }
+    }
+}
+
+fn spawn_klarna_kop(
+    turn_counter: Res<TurnCounter>,
+    player: Single<(&Player, &MapPos)>,
+    walk_blocked_map: Res<map::WalkBlockedMap>,
+    pos_to_creature: Res<map::PosToCreature>,
+    mut commands: Commands,
+    world: Single<Entity, With<GameWorld>>,
+    assets: Res<assets::WorldAssets>,
+) {
+    if turn_counter.0 > 0 && turn_counter.0 % 10 == 0 && player.0.money < -5 {
+        let ppos = player.1.0;
+        let mut valid_spots = Vec::new();
+        for dx in -5..=5 {
+            for dy in -5..=5 {
+                if dx == 0 && dy == 0 {
+                    continue;
+                }
+                let pos = ppos + bevy::math::IVec2::new(dx, dy);
+                if !walk_blocked_map.0.contains(&pos) && !pos_to_creature.0.contains_key(&pos) {
+                    valid_spots.push(pos);
+                }
+            }
+        }
+        if !valid_spots.is_empty() {
+            let mut rng = rand::rng();
+            if let Some(pos) = valid_spots.choose(&mut rng) {
+                let map_pos = MapPos(*pos);
+                let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
+                let bundle = mapgen::MobKind::KlarnaKop.get_bundle(&assets);
+                let new_mob = commands.spawn((bundle, map_pos, transform)).id();
+                commands.entity(world.into_inner()).add_child(new_mob);
+            }
         }
     }
 }

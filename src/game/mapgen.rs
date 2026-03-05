@@ -18,13 +18,14 @@ enum TileKind {
 }
 
 #[derive(Clone, Copy)]
-enum MobKind {
+pub(crate) enum MobKind {
     GiantFrog,
     GymBro,
     Influencer,
     Normie,
     Amogus,
     Capybara,
+    KlarnaKop,
 }
 
 const MOBS: &[MobKind] = &[
@@ -37,7 +38,7 @@ const MOBS: &[MobKind] = &[
 ];
 
 impl MobKind {
-    fn get_bundle(&self, assets: &WorldAssets) -> MobBundle {
+    pub(crate) fn get_bundle(&self, assets: &WorldAssets) -> MobBundle {
         match self {
             MobKind::Capybara => MobBundle {
                 name: Name::new("Capybara"),
@@ -156,6 +157,25 @@ impl MobKind {
                     },
                 },
                 sprite: assets.get_ascii_sprite('a', Color::srgb(1.0, 0.1, 0.1)),
+                corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
+            },
+            MobKind::KlarnaKop => MobBundle {
+                name: Name::new("Klarna Kop"),
+                creature: Creature {
+                    hp: 3,
+                    max_hp: 3,
+                    faction: -1,
+                },
+                mob: Mob {
+                    melee_damage: 1,
+                    target: None,
+                    ranged: false,
+                    attrs: MobAttrs {
+                        aura_resist: Resist::Weak,
+                        ..Default::default()
+                    },
+                },
+                sprite: assets.get_ascii_sprite('k', Color::srgb(0.2, 0.2, 0.8)),
                 corpse: DropsCorpse(assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2))),
             },
         }

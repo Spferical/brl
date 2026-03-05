@@ -104,6 +104,17 @@ const FOOD_MESSAGES: &[&str] = &[
     "tastyyyy?",
 ];
 
+const BROKE_MESSAGES: &[&str] = &[
+    "u broke",
+    "does bankruptcy stack?",
+    "the Klarna Kop is coming",
+    "broke boi",
+    "RIP your credit score",
+    "L credit limit",
+    "can't afford a burrito?",
+    "bro is in the negative right now",
+];
+
 #[derive(Resource)]
 pub struct ChatHistory {
     pub messages: Vec<ChatMessage>,
@@ -305,7 +316,7 @@ pub fn update_chat(
     mut chat: ResMut<ChatHistory>,
     streaming_state: Res<StreamingState>,
     mut damage_events: MessageReader<DamageAnimationMessage>,
-    player_query: Single<Entity, With<Player>>,
+    player_query: Single<(&Player, Entity)>,
 ) {
     if !streaming_state.is_streaming || streaming_state.viewers == 0 {
         chat.messages.clear();
@@ -313,7 +324,7 @@ pub fn update_chat(
         return;
     }
 
-    let player_entity = *player_query;
+    let (player, player_entity) = *player_query;
 
     for msg in &mut chat.messages {
         msg.timer.tick(time.delta());
@@ -343,7 +354,12 @@ pub fn update_chat(
         // 1% chance per viewer, capped at 95%
         let spawn_chance = (streaming_state.viewers as f32 * 0.01).min(0.95);
         if rng.random_bool(spawn_chance as f64) {
-            queue_message(&mut chat, &mut rng, GENERIC_MESSAGES);
+            let pool = if player.money < 0 && rng.random_bool(0.3) {
+                BROKE_MESSAGES
+            } else {
+                GENERIC_MESSAGES
+            };
+            queue_message(&mut chat, &mut rng, pool);
         }
     }
 
