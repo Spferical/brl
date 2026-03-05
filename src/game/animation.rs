@@ -1,10 +1,47 @@
 use std::time::Duration;
 
 use bevy::prelude::*;
+use bevy_egui::egui::{self, Align, FontSelection, RichText};
 
-use crate::game::{DAMAGE_Z, assets::WorldAssets};
+use crate::game::{DAMAGE_Z, apply_brainrot_ui, assets::WorldAssets};
 
 const MAX_TICK: Duration = Duration::from_nanos(1_000_000_000 / 30);
+
+pub fn jumping_text(
+    ui: &mut egui::Ui,
+    text: &str,
+    brainrot: i32,
+    time: f32,
+    base_size: f32,
+    color: Option<egui::Color32>,
+) {
+    ui.spacing_mut().item_spacing.x = 0.0;
+    for (i, c) in text.chars().enumerate() {
+        let phase = i as f32 * 0.5;
+        let t = time * 10.0 - phase;
+        let jump = (t.sin() * 5.0).max(0.0);
+
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing.y = 0.0;
+            ui.add_space(5.0 - jump);
+            let mut rt = RichText::new(c.to_string()).size(base_size);
+            if let Some(color) = color {
+                rt = rt.color(color);
+            }
+            ui.add(
+                egui::Label::new(apply_brainrot_ui(
+                    rt,
+                    brainrot,
+                    ui.style(),
+                    FontSelection::Default,
+                    Align::LEFT,
+                ))
+                .selectable(false),
+            );
+            ui.add_space(jump);
+        });
+    }
+}
 
 #[derive(Component, Debug)]
 pub struct MoveAnimation {

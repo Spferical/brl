@@ -1,6 +1,7 @@
 use bevy::prelude::*;
 use bevy_egui::egui::{self, Color32, RichText};
 
+use crate::game::animation;
 use crate::game::apply_brainrot_ui;
 use crate::game::assets::WorldAssets;
 use crate::game::chat::StreamingState;
@@ -594,6 +595,7 @@ impl DungeonDash {
                     Color32::from_rgba_unmultiplied(150, 150, 150, (alpha as f32 * buy_alpha) as u8)
                 };
 
+                let mut clicked_buy = false;
                 let button = ui.add_enabled(
                     can_pay,
                     egui::Button::new(
@@ -606,6 +608,71 @@ impl DungeonDash {
                 );
 
                 if button.clicked() {
+                    clicked_buy = true;
+                }
+
+                if !can_pay {
+                    ui.add_space(20.0 * scale);
+                    let button_color = Color32::from_rgba_unmultiplied(
+                        220,
+                        220,
+                        220,
+                        (alpha as f32 * buy_alpha) as u8,
+                    );
+                    let klarna_button = ui.add(
+                        egui::Button::new(
+                            RichText::new("  BUY with Klarna  ")
+                                .size(58.0 * scale)
+                                .color(Color32::TRANSPARENT),
+                        )
+                        .fill(button_color)
+                        .stroke(egui::Stroke::new(2.0, Color32::BLACK)),
+                    );
+
+                    let rect = klarna_button.rect;
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
+                        let text = "BUY with Klarna";
+                        let mut total_width = 0.0;
+                        for c in text.chars() {
+                            let rt = RichText::new(c.to_string()).size(52.0 * scale);
+                            let widget_text = crate::game::apply_brainrot_ui(
+                                rt,
+                                player.brainrot,
+                                ui.style(),
+                                egui::FontSelection::Default,
+                                egui::Align::LEFT,
+                            );
+                            let galley = widget_text.into_galley(
+                                ui,
+                                Some(egui::TextWrapMode::Extend),
+                                f32::INFINITY,
+                                egui::FontSelection::Default,
+                            );
+                            total_width += galley.size().x;
+                        }
+
+                        let available_width = ui.available_width();
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            if available_width > total_width {
+                                ui.add_space((available_width - total_width) / 2.0);
+                            }
+                            animation::jumping_text(
+                                ui,
+                                text,
+                                player.brainrot,
+                                ui.input(|i| i.time) as f32,
+                                52.0 * scale,
+                                Some(Color32::BLACK),
+                            );
+                        });
+                    });
+
+                    if klarna_button.clicked() {
+                        clicked_buy = true;
+                    }
+                }
+
+                if clicked_buy {
                     player.money -= total;
 
                     let mut target_pos = player_pos.0;

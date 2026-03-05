@@ -1944,25 +1944,7 @@ fn stat_label(ui: &mut egui::Ui, name: &str, brainrot: i32, is_bad: bool, time: 
     }
 
     ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        for (i, c) in name.chars().enumerate() {
-            let phase = i as f32 * 0.5;
-            let t = time * 10.0 - phase;
-            let jump = (t.sin() * 5.0).max(0.0);
-
-            ui.vertical(|ui| {
-                ui.spacing_mut().item_spacing.y = 0.0;
-                ui.add_space(5.0 - jump);
-                ui.label(apply_brainrot_ui(
-                    c.to_string(),
-                    brainrot,
-                    ui.style(),
-                    FontSelection::Default,
-                    Align::LEFT,
-                ));
-                ui.add_space(jump);
-            });
-        }
+        animation::jumping_text(ui, name, brainrot, time, 14.0, None);
     });
 }
 
