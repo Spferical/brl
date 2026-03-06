@@ -1201,7 +1201,7 @@ pub(crate) fn spawn_level(
         frequency,
     );
 
-    let mut level_entity_cmds = commands.spawn((
+    let level_entity_cmds = commands.spawn((
         Name::new(name),
         Transform::IDENTITY,
         GlobalTransform::IDENTITY,
@@ -1319,7 +1319,7 @@ pub(crate) fn spawn_level(
 
     if matches!(draft.title, LevelTitle::Island) {
         commands.entity(level_entity).with_children(|parent| {
-            let mut spawner = parent.spawn(MinSpawnZone {
+            parent.spawn(MinSpawnZone {
                 rect: draft.get_containing_rect() + offset,
                 min_units: 30,
                 distribution: FORTNITE_DIST,
