@@ -1180,11 +1180,11 @@ pub(crate) fn gen_map(
     let rng = &mut rand::rng();
     map_info.levels.clear();
 
+    // Generate drafts for each level.
     let level_1_draft = gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
         .with_walls()
         .sprinkle_mobs(rng, GENERIC_DIST, 10);
     let player_pos = MapPos(IVec2::from(level_1_draft.entrances[0]));
-
     let mut level_drafts_per_depth = vec![
         vec![level_1_draft],
         vec![
@@ -1228,6 +1228,7 @@ pub(crate) fn gen_map(
     ];
 
     let mut stair_locs = vec![];
+    // Make sure each level has enough stair locations.
     for depth in 0..level_drafts_per_depth.len() {
         let num_higher_levels = if depth > 0 {
             level_drafts_per_depth[depth - 1].len()
@@ -1242,6 +1243,7 @@ pub(crate) fn gen_map(
             level.add_random_stairs(num_higher_levels, num_lower_levels, rng);
         }
     }
+    // Figure out locations of up/down stair pairs.
     for depth in 0..level_drafts_per_depth.len() - 1 {
         for (i, level) in level_drafts_per_depth[depth].iter().enumerate() {
             let upper_offset = rogue_algebra::Offset::new(i as i32 * 200, depth as i32 * 200);
@@ -1255,6 +1257,7 @@ pub(crate) fn gen_map(
             }
         }
     }
+    // Calculate offsets and entity names for levels. Also, update MapInfo metadata.
     let mut levels = vec![];
     for (depth, level_drafts) in level_drafts_per_depth.into_iter().enumerate() {
         for (i, level) in level_drafts.into_iter().enumerate() {
@@ -1271,14 +1274,15 @@ pub(crate) fn gen_map(
         }
     }
 
+    // Spawn everything.
     for (offset, name, level) in levels {
         spawn_level(name, rng, world, commands, &assets, &level, offset);
     }
-
     for (p1, p2) in stair_locs {
         spawn_stairs(world, commands, &assets, p1, p2);
     }
 
+    // Spawn the player.
     let player_sprite = assets.get_ascii_sprite('@', Color::WHITE);
     let player = (
         Player {
@@ -1313,7 +1317,6 @@ pub(crate) fn gen_map(
         GlobalTransform::IDENTITY,
         InheritedVisibility::VISIBLE,
     );
-
     let player = commands.spawn(player).id();
     commands.entity(world).add_child(player);
 }
