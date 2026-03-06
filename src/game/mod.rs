@@ -92,11 +92,7 @@ pub(super) fn plugin(app: &mut App) {
         (
             lighting::on_add_occluder,
             lighting::on_add_player,
-            map::update_walk_blocked_map,
-            map::update_player_visibility,
-            map::apply_hard_fov_to_tiles.run_if(resource_changed::<map::PlayerVisibilityMap>),
             input::handle_input.run_if(is_player_alive.and(phone::is_phone_closed)),
-            handle_eat,
             targeting::update_valid_targets,
             targeting::update_valid_target_indicators
                 .run_if(resource_changed::<targeting::ValidTargets>),
@@ -131,8 +127,10 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Turn,
         (
+            map::update_walk_blocked_map,
             map::update_pos_to_interactable,
             handle_player_move,
+            handle_eat,
             (
                 (
                     increment_turn_counter,
@@ -162,13 +160,18 @@ pub(super) fn plugin(app: &mut App) {
                 prune_dead,
                 map::update_pos_to_creature,
                 // end-of-turn bookkeeping
-                update_nearby_mobs,
                 redo_faction_map,
-                map::update_pos_to_interactable,
                 set_player_corpse.run_if(not(is_player_alive)),
             )
                 .chain()
                 .run_if(player_moved),
+            (
+                map::update_player_visibility,
+                map::apply_hard_fov_to_tiles,
+                update_nearby_mobs,
+                map::update_pos_to_interactable,
+            )
+                .chain(),
         )
             .chain(),
     );
@@ -851,7 +854,7 @@ fn handle_player_move(
         (
             Entity,
             &mut MapPos,
-            &PlayerIntent,
+            Option<&PlayerIntent>,
             &mut Player,
             &mut Creature,
         ),
@@ -881,7 +884,12 @@ fn handle_player_move(
         mut floating_text,
     } = params;
     let world_entity = world.into_inner();
-    let (player_entity, mut pos, intent, mut player_stats, mut creature) = player.into_inner();
+    let (player_entity, mut pos, maybe_intent, mut player_stats, mut creature) =
+        player.into_inner();
+
+    let Some(intent) = maybe_intent else {
+        return;
+    };
     commands.entity(player_entity).remove::<PlayerIntent>();
 
     let p = ((player_stats.brainrot as f32 - 60.0) / 30.0).clamp(0.0, 1.0);
@@ -2253,8 +2261,9 @@ pub fn enter(
     let world = commands.spawn(world).id();
     examine::init_examine_highlight(world, &mut commands, &assets);
     lighting::enable_lighting(&mut commands, *q_camera);
-    mapgen::gen_map(world, commands, assets);
+    mapgen::gen_map(world, &mut commands, assets);
     *phone = PhoneState::default();
+    commands.run_schedule(Turn);
 }
 
 pub fn exit(

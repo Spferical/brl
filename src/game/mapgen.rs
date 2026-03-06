@@ -979,7 +979,7 @@ pub(crate) fn draft_level_mapgen_drunk(rng: &mut impl Rng) -> LevelDraft {
     )
 }
 
-pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAssets>) {
+pub(crate) fn gen_map(world: Entity, commands: &mut Commands, assets: Res<WorldAssets>) {
     let rng = &mut rand::rng();
 
     let level_1_draft = gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
@@ -1069,11 +1069,11 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
     }
 
     for (offset, name, level) in levels {
-        spawn_level(name, rng, world, &mut commands, &assets, &level, offset);
+        spawn_level(name, rng, world, commands, &assets, &level, offset);
     }
 
     for (p1, p2) in stair_locs {
-        spawn_stairs(world, &mut commands, &assets, p1, p2);
+        spawn_stairs(world, commands, &assets, p1, p2);
     }
 
     let player_sprite = assets.get_ascii_sprite('@', Color::WHITE);
