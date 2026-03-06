@@ -1671,6 +1671,64 @@ fn update_nearby_mobs(
     }
 }
 
+fn draw_meter(ui: &mut egui::Ui, ratio: f32, text: String, color: egui::Color32, brainrot: i32) {
+    let bar_size = egui::vec2(180.0, 20.0);
+    let (rect, _response) = ui.allocate_exact_size(bar_size, egui::Sense::hover());
+    // Background
+    ui.painter().rect_filled(
+        rect,
+        3.0,
+        egui::Color32::from_rgba_premultiplied(50, 50, 50, 180),
+    );
+
+    // Add fill (for "filled" part of stat)
+    if ratio > 0.0 {
+        let fill_rect = egui::Rect::from_min_max(
+            rect.min,
+            egui::pos2(rect.min.x + rect.width() * ratio, rect.max.y),
+        );
+
+        ui.painter().rect_filled(fill_rect, 3.0, color);
+    }
+
+    // White border around the bar
+    ui.painter().rect_stroke(
+        rect,
+        3.0,
+        egui::Stroke::new(1.0, egui::Color32::GRAY),
+        egui::StrokeKind::Middle,
+    );
+
+    // Overlay text in white
+    let text_job = apply_brainrot_ui(
+        text,
+        brainrot,
+        ui.style(),
+        egui::FontSelection::FontId(egui::FontId::proportional(14.0)),
+        egui::Align::Center,
+    )
+    .into_layout_job(
+        ui.style(),
+        egui::FontSelection::FontId(egui::FontId::proportional(14.0)),
+        egui::Align::Center,
+    );
+
+    // We need to modify text color in the layout job because apply_brainrot_ui uses default
+    let mut text_job = (*text_job).clone();
+    for section in &mut text_job.sections {
+        section.format.color = egui::Color32::WHITE;
+    }
+
+    let galley = ui.painter().layout_job(text_job);
+    ui.painter().galley(
+        rect.center() - galley.size() / 2.0,
+        galley,
+        egui::Color32::WHITE,
+    );
+
+    ui.add_space(10.0);
+}
+
 fn sidebar(
     mut contexts: EguiContexts,
     player: Single<(&Player, &MapPos)>,
@@ -2083,84 +2141,28 @@ fn left_sidebar(
                 } else {
                     ratio >= 0.75
                 };
+                let color = if !invert_colors {
+                    if ratio > 0.5 {
+                        egui::Color32::from_rgb(0, 150, 0)
+                    } else if ratio > 0.25 {
+                        egui::Color32::from_rgb(180, 150, 0)
+                    } else {
+                        egui::Color32::from_rgb(150, 0, 0)
+                    }
+                } else {
+                    // High is bad
+                    if ratio < 0.5 {
+                        egui::Color32::from_rgb(0, 150, 0)
+                    } else if ratio < 0.75 {
+                        egui::Color32::from_rgb(180, 150, 0)
+                    } else {
+                        egui::Color32::from_rgb(150, 0, 0)
+                    }
+                };
 
                 stat_label(ui, name, player_stats.brainrot, is_bad, time.elapsed_secs());
-                let bar_size = egui::vec2(180.0, 20.0);
-
-                let (rect, _response) = ui.allocate_exact_size(bar_size, egui::Sense::hover());
-
-                // Background
-                ui.painter().rect_filled(
-                    rect,
-                    3.0,
-                    egui::Color32::from_rgba_premultiplied(50, 50, 50, 180),
-                );
-
-                // Add fill (for "filled" part of stat)
-                if ratio > 0.0 {
-                    let fill_rect = egui::Rect::from_min_max(
-                        rect.min,
-                        egui::pos2(rect.min.x + rect.width() * ratio, rect.max.y),
-                    );
-
-                    let color = if !invert_colors {
-                        if ratio > 0.5 {
-                            egui::Color32::from_rgb(0, 150, 0)
-                        } else if ratio > 0.25 {
-                            egui::Color32::from_rgb(180, 150, 0)
-                        } else {
-                            egui::Color32::from_rgb(150, 0, 0)
-                        }
-                    } else {
-                        // High is bad
-                        if ratio < 0.5 {
-                            egui::Color32::from_rgb(0, 150, 0)
-                        } else if ratio < 0.75 {
-                            egui::Color32::from_rgb(180, 150, 0)
-                        } else {
-                            egui::Color32::from_rgb(150, 0, 0)
-                        }
-                    };
-                    ui.painter().rect_filled(fill_rect, 3.0, color);
-                }
-
-                // White border around the bar
-                ui.painter().rect_stroke(
-                    rect,
-                    3.0,
-                    egui::Stroke::new(1.0, egui::Color32::GRAY),
-                    egui::StrokeKind::Middle,
-                );
-
-                // Overlay text in white
-                let text = format!("{}/{}", value, max);
-                let text_job = apply_brainrot_ui(
-                    text,
-                    player_stats.brainrot,
-                    ui.style(),
-                    egui::FontSelection::FontId(egui::FontId::proportional(14.0)),
-                    egui::Align::Center,
-                )
-                .into_layout_job(
-                    ui.style(),
-                    egui::FontSelection::FontId(egui::FontId::proportional(14.0)),
-                    egui::Align::Center,
-                );
-
-                // We need to modify text color in the layout job because apply_brainrot_ui uses default
-                let mut text_job = (*text_job).clone();
-                for section in &mut text_job.sections {
-                    section.format.color = egui::Color32::WHITE;
-                }
-
-                let galley = ui.painter().layout_job(text_job);
-                ui.painter().galley(
-                    rect.center() - galley.size() / 2.0,
-                    galley,
-                    egui::Color32::WHITE,
-                );
-
-                ui.add_space(10.0);
+                let meter_text = format!("{}/{}", value, max);
+                draw_meter(ui, ratio, meter_text, color, player_stats.brainrot);
             }
 
             ui.label(apply_brainrot_ui(
