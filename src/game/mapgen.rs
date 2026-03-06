@@ -366,7 +366,7 @@ impl MobKind {
                 },
             },
             MobKind::Fortnite(faction) => MobBundle {
-                name: Name::new("????"),
+                name: Name::new("Battler"),
                 creature: Creature {
                     hp: 5,
                     max_hp: 5,
@@ -380,11 +380,11 @@ impl MobKind {
                         ..Default::default()
                     },
                 },
-                sprite: assets.get_ascii_sprite(' ', Color::NONE),
+                sprite: assets.get_ascii_sprite('@', Color::srgb(0.8, 0.8, 1.0)),
                 corpse: DropsCorpse {
                     sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
-                    nutrition: 1,
-                    name: "Brainrot".to_string(),
+                    nutrition: 4,
+                    name: "Battler".to_string(),
                     kind: *self,
                 },
             },
