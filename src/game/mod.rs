@@ -194,6 +194,7 @@ pub(super) fn plugin(app: &mut App) {
                 map::apply_hard_fov_to_tiles,
                 update_nearby_mobs,
                 map::update_pos_to_interactable,
+                update_frozen,
             )
                 .chain(),
         )
@@ -2995,9 +2996,31 @@ fn process_spawn_zones(
                     MapPos(IVec2::from(*p)),
                     mob_kind,
                     &assets,
-                    false,
                 );
             }
+        }
+    }
+}
+
+fn update_frozen(
+    mut commands: Commands,
+    player_pos: Single<&MapPos, With<Player>>,
+    map_info: Res<MapInfo>,
+    q_map_pos: Query<(Entity, &MapPos, Option<&Frozen>), Without<Player>>,
+) {
+    let cur_level = map_info.get_level(**player_pos);
+    for (entity, pos, frozen) in q_map_pos {
+        let should_be_frozen = cur_level
+            .map(|l| !l.rect.contains(pos.0.into()))
+            .unwrap_or(false);
+        match (frozen.is_some(), should_be_frozen) {
+            (false, true) => {
+                commands.entity(entity).insert(Frozen);
+            }
+            (true, false) => {
+                commands.entity(entity).remove::<Frozen>();
+            }
+            _ => {}
         }
     }
 }
