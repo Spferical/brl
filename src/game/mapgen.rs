@@ -1095,6 +1095,7 @@ pub(crate) fn gen_map(world: Entity, commands: &mut Commands, assets: Res<WorldA
             pending_upgrades: 1,
             upgrade_options: vec![],
             subscriptions: vec![],
+            food_cooldowns: HashMap::default(),
         },
         Creature {
             hp: 10,

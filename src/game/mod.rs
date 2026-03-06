@@ -226,8 +226,9 @@ pub(crate) fn draw_interactable_popup(
 
             let (title, description) = if let Some(food) = food {
                 let food_item = delivery::FOODS[food.food_idx];
+                let verb = if food_item.rizz > 0 { "Equip" } else { "Eat" };
                 (
-                    format!("Eat {}? (e)", food_item.name),
+                    format!("{} {}? (e)", verb, food_item.name),
                     Some(food_item.effects.to_string()),
                 )
             } else {
@@ -465,6 +466,7 @@ pub struct Player {
     pub pending_upgrades: usize,
     pub upgrade_options: Vec<usize>,
     pub subscriptions: Vec<Subscription>,
+    pub food_cooldowns: HashMap<usize, u32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect)]
@@ -609,6 +611,7 @@ pub(crate) fn handle_eat(
                 let food_item = delivery::FOODS[food.food_idx];
                 player.hunger = (player.hunger + food_item.hunger).clamp(0, 100);
                 player.strength += food_item.strength;
+                player.rizz += food_item.rizz;
                 creature.hp = (creature.hp + food_item.hp).clamp(0, creature.max_hp);
             } else if let Some(cooked) = cooked {
                 player.hunger = (player.hunger - cooked.hunger).clamp(0, 100);
@@ -802,6 +805,11 @@ fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut
             *cooldown -= 1;
         }
     }
+    for cooldown in player.food_cooldowns.values_mut() {
+        if *cooldown > 0 {
+            *cooldown -= 1;
+        }
+    }
 
     if turn_counter.0.is_multiple_of(5) {
         player.apply_hunger_damage(&mut creature, 1);
@@ -846,6 +854,8 @@ struct PlayerMoveParams<'w, 's> {
     pos_to_interactable: Res<'w, PosToInteractable>,
     assets: Res<'w, assets::WorldAssets>,
     floating_text: MessageWriter<'w, FloatingTextMessage>,
+    chat: ResMut<'w, crate::game::chat::ChatHistory>,
+    streaming_state: Res<'w, crate::game::chat::StreamingState>,
 }
 
 fn handle_player_move(
@@ -882,6 +892,8 @@ fn handle_player_move(
         pos_to_interactable,
         assets,
         mut floating_text,
+        mut chat,
+        streaming_state,
     } = params;
     let world_entity = world.into_inner();
     let (player_entity, mut pos, maybe_intent, mut player_stats, mut creature) =
@@ -1070,6 +1082,7 @@ fn handle_player_move(
                             timer: Timer::new(Duration::from_millis(150), TimerMode::Once),
                             base_translation: old_pos.to_vec3(PLAYER_Z),
                         });
+                    crate::game::chat::queue_mog_message(&mut chat, &streaming_state);
                 }
             }
             Ability::Cook => {
@@ -1199,7 +1212,7 @@ fn spawn_klarna_kop(
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum DamageType {
     Physical,
     Psychic,

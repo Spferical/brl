@@ -24,16 +24,18 @@ pub struct FoodItem {
     pub hunger: i32,
     pub hp: i32,
     pub strength: i32,
+    pub rizz: i32,
     pub effects: &'static str,
 }
 
-pub const FOODS: [FoodItem; 7] = [
+pub const FOODS: [FoodItem; 11] = [
     FoodItem {
         name: "Burrito",
         price: 8,
         hunger: -60,
         hp: 1,
         strength: 3,
+        rizz: 0,
         effects: "-60 hunger, +1hp, +3 strength",
     },
     FoodItem {
@@ -42,6 +44,7 @@ pub const FOODS: [FoodItem; 7] = [
         hunger: -5,
         hp: 0,
         strength: 15,
+        rizz: 0,
         effects: "-5 hunger, +15 strength",
     },
     FoodItem {
@@ -50,6 +53,7 @@ pub const FOODS: [FoodItem; 7] = [
         hunger: -5,
         hp: 6,
         strength: 0,
+        rizz: 0,
         effects: "-5 hunger, +6hp",
     },
     FoodItem {
@@ -58,6 +62,7 @@ pub const FOODS: [FoodItem; 7] = [
         hunger: -30,
         hp: 0,
         strength: 0,
+        rizz: 0,
         effects: "-30 hunger",
     },
     FoodItem {
@@ -66,6 +71,7 @@ pub const FOODS: [FoodItem; 7] = [
         hunger: -60,
         hp: 0,
         strength: 0,
+        rizz: 0,
         effects: "-60 hunger",
     },
     FoodItem {
@@ -74,6 +80,7 @@ pub const FOODS: [FoodItem; 7] = [
         hunger: -100,
         hp: -1,
         strength: 0,
+        rizz: 0,
         effects: "-100 hunger, -1 hp",
     },
     FoodItem {
@@ -82,7 +89,44 @@ pub const FOODS: [FoodItem; 7] = [
         hunger: -40,
         hp: 0,
         strength: 10,
+        rizz: 0,
         effects: "-40 hunger, +10 strength",
+    },
+    FoodItem {
+        name: "Essentials Hoodie",
+        price: 80,
+        hunger: 0,
+        hp: 0,
+        strength: 0,
+        rizz: 10,
+        effects: "+10 rizz",
+    },
+    FoodItem {
+        name: "Panda Dunks",
+        price: 95,
+        hunger: 0,
+        hp: 0,
+        strength: 0,
+        rizz: 15,
+        effects: "+15 rizz",
+    },
+    FoodItem {
+        name: "AirPods Max",
+        price: 250,
+        hunger: 0,
+        hp: 0,
+        strength: 0,
+        rizz: 25,
+        effects: "+25 rizz",
+    },
+    FoodItem {
+        name: "Stanley Cup",
+        price: 60,
+        hunger: 0,
+        hp: 0,
+        strength: 0,
+        rizz: 5,
+        effects: "+5 rizz",
     },
 ];
 
@@ -130,6 +174,11 @@ pub(crate) fn process_deliveries(
             let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
             let sprite = assets.get_ascii_sprite('%', Color::srgb(0.5, 0.25, 0.0));
             let food = FOODS[delivery.food_idx];
+            let action = if food.rizz > 0 {
+                "Equip".to_string()
+            } else {
+                "Eat".to_string()
+            };
             let drop_id = commands
                 .spawn((
                     Corpse {
@@ -141,7 +190,7 @@ pub(crate) fn process_deliveries(
                         food_idx: delivery.food_idx,
                     },
                     Interactable {
-                        action: "Eat".to_string(),
+                        action,
                         description: None,
                         kind: InteractionType::Eat,
                     },
@@ -159,7 +208,11 @@ pub(crate) fn process_deliveries(
             });
 
             // Chat reaction
-            crate::game::chat::queue_food_delivery_message(&mut chat, &streaming_state);
+            crate::game::chat::queue_food_delivery_message(
+                &mut chat,
+                &streaming_state,
+                delivery.food_idx,
+            );
 
             to_remove.push(i);
         }

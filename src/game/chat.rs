@@ -1,6 +1,6 @@
 use crate::game::animation::DamageAnimationMessage;
 use crate::game::apply_brainrot_ui;
-use crate::game::{Player, TurnCounter};
+use crate::game::{DamageType, Player, TurnCounter};
 use bevy::prelude::*;
 use bevy_egui::EguiContexts;
 use bevy_egui::egui::{self, Color32, RichText};
@@ -102,6 +102,42 @@ const FOOD_MESSAGES: &[&str] = &[
     "private taxi for your burrito lmao",
     "mukbang stream when?",
     "tastyyyy?",
+];
+
+const CLOTHING_MESSAGES: &[&str] = &[
+    "SHEEEESH THE DRIP",
+    "W FIT",
+    "NEW DRIP JUST DROPPED",
+    "INSANE RIZZ",
+    "RIZZLER MOMENT",
+    "HE'S HIM",
+    "SHE'S HER",
+    "THE AURA IS INSANE",
+    "POG FIT",
+    "W PURCHASE",
+];
+
+const MOG_MESSAGES: &[&str] = &[
+    "MOGGED",
+    "SHEEEESH THE JAWLINE",
+    "LIGHTNING BOLT EMOJI",
+    "HE'S MOGGING THEM",
+    "LIL BRO GOT MOGGED",
+    "COULD NEVER BE ME",
+    "AURA UNLIMITED",
+];
+
+const AURA_LOSS_MESSAGES: &[&str] = &[
+    "AURA LOSS",
+    "L RIZZ",
+    "YOU GOT MOGGED",
+    "LOOK AWAY",
+    "ITS OVER",
+    "NEGATIVE AURA",
+    "DEBATING UNFOLLOWING",
+    "CRINGE",
+    "CURSED",
+    "WHERES THE RIZZ??",
 ];
 
 const BROKE_MESSAGES: &[&str] = &[
@@ -304,10 +340,26 @@ pub fn handle_payout(
     }
 }
 
-pub fn queue_food_delivery_message(chat: &mut ChatHistory, streaming_state: &StreamingState) {
+pub fn queue_mog_message(chat: &mut ChatHistory, streaming_state: &StreamingState) {
     if streaming_state.is_streaming && streaming_state.viewers > 0 {
         let mut rng = rand::rng();
-        queue_message(chat, &mut rng, FOOD_MESSAGES);
+        queue_message(chat, &mut rng, MOG_MESSAGES);
+    }
+}
+
+pub fn queue_food_delivery_message(
+    chat: &mut ChatHistory,
+    streaming_state: &StreamingState,
+    food_idx: usize,
+) {
+    if streaming_state.is_streaming && streaming_state.viewers > 0 {
+        let mut rng = rand::rng();
+        let food = crate::game::delivery::FOODS[food_idx];
+        if food.rizz > 0 {
+            queue_message(chat, &mut rng, CLOTHING_MESSAGES);
+        } else {
+            queue_message(chat, &mut rng, FOOD_MESSAGES);
+        }
     }
 }
 
@@ -336,7 +388,11 @@ pub fn update_chat(
     // Event-based messages go to queue
     for event in damage_events.read() {
         if event.entity == player_entity {
-            queue_message(&mut chat, &mut rng, DAMAGE_MESSAGES);
+            if event.ty == DamageType::Aura {
+                queue_message(&mut chat, &mut rng, AURA_LOSS_MESSAGES);
+            } else {
+                queue_message(&mut chat, &mut rng, DAMAGE_MESSAGES);
+            }
         } else {
             queue_message(&mut chat, &mut rng, ATTACK_MESSAGES);
         }

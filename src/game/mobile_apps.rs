@@ -223,7 +223,12 @@ impl DungeonDash {
     ) {
         let item_height = 120.0 * scale;
         let spacing = 16.0 * scale;
-        let total_height = FOODS.len() as f32 * (item_height + spacing);
+        let visible_items = FOODS
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| *player.food_cooldowns.get(i).unwrap_or(&0) == 0)
+            .count();
+        let total_height = visible_items as f32 * (item_height + spacing);
         let available_height = ui.available_height();
         if total_height < available_height {
             ui.add_space((available_height - total_height) / 2.0);
@@ -237,6 +242,9 @@ impl DungeonDash {
                 ui.vertical_centered(|ui| {
                     let width = ui.available_width() * 0.9;
                     for (i, food) in FOODS.iter().enumerate() {
+                        if *player.food_cooldowns.get(&i).unwrap_or(&0) > 0 {
+                            continue;
+                        }
                         let mut food_price = food.price;
                         if has_platinum {
                             food_price = (food_price as f32 * 0.25) as i32;
@@ -674,6 +682,10 @@ impl DungeonDash {
 
                 if clicked_buy {
                     player.money -= total;
+
+                    if food.rizz > 0 {
+                        player.food_cooldowns.insert(food_idx, 100);
+                    }
 
                     let mut target_pos = player_pos.0;
                     let maxdist = 5;
