@@ -16,7 +16,6 @@ ab_glyph = "0.2"
 geo = "0.32.0"
 indexmap = "2.13.0"
 mapgen = "0.6.0"
-noise = "0.9.0"
 rand = "0.9"
 rand_8 = {package = "rand", version = "0.8"}
 rogue-algebra = { version = "0.1.0", path = "rogue-algebra", features=["bevy17"] }
@@ -28,6 +27,7 @@ tracing = { version = "0.1", features = [
     "max_level_debug",
     "release_max_level_warn",
 ] }
+noisy_bevy = "0.13.0"
 
 [target.wasm32-unknown-unknown.dependencies]
 getrandom = { version = "0.3", features = ["wasm_js"] }
@@ -93,10 +93,6 @@ opt-level = 1
 # Enable a large amount of optimization in the dev profile for dependencies.
 [profile.dev.package."*"]
 opt-level = 3
-
-# Remove expensive debug assertions due to <https://github.com/bevyengine/bevy/issues/14291>
-[profile.dev.package.wgpu-types]
-debug-assertions = false
 
 [profile.release]
 # Compile the entire crate as one unit.
