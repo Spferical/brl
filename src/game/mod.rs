@@ -160,7 +160,14 @@ pub(super) fn plugin(app: &mut App) {
                 transform_brainrot_corpses,
                 map::update_pos_to_creature,
                 // bullets
-                (check_bullet_collision, move_bullets, check_bullet_collision).chain(),
+                (
+                    check_bullet_collision,
+                    move_bullets,
+                    check_bullet_collision,
+                    move_bullets,
+                    check_bullet_collision,
+                )
+                    .chain(),
                 // mobs get a turn
                 build_faction_map,
                 process_mob_turn,
