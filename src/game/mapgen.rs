@@ -182,6 +182,7 @@ impl MobKind {
                     hp: 2,
                     max_hp: 2,
                     faction: -1,
+                    killed_by_player: false,
                 },
                 mob: Mob {
                     melee_damage: 1,
@@ -209,6 +210,7 @@ impl MobKind {
                     hp: 2,
                     max_hp: 2,
                     faction: -1,
+                    killed_by_player: false,
                 },
                 mob: Mob {
                     melee_damage: 1,
@@ -236,6 +238,7 @@ impl MobKind {
                     hp: 4,
                     max_hp: 4,
                     faction: -1,
+                    killed_by_player: false,
                 },
                 mob: Mob {
                     melee_damage: 1,
@@ -261,6 +264,7 @@ impl MobKind {
                     hp: 2,
                     max_hp: 2,
                     faction: -1,
+                    killed_by_player: false,
                 },
                 mob: Mob {
                     melee_damage: 1,
@@ -287,6 +291,7 @@ impl MobKind {
                     hp: 2,
                     max_hp: 2,
                     faction: -1,
+                    killed_by_player: false,
                 },
                 mob: Mob {
                     melee_damage: 1,
@@ -312,6 +317,7 @@ impl MobKind {
                     hp: 2,
                     max_hp: 2,
                     faction: 2, // Crew faction
+                    killed_by_player: false,
                 },
                 mob: Mob {
                     melee_damage: 1,
@@ -337,6 +343,7 @@ impl MobKind {
                     hp: 2,
                     max_hp: 2,
                     faction: -1,
+                    killed_by_player: false,
                 },
                 mob: Mob {
                     melee_damage: 4,
@@ -362,6 +369,7 @@ impl MobKind {
                     hp: 3,
                     max_hp: 3,
                     faction: -1,
+                    killed_by_player: false,
                 },
                 mob: Mob {
                     melee_damage: 1,
@@ -388,6 +396,7 @@ impl MobKind {
                     hp: 5,
                     max_hp: 5,
                     faction: -1,
+                    killed_by_player: false,
                 },
                 mob: Mob {
                     melee_damage: 2,
@@ -412,6 +421,7 @@ impl MobKind {
                     hp: 5,
                     max_hp: 5,
                     faction: *faction,
+                    killed_by_player: false,
                 },
                 mob: Mob {
                     melee_damage: 2,
@@ -1483,6 +1493,7 @@ pub(crate) fn gen_map(
             hp: 10,
             max_hp: 10,
             faction: 0,
+            killed_by_player: false,
         },
         Name::new("Player"),
         CameraFollow,

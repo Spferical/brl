@@ -165,6 +165,7 @@ pub(crate) fn process_deliveries(
                 // kill mob
                 damage.0.push(DamageInstance {
                     entity: *mob,
+                    attacker: player_entity,
                     amount: 9999, // enough to kill
                     ty: DamageType::Physical,
                 });

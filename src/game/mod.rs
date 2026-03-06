@@ -851,6 +851,7 @@ struct MobSpawner {
 struct Bullet {
     direction: IVec2,
     damage: i32,
+    attacker: Entity,
 }
 
 /// Common fields between the player and mobs.
@@ -859,6 +860,7 @@ pub(crate) struct Creature {
     pub hp: i32,
     pub max_hp: i32,
     pub faction: i32,
+    pub killed_by_player: bool,
 }
 
 impl Creature {
@@ -1116,6 +1118,7 @@ fn handle_player_move(
             if let Some(entity) = pos_to_creature.0.get(&new_pos.0) {
                 damage.0.push(DamageInstance {
                     entity: *entity,
+                    attacker: Some(player_entity),
                     amount: player_stats.melee_damage(),
                     ty: DamageType::Physical,
                 });
@@ -1212,6 +1215,7 @@ fn handle_player_move(
                 if let Some(mob_entity) = pos_to_creature.0.get(&new_pos) {
                     damage.0.push(DamageInstance {
                         entity: *mob_entity,
+                        attacker: Some(player_entity),
                         amount: 2,
                         ty: DamageType::Physical,
                     });
@@ -1265,6 +1269,7 @@ fn handle_player_move(
                     let amount = rand::rng().random_range(min_damage..=max_damage);
                     damage.0.push(DamageInstance {
                         entity: *mob_entity,
+                        attacker: Some(player_entity),
                         amount,
                         ty: DamageType::Aura,
                     });
@@ -1574,6 +1579,7 @@ pub(crate) enum DamageType {
 
 pub struct DamageInstance {
     entity: Entity,
+    attacker: Option<Entity>,
     amount: i32,
     ty: DamageType,
 }
@@ -1594,6 +1600,7 @@ fn check_bullet_collision(
         if let Some(mob) = pos_to_mob.0.get(&pos.0) {
             damage.0.push(DamageInstance {
                 entity: *mob,
+                attacker: Some(bullet.attacker),
                 amount: bullet.damage,
                 ty: DamageType::Physical,
             });
@@ -1611,8 +1618,16 @@ fn apply_damage(
     mut damage: ResMut<PendingDamage>,
     mut animation: MessageWriter<DamageAnimationMessage>,
     mut creature: Query<(&mut Creature, Option<&mut Player>, Option<&Mob>, &Transform)>,
+    player_q: Query<Entity, With<Player>>,
 ) {
-    for DamageInstance { entity, amount, ty } in damage.0.drain(..) {
+    let player_entity = player_q.single().ok();
+    for DamageInstance {
+        entity,
+        attacker,
+        amount,
+        ty,
+    } in damage.0.drain(..)
+    {
         if let Ok((mut creature, player, mob, transform)) = creature.get_mut(entity) {
             let world_pos = transform.translation;
             let is_player = player.is_some();
@@ -1655,6 +1670,11 @@ fn apply_damage(
                         Resist::Strong => amount / 2,
                     };
                     creature.hp -= final_amount;
+                    if let Some(attacker) = attacker
+                        && Some(attacker) == player_entity
+                    {
+                        creature.killed_by_player = true;
+                    }
                 }
             }
             animation.write(DamageAnimationMessage {
@@ -1895,6 +1915,7 @@ fn process_mob_turn(
             Action::Melee(enemy, new_pos) => {
                 damage.0.push(DamageInstance {
                     entity: enemy,
+                    attacker: Some(entity),
                     amount: mob.melee_damage,
                     ty: mob.get_melee_damage_type(),
                 });
@@ -1926,6 +1947,7 @@ fn process_mob_turn(
                 let bullet = Bullet {
                     direction,
                     damage: 1,
+                    attacker: entity,
                 };
                 let bullet_id = commands
                     .spawn((bullet, bullet_sprite, new_pos, transform))
@@ -1935,6 +1957,7 @@ fn process_mob_turn(
             Action::AttackAndTeleport(enemy, teleport_pos) => {
                 damage.0.push(DamageInstance {
                     entity: enemy,
+                    attacker: Some(entity),
                     amount: mob.melee_damage,
                     ty: mob.get_melee_damage_type(),
                 });
@@ -1966,7 +1989,7 @@ fn prune_dead(
     mut commands: Commands,
     world: Single<Entity, With<GameWorld>>,
     q_creatures: Query<
-        (Entity, &Creature, &MapPos, Option<&DropsCorpse>),
+        (Entity, &Creature, &MapPos, Option<&DropsCorpse>, &Name),
         (Without<Player>, Without<Frozen>),
     >,
     mut player: Single<&mut Player>,
@@ -1975,11 +1998,13 @@ fn prune_dead(
 ) {
     let world_entity = world.into_inner();
     let player = player.as_mut();
-    for (entity, creature, map_pos, corpse) in q_creatures {
+    for (entity, creature, map_pos, corpse, name) in q_creatures {
         if creature.is_dead() {
             commands.entity(entity).despawn();
 
-            chat::handle_payout(player, &streaming_state, &mut chat);
+            if creature.killed_by_player {
+                chat::handle_payout(player, &streaming_state, &mut chat, name);
+            }
 
             if let Some(DropsCorpse {
                 sprite,
@@ -2842,10 +2867,7 @@ fn update_level_info_on_change(
 
         // Handle freezing/unfreezing
         for (entity, map_pos) in all_map_pos.iter() {
-            if cur_map
-                .rect
-                .contains(rogue_algebra::Pos::from(map_pos.0))
-            {
+            if cur_map.rect.contains(rogue_algebra::Pos::from(map_pos.0)) {
                 commands.entity(entity).remove::<Frozen>();
             } else {
                 commands.entity(entity).insert(Frozen);

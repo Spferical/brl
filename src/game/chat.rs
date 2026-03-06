@@ -299,6 +299,7 @@ pub fn handle_payout(
     player: &mut Player,
     streaming_state: &StreamingState,
     chat: &mut ChatHistory,
+    creature_name: &str,
 ) {
     if streaming_state.is_streaming && streaming_state.viewers > 0 {
         let mut rng = rand::rng();
@@ -319,6 +320,10 @@ pub fn handle_payout(
         }
 
         player.money += payout;
+        println!(
+            "DEBUG: Payout of ${} with {} viewers because {} died",
+            payout, streaming_state.viewers, creature_name
+        );
         player.last_gain_amount = payout;
         player.money_gain_timer = 2.0;
 
