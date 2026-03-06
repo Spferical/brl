@@ -3,7 +3,7 @@ use bevy::{
     prelude::*,
 };
 
-use crate::game::{Creature, Interactable};
+use crate::game::{Creature, Interactable, lighting::Occluder};
 
 pub(crate) const TILE_WIDTH: f32 = 24.0;
 pub(crate) const TILE_HEIGHT: f32 = 24.0;
@@ -85,15 +85,25 @@ pub struct PlayerMemoryMap(pub HashSet<IVec2>);
 
 pub(crate) fn update_walk_blocked_map(
     mut map: ResMut<WalkBlockedMap>,
-    mut sight_map: ResMut<SightBlockedMap>,
     q_blocks: Query<&MapPos, With<BlocksMovement>>,
     q_added: Query<(), Added<BlocksMovement>>,
 ) {
     if !q_added.is_empty() {
         map.clear();
-        sight_map.clear();
         for MapPos(pos) in q_blocks.iter() {
             map.insert(*pos);
+        }
+    }
+}
+
+pub(crate) fn update_sight_blocked_map(
+    mut sight_map: ResMut<SightBlockedMap>,
+    q_blocks: Query<&MapPos, With<Occluder>>,
+    q_added: Query<(), Added<BlocksMovement>>,
+) {
+    if !q_added.is_empty() {
+        sight_map.clear();
+        for MapPos(pos) in q_blocks.iter() {
             sight_map.insert(*pos);
         }
     }

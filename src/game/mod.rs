@@ -137,6 +137,7 @@ pub(super) fn plugin(app: &mut App) {
             map::update_walk_blocked_map,
             map::update_pos_to_interactable,
             handle_player_move,
+            map::update_sight_blocked_map,
             handle_eat,
             (
                 (
@@ -1439,7 +1440,7 @@ pub struct PendingDamage(Vec<DamageInstance>);
 fn check_bullet_collision(
     mut commands: Commands,
     pos_to_mob: Res<PosToCreature>,
-    walk_blocked_map: Res<map::WalkBlockedMap>,
+    sight_blocked_map: Res<map::SightBlockedMap>,
     bullets: Query<(Entity, &MapPos, &Bullet)>,
     mut damage: ResMut<PendingDamage>,
     player_q: Query<Entity, With<Player>>,
@@ -1456,7 +1457,7 @@ fn check_bullet_collision(
                 screen_shake.trauma = (screen_shake.trauma + 0.6).min(1.0);
             }
         }
-        if pos_to_mob.0.contains_key(&pos.0) || walk_blocked_map.0.contains(&pos.0) {
+        if pos_to_mob.0.contains_key(&pos.0) || sight_blocked_map.0.contains(&pos.0) {
             commands.entity(entity).despawn();
         }
     }
