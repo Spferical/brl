@@ -1747,6 +1747,7 @@ fn process_mob_turn(
     sight_blocked_map: Res<map::SightBlockedMap>,
     map_info: Res<mapgen::MapInfo>,
     all_creatures: Query<&Creature>,
+    mut floating_text: MessageWriter<FloatingTextMessage>,
 ) {
     let world_entity = world.into_inner();
     let rng = &mut rand::rng();
@@ -1915,10 +1916,17 @@ fn process_mob_turn(
                 if enemy == player_entity {
                     screen_shake.trauma = (screen_shake.trauma + 0.7).min(1.0);
                 }
+                floating_text.write(FloatingTextMessage {
+                    entity: Some(entity),
+                    world_pos: None,
+                    text: "Teleported!".to_string(),
+                    color: Color::srgb(1.0, 0.0, 1.0),
+                });
             }
         }
     }
 }
+
 
 fn prune_dead(
     mut commands: Commands,
