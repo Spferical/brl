@@ -138,6 +138,7 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Turn,
         (
+            update_frozen,
             map::update_walk_blocked_map,
             map::update_pos_to_interactable,
             handle_player_move,
@@ -190,11 +191,11 @@ pub(super) fn plugin(app: &mut App) {
                 .chain()
                 .run_if(player_moved),
             (
+                update_frozen,
                 map::update_player_visibility,
                 map::apply_hard_fov_to_tiles,
                 update_nearby_mobs,
                 map::update_pos_to_interactable,
-                update_frozen,
             )
                 .chain(),
         )
