@@ -11,16 +11,21 @@ use bevy::{
     platform::collections::{HashMap, HashSet},
     prelude::*,
 };
-use rand::{Rng, seq::IndexedRandom};
+use rand::{
+    Rng,
+    seq::{IndexedRandom, SliceRandom},
+};
 use rand_8::SeedableRng;
+use rogue_algebra::Pos;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum TileKind {
     Floor,
     Wall,
+    WorkoutMachine,
 }
 
-#[derive(Clone, Copy, Debug, Reflect, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Reflect, PartialEq, Eq, Hash)]
 pub(crate) enum MobKind {
     GiantFrog,
     GymBro,
@@ -31,13 +36,20 @@ pub(crate) enum MobKind {
     KlarnaKop,
 }
 
-const MOBS: &[MobKind] = &[
-    MobKind::GiantFrog,
-    MobKind::GymBro,
-    MobKind::Influencer,
-    MobKind::Normie,
-    MobKind::Amogus,
-    MobKind::Capybara,
+const GENERIC_DIST: &[(MobKind, usize)] = &[
+    (MobKind::GiantFrog, 1),
+    (MobKind::GymBro, 1),
+    (MobKind::Influencer, 1),
+    (MobKind::Normie, 1),
+    (MobKind::Amogus, 1),
+    (MobKind::Capybara, 1),
+];
+
+const GYM_DIST: &[(MobKind, usize)] = &[
+    (MobKind::GymBro, 10),
+    (MobKind::Normie, 1),
+    (MobKind::Influencer, 1),
+    (MobKind::GiantFrog, 1),
 ];
 
 impl MobKind {
@@ -350,7 +362,12 @@ impl LevelDraft {
         self
     }
 
-    fn sprinkle_mobs(mut self, rng: &mut impl Rng, num_mobs: usize) -> Self {
+    fn sprinkle_mobs(
+        mut self,
+        rng: &mut impl Rng,
+        dist: &[(MobKind, usize)],
+        num_mobs: usize,
+    ) -> Self {
         let floors = self
             .tiles
             .iter()
@@ -359,7 +376,8 @@ impl LevelDraft {
             .copied()
             .collect::<Vec<rogue_algebra::Pos>>();
         for pos in floors.choose_multiple(rng, num_mobs) {
-            self.mobs.insert(*pos, *MOBS.choose(rng).unwrap());
+            self.mobs
+                .insert(*pos, dist.choose_weighted(rng, |m| m.1).unwrap().0);
         }
         self
     }
@@ -417,6 +435,7 @@ fn draft_level_mapgen_rs(
             let c = match tiles.get(&Pos::new(x as i32, y as i32)) {
                 Some(TileKind::Floor) => '.',
                 Some(TileKind::Wall) => '#',
+                Some(TileKind::WorkoutMachine) => '&',
                 None => ' ',
             };
             print!("{c}");
@@ -697,6 +716,79 @@ fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
     }
 }
 
+fn gen_dungeon_fitness(rng: &mut impl Rng) -> LevelDraft {
+    let rect = rogue_algebra::Rect::new(0, 80, 0, 25);
+    let max_width = 20;
+    let min_width = max_width / 2 - 1;
+    let max_height = 10;
+    let min_height = max_height / 2 - 1;
+    let bsp_opts = CarveRoomOpts {
+        max_width,
+        max_height,
+        min_width,
+        min_height,
+    };
+    let tree = gen_bsp_tree(rect, bsp_opts.into(), rng);
+    let room_graph = tree.into_room_graph();
+    let mut rooms = room_graph.iter().collect::<Vec<rogue_algebra::Rect>>();
+    let mut doors = vec![];
+    for room in room_graph.iter() {
+        for room2 in room_graph.get_adj(room).into_iter().flatten().copied() {
+            if room.topleft() < room2.topleft()
+                && let Some(wall) = get_connecting_wall(room, room2)
+            {
+                doors.push(wall.choose(rng));
+            }
+        }
+    }
+    // Add doors for extra loops.
+    for _ in 0..room_graph.len() {
+        loop {
+            let room1 = room_graph.choose(rng).expect("no rooms in df");
+            let room2 = room_graph.choose(rng).expect("no rooms in df");
+            if let Some(wall) = get_connecting_wall(room1, room2) {
+                let door = wall.choose(rng);
+                doors.push(door);
+                break;
+            }
+        }
+    }
+
+    let mut tiles = HashMap::new();
+    for p in rect {
+        tiles.insert(p, TileKind::Wall);
+    }
+    for room in rooms.iter() {
+        for pos in *room {
+            tiles.insert(pos, TileKind::Floor);
+        }
+    }
+    for door in doors {
+        tiles.insert(door, TileKind::Floor);
+    }
+
+    rooms.shuffle(rng);
+
+    let stairs = rooms[0..6]
+        .iter()
+        .map(|room| room.center())
+        .collect::<Vec<_>>();
+    for room in rooms[6..].iter() {
+        let room_tiles = room.into_iter().collect::<Vec<Pos>>();
+        let num_workout_machines = room_tiles.len() / 8;
+        for pos in room_tiles[0..num_workout_machines].iter() {
+            tiles.insert(*pos, TileKind::WorkoutMachine);
+        }
+    }
+
+    LevelDraft {
+        entrances: stairs[0..3].to_vec(),
+        exits: stairs[3..].to_vec(),
+        tiles,
+        mobs: HashMap::new(),
+    }
+}
+
 pub(crate) fn spawn_level(
     name: String,
     rng: &mut impl rand::Rng,
@@ -743,40 +835,33 @@ pub(crate) fn spawn_level(
                     assets.get_ascii_sprite(' ', color)
                 };
                 tile.insert(sprite);
-                tile.with_children(|parent| {
-                    parent.spawn((
-                        Sprite {
-                            image: assets.get_solid_mask(),
-                            color: Color::srgb(0.1, 0.1, 0.1),
-                            custom_size: Some(Vec2::new(
-                                map::TILE_WIDTH + 1.0,
-                                map::TILE_HEIGHT + 1.0,
-                            )),
-                            ..default()
-                        },
-                        Transform::from_translation(Vec3::new(0.0, 0.0, -0.1)),
-                    ));
-                });
             }
             TileKind::Wall => {
                 let sprite = assets.get_ascii_sprite('#', Color::srgb(0.6, 0.6, 0.6));
                 tile.insert((sprite, map::BlocksMovement, Occluder));
-                tile.with_children(|parent| {
-                    parent.spawn((
-                        Sprite {
-                            image: assets.get_solid_mask(),
-                            color: Color::srgb(0.1, 0.1, 0.1),
-                            custom_size: Some(Vec2::new(
-                                map::TILE_WIDTH + 1.0,
-                                map::TILE_HEIGHT + 1.0,
-                            )),
-                            ..default()
-                        },
-                        Transform::from_translation(Vec3::new(0.0, 0.0, -0.1)),
-                    ));
+            }
+            TileKind::WorkoutMachine => {
+                let sprite = assets.get_ascii_sprite('&', Color::srgb(0.2, 0.2, 0.8));
+                tile.insert(sprite);
+                tile.insert(Interactable {
+                    action: "Use".to_string(),
+                    description: None,
+                    kind: InteractionType::Workout,
                 });
             }
         }
+        tile.with_children(|parent| {
+            parent.spawn((
+                Sprite {
+                    image: assets.get_solid_mask(),
+                    color: Color::srgb(0.1, 0.1, 0.1),
+                    custom_size: Some(Vec2::new(map::TILE_WIDTH + 1.0, map::TILE_HEIGHT + 1.0)),
+                    ..default()
+                },
+                Transform::from_translation(Vec3::new(0.0, 0.0, -0.1)),
+            ));
+        });
+
         tiles.push(tile.id());
     }
     commands.entity(level_entity).add_children(&tiles);
@@ -899,50 +984,50 @@ pub(crate) fn gen_map(world: Entity, mut commands: Commands, assets: Res<WorldAs
 
     let level_1_draft = gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
         .with_walls()
-        .sprinkle_mobs(rng, 10);
+        .sprinkle_mobs(rng, GENERIC_DIST, 10);
     let player_pos = MapPos(IVec2::from(level_1_draft.entrances[0]));
 
     let mut level_drafts_per_depth = vec![
         vec![level_1_draft],
         vec![
+            gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+                .with_walls()
+                .sprinkle_mobs(rng, GENERIC_DIST, 20),
+            gen_dungeon_fitness(rng)
+                .with_walls()
+                .sprinkle_mobs(rng, GYM_DIST, 20),
+        ],
+        vec![
+            gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+                .with_walls()
+                .sprinkle_mobs(rng, GENERIC_DIST, 20),
+            gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+                .with_walls()
+                .sprinkle_mobs(rng, GENERIC_DIST, 20),
+        ],
+        vec![
             draft_level_mapgen_drunk(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, 10),
-            gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+                .sprinkle_mobs(rng, GENERIC_DIST, 30),
+            draft_level_mapgen_simple(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, 10),
-        ],
-        vec![
-            gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
-                .with_walls()
-                .sprinkle_mobs(rng, 20),
-            gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
-                .with_walls()
-                .sprinkle_mobs(rng, 20),
+                .sprinkle_mobs(rng, GENERIC_DIST, 30),
         ],
         vec![
             draft_level_mapgen_simple(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, 30),
+                .sprinkle_mobs(rng, GENERIC_DIST, 40),
             draft_level_mapgen_simple(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, 30),
+                .sprinkle_mobs(rng, GENERIC_DIST, 40),
         ],
         vec![
             draft_level_mapgen_simple(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, 40),
+                .sprinkle_mobs(rng, GENERIC_DIST, 50),
             draft_level_mapgen_simple(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, 40),
-        ],
-        vec![
-            draft_level_mapgen_simple(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, 50),
-            draft_level_mapgen_simple(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, 50),
+                .sprinkle_mobs(rng, GENERIC_DIST, 30),
         ],
     ];
 

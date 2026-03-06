@@ -563,6 +563,7 @@ impl Ability {
 pub enum InteractionType {
     Stairs,
     Eat,
+    Workout,
 }
 
 #[derive(Component)]
@@ -944,6 +945,10 @@ fn handle_player_move(
                     }
                     InteractionType::Eat => {
                         msg_eat.write(EatEvent(*entity));
+                    }
+                    InteractionType::Workout => {
+                        player_stats.strength += 1;
+                        player_stats.hunger += 5;
                     }
                 }
             }
