@@ -19,12 +19,11 @@ use crate::{
     PrimaryCamera,
     asset_tracking::LoadResource as _,
     game::{
-        animation::TitleDropMessage,
-        animation::{DamageAnimationMessage, FloatingTextMessage, MoveAnimation},
+        animation::{DamageAnimationMessage, FloatingTextMessage, MoveAnimation, TitleDropMessage},
         assets::{WorldAssets, get_egui_image_from_sprite},
         debug::{DebugSettings, redo_faction_map},
         input::{AbilityClicked, EatEvent, InputMode, PlayerIntent, StairsClicked},
-        map::{MapPos, PosToCreature, PosToInteractable, TILE_HEIGHT, TILE_WIDTH},
+        map::{MapPos, PlayerMemoryMap, PosToCreature, PosToInteractable, TILE_HEIGHT, TILE_WIDTH},
         mapgen::{MapInfo, MobKind},
     },
     screens::Screen,
@@ -2583,6 +2582,7 @@ pub struct GameResetParams<'w> {
     pub valid_targets: ResMut<'w, targeting::ValidTargets>,
     pub nearby_mobs: ResMut<'w, NearbyMobs>,
     pub last_title_drop_level: ResMut<'w, LastTitleDropLevel>,
+    pub player_memory_map: ResMut<'w, PlayerMemoryMap>,
 }
 
 pub fn enter(
@@ -2616,6 +2616,7 @@ pub fn enter(
     *params.valid_targets = targeting::ValidTargets::default();
     *params.nearby_mobs = NearbyMobs::default();
     *params.last_title_drop_level = LastTitleDropLevel::default();
+    *params.player_memory_map = PlayerMemoryMap::default();
 
     params.next_phone_screen.set(phone::PhoneScreen::Home);
     params
