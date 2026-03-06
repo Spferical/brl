@@ -922,7 +922,7 @@ fn gen_island(rng: &mut impl Rng) -> LevelDraft {
     let mut draft = draft_level_mapgen_rs(
         mapgen_builder,
         &mut rand_8::rngs::StdRng::from_seed(rng.random()),
-        LevelTitle::Dungeon,
+        LevelTitle::Island,
     );
 
     let mut new_tiles = HashMap::<Pos, TileKind>::new();
