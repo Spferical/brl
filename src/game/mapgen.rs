@@ -1150,8 +1150,10 @@ pub(crate) fn draft_level_mapgen_drunk(rng: &mut impl Rng) -> LevelDraft {
 
 #[derive(Clone, Debug)]
 pub(crate) struct LevelInfo {
+    #[allow(unused)]
     pub name: String,
     pub ty: LevelTitle,
+    #[allow(unused)]
     pub depth: usize,
     pub rect: rogue_algebra::Rect,
 }
