@@ -104,14 +104,14 @@ pub(crate) fn handle_input(
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     keyboard_input: Res<ButtonInput<Key>>,
     mut commands: Commands,
-    player: Single<(Entity, &Player, &MapPos)>,
+    player: Single<(Entity, &Player, &MapPos, &GlobalTransform)>,
     mut mode: ResMut<InputMode>,
     mut examine_pos: ResMut<ExaminePos>,
     valid_targets: Res<ValidTargets>,
     camera: Single<(&Camera, &GlobalTransform)>,
     pos_to_interactable: Res<PosToInteractable>,
 ) {
-    let (player_entity, player, player_pos) = player.into_inner();
+    let (player_entity, player, player_pos, player_transform) = player.into_inner();
     let (camera, camera_transform) = camera.into_inner();
     let mouse_pos = window.cursor_position();
     let tile_clicked = if let Some(mouse_pos) = mouse_pos
@@ -169,11 +169,37 @@ pub(crate) fn handle_input(
         InputMode::Normal => {
             if let Some(direction) = check_direction_keys(&keyboard_input) {
                 intent = Some(PlayerIntent::Move(MapPos(player_pos.0 + direction)));
-            } else if let Some(pos) = tile_clicked {
-                if pos == *player_pos {
-                    intent = Some(PlayerIntent::Wait);
-                } else {
-                    intent = Some(PlayerIntent::Move(pos));
+            } else if mouse_button_input.just_pressed(MouseButton::Left)
+                && !ctx
+                    .ctx_mut()
+                    .map(|ctx| ctx.is_pointer_over_area())
+                    .unwrap_or(false)
+            {
+                if let Some(mouse_pos) = mouse_pos
+                    && let Ok(player_viewport_pos) =
+                        camera.world_to_viewport(camera_transform, player_transform.translation())
+                {
+                    let diff = mouse_pos - player_viewport_pos;
+                    if diff.length() < 20.0 {
+                        intent = Some(PlayerIntent::Wait);
+                    } else {
+                        let angle = (-diff.y).atan2(diff.x);
+                        let octant = (angle / (std::f32::consts::PI / 4.0)).round() as i32;
+                        let direction = match octant {
+                            0 => IVec2::new(1, 0),
+                            1 => IVec2::new(1, 1),
+                            2 => IVec2::new(0, 1),
+                            3 => IVec2::new(-1, 1),
+                            4 | -4 => IVec2::new(-1, 0),
+                            -3 => IVec2::new(-1, -1),
+                            -2 => IVec2::new(0, -1),
+                            -1 => IVec2::new(1, -1),
+                            _ => IVec2::ZERO,
+                        };
+                        if direction != IVec2::ZERO {
+                            intent = Some(PlayerIntent::Move(MapPos(player_pos.0 + direction)));
+                        }
+                    }
                 }
             } else if keyboard_input.just_pressed(Key::Character(".".into())) {
                 intent = Some(PlayerIntent::Wait);

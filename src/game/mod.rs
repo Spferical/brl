@@ -907,17 +907,18 @@ fn handle_player_move(
     match intent {
         PlayerIntent::Move(target) => {
             let old_pos = *pos;
-            let new_pos = rogue_algebra::path::bfs_paths(&[old_pos], 50, |p| {
-                p.adjacent()
-                    .into_iter()
-                    .filter(|p| !walk_blocked_map.contains(&p.0))
-            })
-            .find(|path| path.last().unwrap() == target)
-            .and_then(|path| path.into_iter().nth(1));
-            let Some(new_pos) = new_pos else {
+            let diff = target.0 - old_pos.0;
+            if diff.abs().max_element() > 1 {
                 moved.0 = false;
                 return;
-            };
+            }
+
+            if walk_blocked_map.contains(&target.0) {
+                moved.0 = false;
+                return;
+            }
+
+            let new_pos = target;
 
             if let Some(entity) = pos_to_creature.0.get(&new_pos.0) {
                 damage.0.push(DamageInstance {
