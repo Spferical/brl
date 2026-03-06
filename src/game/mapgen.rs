@@ -1003,14 +1003,9 @@ pub(crate) fn spawn_level(
                 ));
             }
             TileKind::Water => {
-                let r = rng.random::<f32>();
                 let color = Color::srgb(0.4, 0.4, 1.0);
-                let sprite = if r <= 0.8 {
-                    assets.get_ascii_sprite('~', color)
-                } else {
-                    assets.get_ascii_sprite(' ', color)
-                };
-                tile.insert((sprite, map::BlocksMovement));
+                let sprite = assets.get_ascii_sprite('~', color);
+                tile.insert((Name::new("Water"), sprite, map::BlocksMovement));
             }
         }
         tile.with_children(|parent| {
