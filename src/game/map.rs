@@ -117,7 +117,7 @@ pub(crate) fn update_player_visibility(
 ) {
     if let Some(player_pos) = q_player.iter().next() {
         player_vis_map.clear();
-        for pos in rogue_algebra::fov::calculate_fov(player_pos.0.into(), 99, |pos| {
+        for pos in rogue_algebra::fov::calculate_fov(player_pos.0.into(), 20, |pos| {
             sight_blocked_map.contains(&IVec2::from(pos))
         }) {
             player_vis_map.insert(IVec2::from(pos));
