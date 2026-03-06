@@ -3005,13 +3005,14 @@ fn update_frozen(
     q_map_pos: Query<(Entity, &MapPos, Option<&Frozen>), Without<Player>>,
 ) {
     let cur_level = map_info.get_level(**player_pos);
+    let mut new_frozen_batch = vec![];
     for (entity, pos, frozen) in q_map_pos {
         let should_be_frozen = cur_level
             .map(|l| !l.rect.contains(pos.0.into()))
             .unwrap_or(false);
         match (frozen.is_some(), should_be_frozen) {
             (false, true) => {
-                commands.entity(entity).insert(Frozen);
+                new_frozen_batch.push((entity, Frozen));
             }
             (true, false) => {
                 commands.entity(entity).remove::<Frozen>();
@@ -3019,6 +3020,7 @@ fn update_frozen(
             _ => {}
         }
     }
+    commands.insert_batch(new_frozen_batch);
 }
 
 #[derive(SystemParam)]
