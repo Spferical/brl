@@ -38,7 +38,7 @@ pub(crate) fn spawn_stairs(
     commands.entity(world).with_children(|parent| {
         parent
             .spawn((
-                Name::new("Up Stairs"),
+                Name::new("Stairs"),
                 up_pos,
                 Transform::from_translation(up_pos.to_vec3(TILE_Z)),
                 Stairs {
@@ -66,7 +66,7 @@ pub(crate) fn spawn_stairs(
             });
         parent
             .spawn((
-                Name::new("Down Stairs"),
+                Name::new("Stairs"),
                 down_pos,
                 Transform::from_translation(down_pos.to_vec3(TILE_Z)),
                 Stairs {
