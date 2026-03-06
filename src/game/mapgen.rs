@@ -68,7 +68,7 @@ impl MobKind {
                 "Frog Legs",
                 CookedMeal {
                     hunger: 30,
-                    hp: 2,
+                    hp: 0,
                     strength: 0,
                     boredom: 0,
                 },
@@ -95,7 +95,7 @@ impl MobKind {
                 "Beefus",
                 CookedMeal {
                     hunger: 10,
-                    hp: 2,
+                    hp: 0,
                     strength: 2,
                     boredom: 0,
                 },
@@ -104,7 +104,7 @@ impl MobKind {
                 "Carne de Chiguiro",
                 CookedMeal {
                     hunger: 15,
-                    hp: 1,
+                    hp: 5,
                     strength: 0,
                     boredom: 30,
                 },
@@ -113,7 +113,7 @@ impl MobKind {
                 "4-Part Interest-Free Burrito",
                 CookedMeal {
                     hunger: 20,
-                    hp: 2,
+                    hp: 0,
                     strength: 0,
                     boredom: 0,
                 },
