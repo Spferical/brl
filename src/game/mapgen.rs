@@ -32,7 +32,8 @@ pub(crate) enum MobKind {
     GymBro,
     Influencer,
     Normie,
-    Amogus,
+    AmogusCrew,
+    AmogusImpostor,
     Capybara,
     KlarnaKop,
     BrainrotEnemy,
@@ -44,7 +45,7 @@ const GENERIC_DIST: &[(MobKind, usize)] = &[
     (MobKind::GymBro, 1),
     (MobKind::Influencer, 1),
     (MobKind::Normie, 1),
-    (MobKind::Amogus, 1),
+    (MobKind::AmogusImpostor, 1),
     (MobKind::Capybara, 1),
 ];
 
@@ -61,7 +62,11 @@ const FORTNITE_DIST: &[(MobKind, usize)] = &[
     (MobKind::Fortnite(3), 1),
 ];
 
-const AMOGUS_DIST: &[(MobKind, usize)] = &[(MobKind::Amogus, 10), (MobKind::Normie, 1)];
+const AMOGUS_DIST: &[(MobKind, usize)] = &[
+    (MobKind::AmogusCrew, 14),
+    (MobKind::AmogusImpostor, 2),
+    (MobKind::Normie, 1),
+];
 
 impl MobKind {
     pub(crate) fn get_cooked_meal(&self) -> (&'static str, CookedMeal) {
@@ -110,7 +115,7 @@ impl MobKind {
                     boredom: 0,
                 },
             ),
-            MobKind::Amogus => (
+            MobKind::AmogusCrew | MobKind::AmogusImpostor => (
                 "Beefus",
                 CookedMeal {
                     hunger: 10,
@@ -180,6 +185,7 @@ impl MobKind {
                 mob: Mob {
                     melee_damage: 1,
                     target: None,
+                    destination: None,
                     ranged: false,
                     attrs: MobAttrs {
                         psychic_resist: Resist::Weak,
@@ -206,6 +212,7 @@ impl MobKind {
                 mob: Mob {
                     melee_damage: 1,
                     target: None,
+                    destination: None,
                     ranged: false,
                     attrs: MobAttrs {
                         based: true,
@@ -232,6 +239,7 @@ impl MobKind {
                 mob: Mob {
                     melee_damage: 1,
                     target: None,
+                    destination: None,
                     ranged: false,
                     attrs: MobAttrs {
                         physical_resist: Resist::Strong,
@@ -256,6 +264,7 @@ impl MobKind {
                 mob: Mob {
                     melee_damage: 1,
                     target: None,
+                    destination: None,
                     ranged: false,
                     attrs: MobAttrs {
                         mog_risk: true,
@@ -281,6 +290,7 @@ impl MobKind {
                 mob: Mob {
                     melee_damage: 1,
                     target: None,
+                    destination: None,
                     ranged: false,
                     attrs: MobAttrs {
                         basic: true,
@@ -295,7 +305,32 @@ impl MobKind {
                     kind: *self,
                 },
             },
-            MobKind::Amogus => MobBundle {
+            MobKind::AmogusCrew => MobBundle {
+                name: Name::new("Amogus"),
+                creature: Creature {
+                    hp: 2,
+                    max_hp: 2,
+                    faction: 2, // Crew faction
+                },
+                mob: Mob {
+                    melee_damage: 1,
+                    target: None,
+                    destination: None,
+                    ranged: false,
+                    attrs: MobAttrs {
+                        sus: true,
+                        ..Default::default()
+                    },
+                },
+                sprite: assets.get_ascii_sprite('a', Color::srgb(1.0, 0.1, 0.1)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 1,
+                    name: "Amogus".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::AmogusImpostor => MobBundle {
                 name: Name::new("Amogus"),
                 creature: Creature {
                     hp: 2,
@@ -305,6 +340,7 @@ impl MobKind {
                 mob: Mob {
                     melee_damage: 4,
                     target: None,
+                    destination: None,
                     ranged: false,
                     attrs: MobAttrs {
                         sus: true,
@@ -329,6 +365,7 @@ impl MobKind {
                 mob: Mob {
                     melee_damage: 1,
                     target: None,
+                    destination: None,
                     ranged: false,
                     attrs: MobAttrs {
                         aura_resist: Resist::Weak,
@@ -354,6 +391,7 @@ impl MobKind {
                 mob: Mob {
                     melee_damage: 2,
                     target: None,
+                    destination: None,
                     ranged: false,
                     attrs: MobAttrs {
                         ..Default::default()
@@ -377,6 +415,7 @@ impl MobKind {
                 mob: Mob {
                     melee_damage: 2,
                     target: None,
+                    destination: None,
                     ranged: true,
                     attrs: MobAttrs {
                         ..Default::default()
@@ -423,6 +462,7 @@ pub struct LevelDraft {
     exits: Vec<rogue_algebra::Pos>,
     tiles: HashMap<rogue_algebra::Pos, TileKind>,
     mobs: HashMap<rogue_algebra::Pos, MobKind>,
+    destinations: Vec<rogue_algebra::Pos>,
 }
 
 impl LevelDraft {
@@ -568,6 +608,7 @@ fn draft_level_mapgen_rs(
         exits: vec![furthest_tile],
         tiles,
         mobs: HashMap::new(),
+        destinations: vec![],
     }
 }
 
@@ -834,6 +875,7 @@ fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
         exits: stairs[3..].to_vec(),
         tiles,
         mobs: Default::default(),
+        destinations: vec![],
     }
 }
 
@@ -908,6 +950,7 @@ fn gen_dungeon_fitness(rng: &mut impl Rng) -> LevelDraft {
         exits: stairs[3..].to_vec(),
         tiles,
         mobs: HashMap::new(),
+        destinations: vec![],
     }
 }
 
@@ -1012,21 +1055,6 @@ fn gen_amogus_spaceship(_rng: &mut impl Rng) -> LevelDraft {
     let shields = create_prefab_room(&mut tiles, Pos::new(72, 35), medbay_prefab);
     let navigation = create_prefab_room(&mut tiles, Pos::new(82, 20), admin_navigation_prefab);
 
-    let rooms = [
-        reactor,
-        upper_engine,
-        lower_engine,
-        medbay,
-        electrical,
-        cafeteria,
-        storage,
-        security,
-        admin,
-        navigation,
-        weapons,
-        shields,
-    ];
-
     // Connect rooms with 1-tile wide corridors
     let mut corridors = vec![];
     corridors.push((reactor.center(), upper_engine.center()));
@@ -1064,6 +1092,20 @@ fn gen_amogus_spaceship(_rng: &mut impl Rng) -> LevelDraft {
         exits: vec![navigation.center()],
         tiles,
         mobs: HashMap::new(),
+        destinations: vec![
+            reactor.center(),
+            upper_engine.center(),
+            lower_engine.center(),
+            security.center(),
+            medbay.center(),
+            electrical.center(),
+            cafeteria.center(),
+            storage.center(),
+            admin.center(),
+            weapons.center(),
+            shields.center(),
+            navigation.center(),
+        ],
     }
 }
 
@@ -1311,6 +1353,7 @@ pub(crate) struct LevelInfo {
     #[allow(unused)]
     pub depth: usize,
     pub rect: rogue_algebra::Rect,
+    pub destinations: Vec<rogue_algebra::Pos>,
 }
 
 #[derive(Resource, Default, Debug)]
@@ -1434,6 +1477,7 @@ pub(crate) fn gen_map(
                 name: name.clone(),
                 depth,
                 rect: level.get_containing_rect() + offset,
+                destinations: level.destinations.iter().map(|&p| p + offset).collect(),
             });
             levels.push((offset, name, level));
         }

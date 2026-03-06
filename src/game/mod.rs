@@ -215,6 +215,73 @@ pub(super) fn plugin(app: &mut App) {
     );
 }
 
+fn anger_crew(
+    attacked_entity: Entity,
+    _player_entity: Entity,
+    creatures: &mut Query<
+        (
+            Entity,
+            &mut MapPos,
+            &mut Creature,
+            Option<&mut Name>,
+            Option<&Mob>,
+        ),
+        Without<Player>,
+    >,
+    _commands: &mut Commands,
+    _pos_to_creature: &PosToCreature,
+    sight_blocked_map: &map::SightBlockedMap,
+) {
+    let mut to_anger = Vec::new();
+    let victim_pos;
+
+    // Check if the attacked entity is a crew member or already angered
+    if let Ok((_entity, pos, creature, name, _mob)) = creatures.get(attacked_entity) {
+        if creature.faction == 2
+            || name
+                .as_ref()
+                .map(|n| n.as_str() == "Angered Crew Amogus")
+                .unwrap_or(false)
+        {
+            victim_pos = pos.0;
+            // The attacked entity is crew or already angered crew.
+            // Find all other crew members who can see this
+            for (other_entity, other_pos, other_creature, _other_name, _other_mob) in
+                creatures.iter()
+            {
+                if other_creature.faction == 2 {
+                    let fov = rogue_algebra::fov::calculate_fov(other_pos.0.into(), 10, |p| {
+                        sight_blocked_map.contains(&IVec2::from(p))
+                    });
+                    if fov.iter().any(|&p| IVec2::from(p) == victim_pos) {
+                        to_anger.push(other_entity);
+                    }
+                }
+            }
+            // Also anger the victim if they were faction 2
+            if creature.faction == 2 {
+                to_anger.push(attacked_entity);
+            }
+        } else {
+            return;
+        }
+    } else {
+        return;
+    }
+
+    to_anger.sort_unstable();
+    to_anger.dedup();
+
+    for entity in to_anger {
+        if let Ok((_, _, mut creature, name, _)) = creatures.get_mut(entity) {
+            creature.faction = -1; // Join the enemy faction
+            if let Some(mut name) = name {
+                *name = Name::new("Angered Crew Amogus");
+            }
+        }
+    }
+}
+
 pub(crate) fn draw_interactable_popup(
     mut contexts: EguiContexts,
     player_query: Single<(Entity, &MapPos, &Player)>,
@@ -785,6 +852,16 @@ impl Creature {
     fn is_dead(&self) -> bool {
         self.hp <= 0
     }
+
+    fn is_enemy(&self, other_faction: i32) -> bool {
+        if self.faction == 2 {
+            false
+        } else if self.faction == -1 {
+            other_faction == 0
+        } else {
+            other_faction != self.faction
+        }
+    }
 }
 
 fn is_player_alive(player: Single<&Creature, With<Player>>, settings: Res<DebugSettings>) -> bool {
@@ -819,6 +896,7 @@ pub(crate) struct Mob {
     pub ranged: bool,
     pub attrs: MobAttrs,
     pub target: Option<IVec2>,
+    pub destination: Option<IVec2>,
 }
 
 #[derive(Component)]
@@ -930,6 +1008,7 @@ struct PlayerMoveParams<'w, 's> {
     floating_text: MessageWriter<'w, FloatingTextMessage>,
     chat: ResMut<'w, crate::game::chat::ChatHistory>,
     streaming_state: Res<'w, crate::game::chat::StreamingState>,
+    sight_blocked_map: Res<'w, map::SightBlockedMap>,
 }
 
 fn handle_player_move(
@@ -944,7 +1023,16 @@ fn handle_player_move(
         ),
         With<Player>,
     >,
-    mut mobs: Query<&mut MapPos, (With<Creature>, Without<Player>, Without<Corpse>)>,
+    mut creatures: Query<
+        (
+            Entity,
+            &mut MapPos,
+            &mut Creature,
+            Option<&mut Name>,
+            Option<&Mob>,
+        ),
+        Without<Player>,
+    >,
     stairs: Query<&Stairs, (Without<Player>, Without<Creature>)>,
     interactables: Query<&Interactable>,
     q_corpses: Query<
@@ -968,6 +1056,7 @@ fn handle_player_move(
         mut floating_text,
         mut chat,
         streaming_state,
+        sight_blocked_map,
     } = params;
     let world_entity = world.into_inner();
     let (player_entity, mut pos, maybe_intent, mut player_stats, mut creature) =
@@ -1012,6 +1101,14 @@ fn handle_player_move(
                     amount: player_stats.melee_damage(),
                     ty: DamageType::Physical,
                 });
+                anger_crew(
+                    *entity,
+                    player_entity,
+                    &mut creatures,
+                    &mut commands,
+                    &pos_to_creature,
+                    &sight_blocked_map,
+                );
                 commands
                     .entity(player_entity)
                     .insert(animation::AttackAnimation {
@@ -1105,8 +1202,16 @@ fn handle_player_move(
                         amount: 2,
                         ty: DamageType::Physical,
                     });
+                    anger_crew(
+                        *mob_entity,
+                        player_entity,
+                        &mut creatures,
+                        &mut commands,
+                        &pos_to_creature,
+                        &sight_blocked_map,
+                    );
                     pos.0 = new_pos;
-                    if let Ok(mut mob_pos) = mobs.get_mut(*mob_entity) {
+                    if let Ok((_, mut mob_pos, _, _, _)) = creatures.get_mut(*mob_entity) {
                         *mob_pos = old_pos;
                     }
                     commands.entity(player_entity).insert(MoveAnimation {
@@ -1152,6 +1257,14 @@ fn handle_player_move(
                         amount,
                         ty: DamageType::Aura,
                     });
+                    anger_crew(
+                        *mob_entity,
+                        player_entity,
+                        &mut creatures,
+                        &mut commands,
+                        &pos_to_creature,
+                        &sight_blocked_map,
+                    );
                     commands
                         .entity(player_entity)
                         .insert(animation::AttackAnimation {
@@ -1589,7 +1702,15 @@ fn build_faction_map(
         }
         let enemy_positions = positions_per_faction
             .iter()
-            .filter(|(f, _positions)| **f != *faction)
+            .filter(|(f, _positions)| {
+                if *faction == 2 {
+                    false
+                } else if *faction == -1 {
+                    **f == 0
+                } else {
+                    **f != *faction
+                }
+            })
             .flat_map(|(_f, positions)| positions)
             .copied()
             .map(MapPos)
@@ -1604,6 +1725,14 @@ fn build_faction_map(
     faction_map.dijkstra_map_per_faction = dijkstra_map_per_faction;
 }
 
+#[derive(Debug, Clone, Copy)]
+enum Action {
+    Move(MapPos),
+    Melee(Entity, MapPos),
+    RangedAttack(MapPos),
+    AttackAndTeleport(Entity, MapPos),
+}
+
 fn process_mob_turn(
     world: Single<Entity, With<GameWorld>>,
     assets: Res<WorldAssets>,
@@ -1616,15 +1745,9 @@ fn process_mob_turn(
     mut screen_shake: ResMut<camera::ScreenShake>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     sight_blocked_map: Res<map::SightBlockedMap>,
+    map_info: Res<mapgen::MapInfo>,
     all_creatures: Query<&Creature>,
 ) {
-    enum Action {
-        Move(MapPos),
-        Melee(Entity, MapPos),
-        RangedAttack(MapPos),
-        AttackAndTeleport(Entity, MapPos),
-    }
-
     let world_entity = world.into_inner();
     let rng = &mut rand::rng();
     let (player_entity, player_pos, _) = *player_q;
@@ -1639,26 +1762,14 @@ fn process_mob_turn(
         if mob.attrs.knows_player_location {
             mob.target = Some(player_pos.0);
         } else {
-            let fov = rogue_algebra::fov::calculate_fov(pos.0.into(), 10, |p| {
-                sight_blocked_map.contains(&IVec2::from(p))
-            });
-
-            let mut sees_enemy = false;
-            let mut target_pos = None;
-            for visible_pos in fov {
-                let visible_ivec = IVec2::from(visible_pos);
-                if let Some(other_entity) = pos_to_creature.0.get(&visible_ivec)
-                    && let Ok(other_creature) = all_creatures.get(*other_entity)
-                    && other_creature.faction != creature.faction
-                {
-                    sees_enemy = true;
-                    target_pos = Some(visible_ivec);
-                    break;
-                }
-            }
-
-            if sees_enemy {
-                mob.target = target_pos;
+            if let Some(target) = get_fov_target(
+                *pos,
+                creature,
+                &sight_blocked_map,
+                &pos_to_creature,
+                &all_creatures,
+            ) {
+                mob.target = Some(target);
             } else if let Some(t) = mob.target
                 && pos.0 == t
             {
@@ -1667,6 +1778,22 @@ fn process_mob_turn(
         }
 
         if mob.target.is_none() {
+            if creature.faction == 2 {
+                if let Some(action) = get_crew_move(
+                    *pos,
+                    &mut mob,
+                    rng,
+                    &map_info,
+                    &walk_blocked_map,
+                    &pos_to_creature,
+                    &claimed_locations,
+                ) {
+                    if let Action::Move(target) = action {
+                        claimed_locations.insert(target.0);
+                        mob_moves.insert(entity, action);
+                    }
+                }
+            }
             continue;
         }
 
@@ -1675,49 +1802,38 @@ fn process_mob_turn(
             continue;
         };
 
-        let mut adjacent = pos.adjacent();
-        adjacent.shuffle(rng);
-        let target = adjacent
+        let target = pos
+            .adjacent()
             .into_iter()
             .filter(|p| dijkstra_map.contains_key(p))
             .filter(|p| !claimed_locations.contains(&p.0))
             .min_by_key(|p| dijkstra_map.get(p).cloned().unwrap_or(usize::MAX));
 
         if let Some(target) = target {
-            if mob.ranged && rng.random_bool(0.5) {
-                mob_moves.insert(entity, Action::RangedAttack(target));
+            let action = if mob.ranged && rng.random_bool(0.5) {
+                Action::RangedAttack(target)
             } else if let Some(occupier) = pos_to_creature.0.get(&target.0) {
                 if mob.attrs.sus {
-                    let teleport_target = rogue_algebra::path::bfs_paths(&[*pos], 25, |p| {
-                        p.adjacent()
-                            .into_iter()
-                            .filter(|p| !walk_blocked_map.contains(&p.0))
-                    })
-                    .filter(|path| {
-                        let pos = path.last().unwrap();
-                        !pos_to_creature.0.contains_key(&pos.0)
-                            && !claimed_locations.contains(&pos.0)
-                    })
-                    .max_by_key(|path| path.len())
-                    .map(|path| *path.last().unwrap());
-                    if let Some(teleport_target) = teleport_target {
-                        mob_moves.insert(
-                            entity,
-                            Action::AttackAndTeleport(*occupier, teleport_target),
-                        );
-                        claimed_locations.insert(teleport_target.0);
-                    } else {
-                        mob_moves.insert(entity, Action::Melee(*occupier, target));
-                    }
+                    get_teleport_action(
+                        target,
+                        *occupier,
+                        &walk_blocked_map,
+                        &pos_to_creature,
+                        &claimed_locations,
+                    )
                 } else {
-                    mob_moves.insert(entity, Action::Melee(*occupier, target));
+                    Action::Melee(*occupier, target)
                 }
             } else {
-                mob_moves.insert(entity, Action::Move(target));
-            }
-            // Claim any move that is not a destination.
-            // This works because destinations are always enemies.
-            if dijkstra_map.get(&target) != Some(&1) {
+                Action::Move(target)
+            };
+
+            mob_moves.insert(entity, action);
+            if let Action::Move(t) | Action::AttackAndTeleport(_, t) = action {
+                claimed_locations.insert(t.0);
+            } else if dijkstra_map.get(&target) != Some(&1) {
+                // Claim any move that is not a destination.
+                // This works because destinations are always enemies.
                 claimed_locations.insert(target.0);
             }
         }
@@ -1870,6 +1986,121 @@ pub(crate) struct NearbyMobs {
         Option<Sprite>,
         Name,
     )>,
+}
+
+fn get_fov_target(
+    pos: MapPos,
+    creature: &Creature,
+    sight_blocked_map: &map::SightBlockedMap,
+    pos_to_creature: &PosToCreature,
+    all_creatures: &Query<&Creature>,
+) -> Option<IVec2> {
+    let fov = rogue_algebra::fov::calculate_fov(pos.0.into(), 10, |p| {
+        sight_blocked_map.contains(&IVec2::from(p))
+    });
+
+    for visible_pos in fov {
+        let visible_ivec = IVec2::from(visible_pos);
+        if let Some(other_entity) = pos_to_creature.0.get(&visible_ivec)
+            && let Ok(other_creature) = all_creatures.get(*other_entity)
+            && creature.is_enemy(other_creature.faction)
+        {
+            return Some(visible_ivec);
+        }
+    }
+    None
+}
+
+fn get_teleport_action(
+    pos: MapPos,
+    occupier: Entity,
+    walk_blocked_map: &map::WalkBlockedMap,
+    pos_to_creature: &PosToCreature,
+    claimed_locations: &HashSet<IVec2>,
+) -> Action {
+    let teleport_target = rogue_algebra::path::bfs_paths(&[pos.0], 25, |p| {
+        let map_pos = MapPos(p);
+        map_pos
+            .adjacent()
+            .into_iter()
+            .filter(|p| !walk_blocked_map.contains(&p.0))
+            .map(|p| p.0)
+    })
+    .filter(|path| {
+        let pos = path.last().unwrap();
+        !pos_to_creature.0.contains_key(pos) && !claimed_locations.contains(pos)
+    })
+    .max_by_key(|path| path.len())
+    .map(|path| MapPos(*path.last().unwrap()));
+
+    if let Some(teleport_target) = teleport_target {
+        Action::AttackAndTeleport(occupier, teleport_target)
+    } else {
+        Action::Melee(occupier, pos)
+    }
+}
+
+fn select_random_move(
+    pos: MapPos,
+    rng: &mut impl rand::Rng,
+    walk_blocked_map: &map::WalkBlockedMap,
+    pos_to_creature: &PosToCreature,
+    claimed_locations: &HashSet<IVec2>,
+) -> Option<Action> {
+    let mut adjacent = pos.adjacent();
+    adjacent.shuffle(rng);
+    adjacent
+        .into_iter()
+        .find(|p| {
+            !walk_blocked_map.contains(&p.0)
+                && !pos_to_creature.0.contains_key(&p.0)
+                && !claimed_locations.contains(&p.0)
+        })
+        .map(Action::Move)
+}
+
+fn get_crew_move(
+    pos: MapPos,
+    mob: &mut Mob,
+    rng: &mut impl rand::Rng,
+    map_info: &mapgen::MapInfo,
+    walk_blocked_map: &map::WalkBlockedMap,
+    pos_to_creature: &PosToCreature,
+    claimed_locations: &HashSet<IVec2>,
+) -> Option<Action> {
+    if mob.destination.is_none() || mob.destination == Some(pos.0) {
+        if let Some(level) = map_info.get_level(pos) {
+            if !level.destinations.is_empty() {
+                mob.destination = Some(IVec2::from(*level.destinations.choose(rng).unwrap()));
+            }
+        }
+    }
+
+    if let Some(destination) = mob.destination {
+        let path = rogue_algebra::path::bfs_paths(&[pos.0], 50, |p| {
+            let map_pos = MapPos(p);
+            map_pos.adjacent().into_iter().map(|p| p.0).filter(|&p| {
+                !walk_blocked_map.contains(&p)
+                    && (p == destination || !pos_to_creature.0.contains_key(&p))
+                    && !claimed_locations.contains(&p)
+            })
+        })
+        .find(|path| path.last() == Some(&destination));
+
+        if let Some(path) = path
+            && path.len() > 1
+        {
+            return Some(Action::Move(MapPos(path[1])));
+        }
+    }
+
+    select_random_move(
+        pos,
+        rng,
+        walk_blocked_map,
+        pos_to_creature,
+        claimed_locations,
+    )
 }
 
 fn update_nearby_mobs(
