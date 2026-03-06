@@ -1176,6 +1176,7 @@ fn gen_island(rng: &mut impl Rng) -> LevelDraft {
             },
         );
     }
+    draft.tiles = new_tiles;
     draft.override_rect = None;
     draft
 }
