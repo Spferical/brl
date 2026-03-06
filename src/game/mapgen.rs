@@ -1191,7 +1191,9 @@ pub(crate) fn gen_map(
                 .sprinkle_mobs(rng, GYM_DIST, 20),
         ],
         vec![
-            gen_island(rng).sprinkle_mobs(rng, FORTNITE_DIST, 30),
+            gen_island(rng)
+                .with_walls()
+                .sprinkle_mobs(rng, FORTNITE_DIST, 30),
             gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
                 .with_walls()
                 .sprinkle_mobs(rng, GENERIC_DIST, 30),

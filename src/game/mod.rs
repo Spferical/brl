@@ -1761,7 +1761,7 @@ fn process_mob_turn(
                     (1, 0) => (2094, PI * 1.5),
                     _ => panic!("Unexpected bullet direction: {direction:?}"),
                 };
-                let bullet_sprite = assets.get_ascii_sprite('^', Color::WHITE);
+                let bullet_sprite = assets.get_ascii_sprite('o', Color::WHITE);
                 let transform = Transform::from_translation(new_pos.to_vec3(PLAYER_Z))
                     .with_rotation(Quat::from_rotation_z(rotation));
                 let bullet = Bullet {
