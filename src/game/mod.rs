@@ -581,7 +581,7 @@ impl Ability {
         match self {
             Ability::Sprint => "Move multiple tiles in one turn. Costs hunger.",
             Ability::ShoulderCheck => "Damage and swap positions with an adjacent enemy.",
-            Ability::Mog => "Deal aura damage to an adjacent enemy.",
+            Ability::Mog => "Deal aura damage to an adjacent enemy. Scales with rizz.",
             Ability::Cook => "Cook a corpse you are standing on. Requires < 10 brainrot.",
             Ability::ReadBook => {
                 "Reduce brainrot. Might be a little boring. (Borrow period: 10 turns)"
@@ -1130,9 +1130,12 @@ fn handle_player_move(
                 let new_pos = map_pos;
                 let old_pos = pos;
                 if let Some(mob_entity) = pos_to_creature.0.get(&new_pos.0) {
+                    let min_damage = 2 + (player_stats.rizz * 6) / 100;
+                    let max_damage = 2 + (player_stats.rizz * 12) / 100;
+                    let amount = rand::rng().random_range(min_damage..=max_damage);
                     damage.0.push(DamageInstance {
                         entity: *mob_entity,
-                        amount: 2,
+                        amount,
                         ty: DamageType::Aura,
                     });
                     commands

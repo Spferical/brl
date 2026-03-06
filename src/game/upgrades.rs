@@ -170,7 +170,7 @@ pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
         },
         Upgrade {
             name: "Mewing",
-            effects: vec![Effect::AttrChange(Attr::Rizz, 5)],
+            effects: vec![Effect::AttrChange(Attr::Rizz, 20)],
             frequency: 5.0,
         },
         Upgrade {
