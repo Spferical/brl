@@ -842,12 +842,15 @@ pub(crate) fn spawn_level(
             }
             TileKind::WorkoutMachine => {
                 let sprite = assets.get_ascii_sprite('&', Color::srgb(0.2, 0.2, 0.8));
-                tile.insert(sprite);
-                tile.insert(Interactable {
-                    action: "Use".to_string(),
-                    description: None,
-                    kind: InteractionType::Workout,
-                });
+                tile.insert((
+                    sprite,
+                    Name::new("Workout Machine".to_string()),
+                    Interactable {
+                        action: "Use".to_string(),
+                        description: None,
+                        kind: InteractionType::Workout,
+                    },
+                ));
             }
         }
         tile.with_children(|parent| {
