@@ -351,22 +351,26 @@ impl MobKind {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub enum LevelType {
+pub enum LevelTitle {
     Caves,
     Gym,
+    Dungeon,
+    Office,
 }
 
-impl std::fmt::Display for LevelType {
+impl std::fmt::Display for LevelTitle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
-            LevelType::Caves => "Caves",
-            LevelType::Gym => "Dungeon Fitness",
+            LevelTitle::Caves => "Some Caves",
+            LevelTitle::Gym => "Dungeon Fitness",
+            LevelTitle::Dungeon => "The Dungeon",
+            LevelTitle::Office => "Some Unpopulated Backrooms",
         })
     }
 }
 
 pub struct LevelDraft {
-    ty: LevelType,
+    title: LevelTitle,
     entrances: Vec<rogue_algebra::Pos>,
     exits: Vec<rogue_algebra::Pos>,
     tiles: HashMap<rogue_algebra::Pos, TileKind>,
@@ -451,6 +455,7 @@ impl LevelDraft {
 fn draft_level_mapgen_rs(
     mut builder: mapgen::MapBuilder,
     rng: &mut rand_8::rngs::StdRng,
+    ty: LevelTitle,
 ) -> LevelDraft {
     use rogue_algebra::Pos;
     let mut tiles = HashMap::<Pos, TileKind>::new();
@@ -509,7 +514,7 @@ fn draft_level_mapgen_rs(
     }
 
     LevelDraft {
-        ty: LevelType::Caves,
+        title: ty,
         entrances: vec![start_pos],
         exits: vec![furthest_tile],
         tiles,
@@ -775,7 +780,7 @@ fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
         .collect::<Vec<_>>();
 
     LevelDraft {
-        ty: LevelType::Caves,
+        title: LevelTitle::Caves,
         entrances: stairs[0..3].to_vec(),
         exits: stairs[3..].to_vec(),
         tiles,
@@ -849,7 +854,7 @@ fn gen_dungeon_fitness(rng: &mut impl Rng) -> LevelDraft {
     }
 
     LevelDraft {
-        ty: LevelType::Gym,
+        title: LevelTitle::Gym,
         entrances: stairs[0..3].to_vec(),
         exits: stairs[3..].to_vec(),
         tiles,
@@ -1035,6 +1040,7 @@ pub(crate) fn draft_level_mapgen_simple(rng: &mut impl Rng) -> LevelDraft {
     draft_level_mapgen_rs(
         mapgen_builder,
         &mut rand_8::rngs::StdRng::from_seed(rng.random()),
+        LevelTitle::Dungeon,
     )
 }
 
@@ -1051,13 +1057,14 @@ pub(crate) fn draft_level_mapgen_drunk(rng: &mut impl Rng) -> LevelDraft {
     draft_level_mapgen_rs(
         mapgen_builder,
         &mut rand_8::rngs::StdRng::from_seed(rng.random()),
+        LevelTitle::Caves,
     )
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct LevelInfo {
     pub name: String,
-    pub ty: LevelType,
+    pub ty: LevelTitle,
     pub depth: usize,
     pub rect: rogue_algebra::Rect,
 }
@@ -1168,7 +1175,7 @@ pub(crate) fn gen_map(
             let offset = rogue_algebra::Offset::new(i as i32 * 200, depth as i32 * 200);
             let name = format!("Level {depth}-{i}");
             map_info.levels.push(LevelInfo {
-                ty: level.ty,
+                ty: level.title,
                 name: name.clone(),
                 depth,
                 rect: level.get_containing_rect() + offset,
