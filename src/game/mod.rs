@@ -227,12 +227,12 @@ fn anger_crew(
     creatures: &mut Query<
         (
             Entity,
-            &mut MapPos,
+            &MapPos,
             &mut Creature,
             Option<&mut Name>,
             Option<&Mob>,
         ),
-        Without<Player>,
+        (Without<Player>, Without<Frozen>),
     >,
     _commands: &mut Commands,
     _pos_to_creature: &PosToCreature,
@@ -291,13 +291,16 @@ fn anger_crew(
 pub(crate) fn draw_interactable_popup(
     mut contexts: EguiContexts,
     player_query: Single<(Entity, &MapPos, &Player)>,
-    interactable_query: Query<(
-        Entity,
-        &MapPos,
-        Option<&Name>,
-        &Interactable,
-        Option<&delivery::Food>,
-    )>,
+    interactable_query: Query<
+        (
+            Entity,
+            &MapPos,
+            Option<&Name>,
+            &Interactable,
+            Option<&delivery::Food>,
+        ),
+        Without<Frozen>,
+    >,
     q_camera: Single<(&Camera, &GlobalTransform), With<PrimaryCamera>>,
 ) {
     let (_player_entity, player_pos, player) = player_query.into_inner();
@@ -410,7 +413,7 @@ fn apply_brainrot_to_world_text(
             &Text2d,
             &assets::BaseColor,
         ),
-        Without<MoveAnimation>,
+        (Without<MoveAnimation>, Without<Frozen>),
     >,
     player: Query<&Player>,
 ) {
@@ -465,6 +468,7 @@ fn apply_brainrot_visual_effects(
         (
             Without<animation::MoveAnimation>,
             Without<animation::AttackAnimation>,
+            Without<Frozen>,
         ),
     >,
     player_q: Query<(&map::MapPos, &Player)>,
@@ -534,6 +538,9 @@ fn apply_brainrot_visual_effects(
         transform.translation = target_pos;
     }
 }
+#[derive(Component)]
+pub struct Frozen;
+
 #[derive(Component)]
 pub struct GameWorld;
 
@@ -1015,6 +1022,7 @@ struct PlayerMoveParams<'w, 's> {
     chat: ResMut<'w, crate::game::chat::ChatHistory>,
     streaming_state: Res<'w, crate::game::chat::StreamingState>,
     sight_blocked_map: Res<'w, map::SightBlockedMap>,
+    map_info: Res<'w, mapgen::MapInfo>,
 }
 
 fn handle_player_move(
@@ -1032,18 +1040,24 @@ fn handle_player_move(
     mut creatures: Query<
         (
             Entity,
-            &mut MapPos,
+            &MapPos,
             &mut Creature,
             Option<&mut Name>,
             Option<&Mob>,
         ),
-        Without<Player>,
+        (Without<Player>, Without<Frozen>),
     >,
-    stairs: Query<&Stairs, (Without<Player>, Without<Creature>)>,
-    interactables: Query<&Interactable>,
+    all_map_pos: Query<(Entity, &MapPos), Without<Player>>,
+    stairs: Query<&Stairs, (Without<Player>, Without<Creature>, Without<Frozen>)>,
+    interactables: Query<&Interactable, Without<Frozen>>,
     q_corpses: Query<
         (Entity, &MapPos, &Corpse),
-        (With<Corpse>, Without<Player>, Without<Creature>),
+        (
+            With<Corpse>,
+            Without<Player>,
+            Without<Creature>,
+            Without<Frozen>,
+        ),
     >,
     world: Single<Entity, With<GameWorld>>,
 ) {
@@ -1063,6 +1077,7 @@ fn handle_player_move(
         mut chat,
         streaming_state,
         sight_blocked_map,
+        map_info,
     } = params;
     let world_entity = world.into_inner();
     let (player_entity, mut pos, maybe_intent, mut player_stats, mut creature) =
@@ -1160,6 +1175,23 @@ fn handle_player_move(
             {
                 let old_pos = *pos;
                 *pos = *destination;
+
+                // Handle freezing/unfreezing if the level changed
+                if let (Some(old_level), Some(new_level)) = (
+                    map_info.get_level(old_pos),
+                    map_info.get_level(*destination),
+                ) {
+                    if old_level.rect != new_level.rect {
+                        for (entity, map_pos) in all_map_pos.iter() {
+                            if new_level.rect.contains(rogue_algebra::Pos::from(map_pos.0)) {
+                                commands.entity(entity).remove::<Frozen>();
+                            } else {
+                                commands.entity(entity).insert(Frozen);
+                            }
+                        }
+                    }
+                }
+
                 commands.entity(player_entity).insert(MoveAnimation {
                     from: old_pos.to_vec3(PLAYER_Z),
                     to: pos.to_vec3(PLAYER_Z),
@@ -1217,9 +1249,7 @@ fn handle_player_move(
                         &sight_blocked_map,
                     );
                     pos.0 = new_pos;
-                    if let Ok((_, mut mob_pos, _, _, _)) = creatures.get_mut(*mob_entity) {
-                        *mob_pos = old_pos;
-                    }
+                    commands.entity(*mob_entity).insert(old_pos);
                     commands.entity(player_entity).insert(MoveAnimation {
                         from: old_pos.to_vec3(PLAYER_Z),
                         to: pos.to_vec3(PLAYER_Z),
@@ -1366,7 +1396,14 @@ fn process_spawners(
 
 fn get_valid_spawn_spots(
     ppos: IVec2,
-    tiles: &Query<&MapPos, (With<map::Tile>, Without<map::BlocksMovement>)>,
+    tiles: &Query<
+        &MapPos,
+        (
+            With<map::Tile>,
+            Without<map::BlocksMovement>,
+            Without<Frozen>,
+        ),
+    >,
     pos_to_creature: &Res<map::PosToCreature>,
 ) -> Vec<MapPos> {
     let mut valid_spots = Vec::new();
@@ -1416,7 +1453,14 @@ fn spawn_klarna_kop(
     mut commands: Commands,
     world: Single<Entity, With<GameWorld>>,
     assets: Res<assets::WorldAssets>,
-    tiles: Query<&MapPos, (With<map::Tile>, Without<map::BlocksMovement>)>,
+    tiles: Query<
+        &MapPos,
+        (
+            With<map::Tile>,
+            Without<map::BlocksMovement>,
+            Without<Frozen>,
+        ),
+    >,
 ) {
     let (player_stats, player_pos) = player.into_inner();
     let debt = -player_stats.money;
@@ -1452,7 +1496,14 @@ fn spawn_brainrot_enemies(
     mut commands: Commands,
     world: Single<Entity, With<GameWorld>>,
     assets: Res<assets::WorldAssets>,
-    tiles: Query<&MapPos, (With<map::Tile>, Without<map::BlocksMovement>)>,
+    tiles: Query<
+        &MapPos,
+        (
+            With<map::Tile>,
+            Without<map::BlocksMovement>,
+            Without<Frozen>,
+        ),
+    >,
 ) {
     let (player_stats, player_pos) = player.into_inner();
     let brainrot = player_stats.brainrot;
@@ -1495,7 +1546,7 @@ fn transform_brainrot_enemies(
     mut commands: Commands,
     player: Single<&Player>,
     assets: Res<assets::WorldAssets>,
-    brainrot_enemies: Query<(Entity, &MapPos), With<BrainrotEnemyMarker>>,
+    brainrot_enemies: Query<(Entity, &MapPos), (With<BrainrotEnemyMarker>, Without<Frozen>)>,
 ) {
     if player.brainrot < 100 && !brainrot_enemies.is_empty() {
         for (entity, _pos) in brainrot_enemies.iter() {
@@ -1513,7 +1564,7 @@ fn transform_brainrot_corpses(
     mut commands: Commands,
     player: Single<&Player>,
     assets: Res<assets::WorldAssets>,
-    brainrot_corpses: Query<Entity, With<Ambrosia>>,
+    brainrot_corpses: Query<Entity, (With<Ambrosia>, Without<Frozen>)>,
 ) {
     if player.brainrot < 100 && !brainrot_corpses.is_empty() {
         for entity in brainrot_corpses.iter() {
@@ -1559,7 +1610,7 @@ fn check_bullet_collision(
     mut commands: Commands,
     pos_to_mob: Res<PosToCreature>,
     sight_blocked_map: Res<map::SightBlockedMap>,
-    bullets: Query<(Entity, &MapPos, &Bullet)>,
+    bullets: Query<(Entity, &MapPos, &Bullet), Without<Frozen>>,
     mut damage: ResMut<PendingDamage>,
     player_q: Query<Entity, With<Player>>,
     mut screen_shake: ResMut<camera::ScreenShake>,
@@ -1652,7 +1703,10 @@ fn set_player_corpse(
         .insert(assets.get_ascii_sprite('%', bevy::color::palettes::css::DARK_RED.into()));
 }
 
-fn move_bullets(mut commands: Commands, mut bullets: Query<(Entity, &mut MapPos, &Bullet)>) {
+fn move_bullets(
+    mut commands: Commands,
+    mut bullets: Query<(Entity, &mut MapPos, &Bullet), Without<Frozen>>,
+) {
     for (entity, mut pos, bullet) in bullets.iter_mut() {
         let old_pos = *pos;
         pos.0 += bullet.direction;
@@ -1687,7 +1741,7 @@ fn reachable(
 
 fn build_faction_map(
     mut faction_map: ResMut<FactionMap>,
-    creatures: Query<(Entity, &mut MapPos, &mut Creature)>,
+    creatures: Query<(Entity, &mut MapPos, &mut Creature), Without<Frozen>>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
 ) {
     // For each enemy, target their nearest enemy
@@ -1744,7 +1798,7 @@ fn process_mob_turn(
     assets: Res<WorldAssets>,
     pos_to_creature: Res<PosToCreature>,
     faction_map: Res<FactionMap>,
-    mut mobs: Query<(Entity, &mut MapPos, &Creature, &mut Mob), Without<Player>>,
+    mut mobs: Query<(Entity, &mut MapPos, &Creature, &mut Mob), (Without<Player>, Without<Frozen>)>,
     mut commands: Commands,
     mut damage: ResMut<PendingDamage>,
     player_q: Single<(Entity, &MapPos, &Creature), With<Player>>,
@@ -1936,7 +1990,10 @@ fn process_mob_turn(
 fn prune_dead(
     mut commands: Commands,
     world: Single<Entity, With<GameWorld>>,
-    q_creatures: Query<(Entity, &Creature, &MapPos, Option<&DropsCorpse>), Without<Player>>,
+    q_creatures: Query<
+        (Entity, &Creature, &MapPos, Option<&DropsCorpse>),
+        (Without<Player>, Without<Frozen>),
+    >,
     mut player: Single<&mut Player>,
     streaming_state: Res<chat::StreamingState>,
     mut chat: ResMut<chat::ChatHistory>,
@@ -2129,7 +2186,7 @@ fn update_nearby_mobs(
             Option<&Sprite>,
             &Name,
         ),
-        Without<Player>,
+        (Without<Player>, Without<Frozen>),
     >,
     pos_to_creature: Res<PosToCreature>,
     player_vis_map: Res<map::PlayerVisibilityMap>,

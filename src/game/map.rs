@@ -131,7 +131,7 @@ pub(crate) fn apply_hard_fov_to_tiles(
     player_memory_map: Res<PlayerMemoryMap>,
     mut q_tiles: Query<
         (&MapPos, &mut Visibility, Has<crate::game::Creature>),
-        Without<crate::game::Player>,
+        (Without<crate::game::Player>, Without<crate::game::Frozen>),
     >,
 ) {
     for (pos, mut vis, is_creature) in q_tiles.iter_mut() {
@@ -157,7 +157,7 @@ pub(crate) struct PosToCreature(pub HashMap<IVec2, Entity>);
 
 pub(crate) fn update_pos_to_creature(
     mut pos_to_creature: ResMut<PosToCreature>,
-    creatures: Query<(Entity, &MapPos), With<Creature>>,
+    creatures: Query<(Entity, &MapPos), (With<Creature>, Without<crate::game::Frozen>)>,
 ) {
     pos_to_creature.0.clear();
     for (entity, pos) in creatures {
@@ -172,7 +172,7 @@ pub(crate) struct PosToInteractable(pub HashMap<MapPos, Vec<Entity>>);
 
 pub(crate) fn update_pos_to_interactable(
     mut pos_to_interactable: ResMut<PosToInteractable>,
-    interactable: Query<(Entity, &MapPos), With<Interactable>>,
+    interactable: Query<(Entity, &MapPos), (With<Interactable>, Without<crate::game::Frozen>)>,
 ) {
     pos_to_interactable.0.clear();
     for (entity, pos) in interactable {

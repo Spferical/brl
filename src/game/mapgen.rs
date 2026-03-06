@@ -1150,18 +1150,21 @@ pub(crate) fn spawn_level(
     assets: &WorldAssets,
     draft: &LevelDraft,
     offset: rogue_algebra::Offset,
+    frozen: bool,
 ) {
     let signal_map = signal::generate_signal_map(draft.get_containing_rect(), rng.random());
 
-    let level_entity = commands
-        .spawn((
-            Name::new(name),
-            Transform::IDENTITY,
-            GlobalTransform::IDENTITY,
-            InheritedVisibility::VISIBLE,
-            signal_map,
-        ))
-        .id();
+    let mut level_entity_cmds = commands.spawn((
+        Name::new(name),
+        Transform::IDENTITY,
+        GlobalTransform::IDENTITY,
+        InheritedVisibility::VISIBLE,
+        signal_map,
+    ));
+    if frozen {
+        level_entity_cmds.insert(crate::game::Frozen);
+    }
+    let level_entity = level_entity_cmds.id();
     commands.entity(world).add_child(level_entity);
 
     let mut tiles = vec![];
@@ -1176,6 +1179,9 @@ pub(crate) fn spawn_level(
             GlobalTransform::IDENTITY,
             InheritedVisibility::VISIBLE,
         ));
+        if frozen {
+            tile.insert(crate::game::Frozen);
+        }
         match tile_kind {
             TileKind::Floor => {
                 let r = rng.random::<f32>();
@@ -1235,6 +1241,7 @@ pub(crate) fn spawn_level(
             MapPos(IVec2::from(pos)),
             mob_kind,
             assets,
+            frozen,
         );
     }
 
@@ -1424,10 +1431,30 @@ pub(crate) fn gen_map(
 
     // Spawn everything.
     for (offset, name, level) in levels {
-        spawn_level(name, rng, world, commands, &assets, &level, offset);
+        let is_starting_level = name == "Level 0-0";
+        spawn_level(
+            name,
+            rng,
+            world,
+            commands,
+            &assets,
+            &level,
+            offset,
+            !is_starting_level,
+        );
     }
     for (p1, p2) in stair_locs {
-        spawn_stairs(world, commands, &assets, p1, p2);
+        let p1_level = map_info.get_level(MapPos(IVec2::from(p1))).unwrap();
+        let p2_level = map_info.get_level(MapPos(IVec2::from(p2))).unwrap();
+        spawn_stairs(
+            world,
+            commands,
+            &assets,
+            p1,
+            p2,
+            p1_level.name != "Level 0-0",
+            p2_level.name != "Level 0-0",
+        );
     }
 
     // Spawn the player.
