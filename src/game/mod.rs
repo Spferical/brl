@@ -722,6 +722,7 @@ pub(crate) struct MobAttrs {
     pub basic: bool,
     pub mog_risk: bool,
     pub sus: bool,
+    pub knows_player_location: bool,
     pub aura_resist: Resist,
     pub physical_resist: Resist,
     pub psychic_resist: Resist,
@@ -1136,30 +1137,29 @@ fn process_spawners(
 fn spawn_klarna_kop(
     turn_counter: Res<TurnCounter>,
     player: Single<(&Player, &MapPos)>,
-    walk_blocked_map: Res<map::WalkBlockedMap>,
     pos_to_creature: Res<map::PosToCreature>,
     mut commands: Commands,
     world: Single<Entity, With<GameWorld>>,
     assets: Res<assets::WorldAssets>,
+    tiles: Query<&MapPos, (With<map::Tile>, Without<map::BlocksMovement>)>,
 ) {
     if turn_counter.0 > 0 && turn_counter.0 % 10 == 0 && player.0.money < -5 {
         let ppos = player.1.0;
+        let mut rng = rand::rng();
         let mut valid_spots = Vec::new();
-        for dx in -5..=5 {
-            for dy in -5..=5 {
-                if dx == 0 && dy == 0 {
-                    continue;
-                }
-                let pos = ppos + bevy::math::IVec2::new(dx, dy);
-                if !walk_blocked_map.0.contains(&pos) && !pos_to_creature.0.contains_key(&pos) {
-                    valid_spots.push(pos);
-                }
+        // Limit search to a 100x100 area around the player for performance
+        let search_range = 100;
+        for &MapPos(pos) in tiles.iter() {
+            let diff = (pos - ppos).abs();
+            let dist = diff.max_element();
+            if dist > 2 && dist <= search_range && !pos_to_creature.0.contains_key(&pos) {
+                valid_spots.push(MapPos(pos));
             }
         }
+
         if !valid_spots.is_empty() {
-            let mut rng = rand::rng();
             if let Some(pos) = valid_spots.choose(&mut rng) {
-                let map_pos = MapPos(*pos);
+                let map_pos = *pos;
                 let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
                 let bundle = mapgen::MobKind::KlarnaKop.get_bundle(&assets);
                 let new_mob = commands.spawn((bundle, map_pos, transform)).id();
@@ -1334,6 +1334,10 @@ fn build_faction_map(
     let mut dijkstra_map_per_faction =
         HashMap::<i32, std::collections::HashMap<MapPos, usize>>::new();
     for (faction, friendly_positions) in positions_per_faction.iter() {
+        if *faction == 0 {
+            // Player doesn't need a dijkstra map to find targets.
+            continue;
+        }
         let enemy_positions = positions_per_faction
             .iter()
             .filter(|(f, _positions)| **f != *faction)
@@ -1342,7 +1346,7 @@ fn build_faction_map(
             .map(MapPos)
             .collect::<Vec<_>>();
         let reachable_cb = |p| reachable(p, &walk_blocked_map, friendly_positions);
-        let maxdist = 20;
+        let maxdist = 100;
         dijkstra_map_per_faction.insert(
             *faction,
             rogue_algebra::path::build_dijkstra_map(&enemy_positions, maxdist, reachable_cb),
@@ -1356,10 +1360,10 @@ fn process_mob_turn(
     assets: Res<WorldAssets>,
     pos_to_creature: Res<PosToCreature>,
     faction_map: Res<FactionMap>,
-    mut mobs: Query<(Entity, &mut MapPos, &Creature, &mut Mob)>,
+    mut mobs: Query<(Entity, &mut MapPos, &Creature, &mut Mob), Without<Player>>,
     mut commands: Commands,
     mut damage: ResMut<PendingDamage>,
-    player_q: Query<Entity, With<Player>>,
+    player_q: Single<(Entity, &MapPos, &Creature), With<Player>>,
     mut screen_shake: ResMut<camera::ScreenShake>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     sight_blocked_map: Res<map::SightBlockedMap>,
@@ -1374,6 +1378,7 @@ fn process_mob_turn(
 
     let world_entity = world.into_inner();
     let rng = &mut rand::rng();
+    let (player_entity, player_pos, _) = *player_q;
     // Determine mob intentions.
     let mut mob_moves = HashMap::new();
     let mut claimed_locations = HashSet::new();
@@ -1382,30 +1387,34 @@ fn process_mob_turn(
             continue;
         }
 
-        let fov = rogue_algebra::fov::calculate_fov(pos.0.into(), 10, |p| {
-            sight_blocked_map.contains(&IVec2::from(p))
-        });
+        if mob.attrs.knows_player_location {
+            mob.target = Some(player_pos.0);
+        } else {
+            let fov = rogue_algebra::fov::calculate_fov(pos.0.into(), 10, |p| {
+                sight_blocked_map.contains(&IVec2::from(p))
+            });
 
-        let mut sees_enemy = false;
-        let mut target_pos = None;
-        for visible_pos in fov {
-            let visible_ivec = IVec2::from(visible_pos);
-            if let Some(other_entity) = pos_to_creature.0.get(&visible_ivec)
-                && let Ok(other_creature) = all_creatures.get(*other_entity)
-                && other_creature.faction != creature.faction
-            {
-                sees_enemy = true;
-                target_pos = Some(visible_ivec);
-                break;
+            let mut sees_enemy = false;
+            let mut target_pos = None;
+            for visible_pos in fov {
+                let visible_ivec = IVec2::from(visible_pos);
+                if let Some(other_entity) = pos_to_creature.0.get(&visible_ivec)
+                    && let Ok(other_creature) = all_creatures.get(*other_entity)
+                    && other_creature.faction != creature.faction
+                {
+                    sees_enemy = true;
+                    target_pos = Some(visible_ivec);
+                    break;
+                }
             }
-        }
 
-        if sees_enemy {
-            mob.target = target_pos;
-        } else if let Some(t) = mob.target
-            && pos.0 == t
-        {
-            mob.target = None;
+            if sees_enemy {
+                mob.target = target_pos;
+            } else if let Some(t) = mob.target
+                && pos.0 == t
+            {
+                mob.target = None;
+            }
         }
 
         if mob.target.is_none() {
@@ -1413,10 +1422,9 @@ fn process_mob_turn(
         }
 
         // follow dijkstra map
-        let dijkstra_map = faction_map
-            .dijkstra_map_per_faction
-            .get(&creature.faction)
-            .unwrap();
+        let Some(dijkstra_map) = faction_map.dijkstra_map_per_faction.get(&creature.faction) else {
+            continue;
+        };
 
         let mut adjacent = pos.adjacent();
         adjacent.shuffle(rng);
@@ -1494,7 +1502,7 @@ fn process_mob_turn(
                     timer: Timer::new(Duration::from_millis(150), TimerMode::Once),
                     base_translation: old_pos.to_vec3(PLAYER_Z),
                 });
-                if player_q.get(enemy).is_ok() {
+                if enemy == player_entity {
                     screen_shake.trauma = (screen_shake.trauma + 0.7).min(1.0);
                 }
             }
@@ -1539,7 +1547,7 @@ fn process_mob_turn(
                     rotation: None,
                     sway: None,
                 });
-                if player_q.get(enemy).is_ok() {
+                if enemy == player_entity {
                     screen_shake.trauma = (screen_shake.trauma + 0.7).min(1.0);
                 }
             }

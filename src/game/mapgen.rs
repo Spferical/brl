@@ -273,6 +273,7 @@ impl MobKind {
                     ranged: false,
                     attrs: MobAttrs {
                         aura_resist: Resist::Weak,
+                        knows_player_location: true,
                         ..Default::default()
                     },
                 },
