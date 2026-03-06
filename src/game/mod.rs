@@ -26,7 +26,6 @@ use crate::{
         input::{AbilityClicked, EatEvent, InputMode, PlayerIntent, StairsClicked},
         map::{MapPos, PosToCreature, PosToInteractable, TILE_HEIGHT, TILE_WIDTH},
         mapgen::{MapInfo, MobKind},
-        phone::PhoneState,
     },
     screens::Screen,
 };
@@ -70,6 +69,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<PosToCreature>();
     app.init_resource::<PosToInteractable>();
     app.init_resource::<NearbyMobs>();
+    app.init_resource::<LastTitleDropLevel>();
     app.init_resource::<DebugSettings>();
     app.init_resource::<examine::ExaminePos>();
     app.init_resource::<examine::ExamineResults>();
@@ -1854,7 +1854,7 @@ fn prune_dead(
 }
 
 #[derive(Default, Resource)]
-struct NearbyMobs {
+pub(crate) struct NearbyMobs {
     mobs: Vec<(
         MapPos,
         Creature,
@@ -2540,26 +2540,49 @@ fn left_sidebar(
         });
 }
 
+#[derive(Resource, Default)]
+pub struct LastTitleDropLevel(pub Option<rogue_algebra::Rect>);
+
 fn title_drop_new_levels(
     mut msg_td: MessageWriter<TitleDropMessage>,
     map_info: Res<MapInfo>,
-    mut last_level: Local<Option<rogue_algebra::Rect>>,
+    mut last_level: ResMut<LastTitleDropLevel>,
     player_pos: Single<&MapPos, With<Player>>,
 ) {
     if let Some(cur_map) = map_info.get_level(**player_pos)
-        && Some(cur_map.rect) != *last_level
+        && Some(cur_map.rect) != last_level.0
     {
-        *last_level = Some(cur_map.rect);
+        last_level.0 = Some(cur_map.rect);
         msg_td.write(TitleDropMessage(format!("{}", cur_map.ty)));
     }
+}
+
+#[derive(SystemParam)]
+pub struct GameResetParams<'w> {
+    pub phone: ResMut<'w, phone::PhoneState>,
+    pub map_info: ResMut<'w, mapgen::MapInfo>,
+    pub streaming_state: ResMut<'w, chat::StreamingState>,
+    pub chat_history: ResMut<'w, chat::ChatHistory>,
+    pub active_delivery: ResMut<'w, delivery::ActiveDelivery>,
+    pub dungeon_dash_selection: ResMut<'w, mobile_apps::DungeonDashSelection>,
+    pub cockatrice_state: ResMut<'w, mobile_apps::CockatriceState>,
+    pub turn_counter: ResMut<'w, TurnCounter>,
+    pub next_phone_screen: ResMut<'w, NextState<phone::PhoneScreen>>,
+    pub next_dungeon_dash_screen: ResMut<'w, NextState<mobile_apps::DungeonDashScreen>>,
+    pub examine_pos: ResMut<'w, examine::ExaminePos>,
+    pub examine_results: ResMut<'w, examine::ExamineResults>,
+    pub screen_shake: ResMut<'w, camera::ScreenShake>,
+    pub pending_damage: ResMut<'w, PendingDamage>,
+    pub valid_targets: ResMut<'w, targeting::ValidTargets>,
+    pub nearby_mobs: ResMut<'w, NearbyMobs>,
+    pub last_title_drop_level: ResMut<'w, LastTitleDropLevel>,
 }
 
 pub fn enter(
     mut commands: Commands,
     assets: Res<assets::WorldAssets>,
     q_camera: Single<Entity, With<PrimaryCamera>>,
-    mut phone: ResMut<PhoneState>,
-    mut map_info: ResMut<MapInfo>,
+    mut params: GameResetParams,
 ) {
     let world = (
         GameWorld,
@@ -2571,8 +2594,30 @@ pub fn enter(
     let world = commands.spawn(world).id();
     examine::init_examine_highlight(world, &mut commands, &assets);
     lighting::enable_lighting(&mut commands, *q_camera);
-    mapgen::gen_map(world, &mut commands, assets, &mut map_info);
-    *phone = PhoneState::default();
+    mapgen::gen_map(world, &mut commands, assets, &mut params.map_info);
+
+    // Reset game state
+    *params.phone = phone::PhoneState::default();
+    *params.map_info = mapgen::MapInfo::default();
+    *params.streaming_state = chat::StreamingState::default();
+    *params.chat_history = chat::ChatHistory::default();
+    *params.active_delivery = delivery::ActiveDelivery::default();
+    *params.dungeon_dash_selection = mobile_apps::DungeonDashSelection::default();
+    *params.cockatrice_state = mobile_apps::CockatriceState::default();
+    *params.turn_counter = TurnCounter::default();
+    *params.examine_pos = examine::ExaminePos::default();
+    *params.examine_results = examine::ExamineResults::default();
+    *params.screen_shake = camera::ScreenShake::default();
+    *params.pending_damage = PendingDamage::default();
+    *params.valid_targets = targeting::ValidTargets::default();
+    *params.nearby_mobs = NearbyMobs::default();
+    *params.last_title_drop_level = LastTitleDropLevel::default();
+
+    params.next_phone_screen.set(phone::PhoneScreen::Home);
+    params
+        .next_dungeon_dash_screen
+        .set(mobile_apps::DungeonDashScreen::Menu);
+
     commands.run_schedule(Turn);
 }
 
@@ -2581,7 +2626,9 @@ pub fn exit(
     q_camera: Single<Entity, With<PrimaryCamera>>,
     game_world: Query<Entity, With<GameWorld>>,
 ) {
-    commands.entity(game_world.single().unwrap()).despawn();
+    for world in game_world.iter() {
+        commands.entity(world).despawn();
+    }
     lighting::disable_lighting(&mut commands, *q_camera);
 }
 
