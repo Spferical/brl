@@ -2574,6 +2574,20 @@ fn sidebar(
                             FontSelection::Default,
                             Align::LEFT,
                         ));
+                        ui.label(apply_brainrot_ui(
+                            "phone: space",
+                            player.brainrot,
+                            ui.style(),
+                            FontSelection::Default,
+                            Align::LEFT,
+                        ));
+                        ui.label(apply_brainrot_ui(
+                            "wait: .",
+                            player.brainrot,
+                            ui.style(),
+                            FontSelection::Default,
+                            Align::LEFT,
+                        ));
 
                         for (i, ability) in player.abilities.iter().enumerate() {
                             let ability_key = (i + 1) % 10;
