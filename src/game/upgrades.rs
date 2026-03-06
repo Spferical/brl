@@ -44,19 +44,26 @@ impl std::fmt::Display for Effect {
             Effect::Subscription(sub) => match sub {
                 Subscription::DungeonDashPlatinum => write!(
                     f,
-                    "DungeonDash Platinum Subscription: -75% food cost, 5 turn delivery, $20/100 turns"
+                    "DungeonDash Platinum Subscription: -75% food cost, 5 turn delivery, ${}/100 turns",
+                    sub.cost()
                 ),
                 Subscription::UndergroundTVPro => write!(
                     f,
-                    "UndergroundTV Pro Subscription: 3x viewer growth, $50/100 turns"
+                    "UndergroundTV Pro Subscription: 3x viewer growth, ${}/100 turns",
+                    sub.cost()
                 ),
                 Subscription::FiveGLTE => {
-                    write!(f, "5G LTE Subscription: Guaranteed signal, $5/100 turns")
+                    write!(
+                        f,
+                        "5G LTE Subscription: Guaranteed signal, ${}/100 turns",
+                        sub.cost()
+                    )
                 }
                 Subscription::DungeonFitness => {
                     write!(
                         f,
-                        "Dungeon Fitness Membership: Passively gain Strength (up to a point), $80/100 turns"
+                        "Dungeon Fitness Membership: Passively gain Strength (up to a point), ${}/100 turns",
+                        sub.cost()
                     )
                 }
             },

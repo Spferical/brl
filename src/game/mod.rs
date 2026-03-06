@@ -477,6 +477,26 @@ pub enum Subscription {
     DungeonFitness,
 }
 
+impl Subscription {
+    pub fn name(&self) -> &'static str {
+        match self {
+            Subscription::DungeonDashPlatinum => "DungeonDash Platinum",
+            Subscription::UndergroundTVPro => "UndergroundTV Pro",
+            Subscription::FiveGLTE => "5G LTE",
+            Subscription::DungeonFitness => "Dungeon Fitness",
+        }
+    }
+
+    pub fn cost(&self) -> i32 {
+        match self {
+            Subscription::DungeonDashPlatinum => 20,
+            Subscription::UndergroundTVPro => 50,
+            Subscription::FiveGLTE => 5,
+            Subscription::DungeonFitness => 80,
+        }
+    }
+}
+
 impl Player {
     pub fn has_subscription(&self, sub: Subscription) -> bool {
         self.subscriptions.contains(&sub)
@@ -833,13 +853,7 @@ fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut
 fn handle_subscriptions(turn_counter: Res<TurnCounter>, mut player: Single<&mut Player>) {
     if turn_counter.0 > 0 && turn_counter.0.is_multiple_of(100) {
         for sub in player.subscriptions.clone() {
-            let cost = match sub {
-                Subscription::DungeonDashPlatinum => 20,
-                Subscription::UndergroundTVPro => 50,
-                Subscription::FiveGLTE => 5,
-                Subscription::DungeonFitness => 80,
-            };
-            player.money -= cost;
+            player.money -= sub.cost();
         }
     }
 }
@@ -2116,11 +2130,12 @@ fn left_sidebar(
     player: Single<(&Creature, &Player)>,
     time: Res<Time>,
     streaming_state: Res<crate::game::chat::StreamingState>,
+    turn_counter: Res<TurnCounter>,
 ) {
     let (creature, player_stats) = player.into_inner();
     let ctx = contexts.ctx_mut().unwrap();
     egui::SidePanel::left("left_sidebar")
-        .min_width(200.0)
+        .min_width(250.0)
         .show(ctx, |ui| {
             ui.add_space(20.0);
 
@@ -2251,6 +2266,44 @@ fn left_sidebar(
                     FontSelection::Default,
                     Align::LEFT,
                 ));
+            }
+
+            if !player_stats.subscriptions.is_empty() {
+                ui.add_space(20.0);
+                ui.label(apply_brainrot_ui(
+                    RichText::new("Subscriptions").size(18.0).strong(),
+                    player_stats.brainrot,
+                    ui.style(),
+                    FontSelection::Default,
+                    Align::LEFT,
+                ));
+                let next_payment = 100 - (turn_counter.0 % 100);
+                let mut next_payment_text =
+                    RichText::new(format!("Next billing in {} turns", next_payment))
+                        .italics()
+                        .size(12.0);
+                if next_payment <= 5 {
+                    next_payment_text = next_payment_text.color(egui::Color32::RED);
+                }
+
+                ui.label(apply_brainrot_ui(
+                    next_payment_text,
+                    player_stats.brainrot,
+                    ui.style(),
+                    FontSelection::Default,
+                    Align::LEFT,
+                ));
+                ui.add_space(5.0);
+                for sub in &player_stats.subscriptions {
+                    ui.label(apply_brainrot_ui(
+                        RichText::new(format!("{}: ${}/100 turns", sub.name(), sub.cost()))
+                            .size(12.0),
+                        player_stats.brainrot,
+                        ui.style(),
+                        FontSelection::Default,
+                        Align::LEFT,
+                    ));
+                }
             }
         });
 }
