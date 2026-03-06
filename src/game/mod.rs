@@ -114,7 +114,7 @@ pub(super) fn plugin(app: &mut App) {
             chat::update_streaming_stats,
             chat::update_money_timer,
             chat::update_chat,
-            title_drop_new_levels,
+            update_level_info_on_change,
             (
                 animation::process_move_animations,
                 animation::process_attack_animations,
@@ -1022,7 +1022,6 @@ struct PlayerMoveParams<'w, 's> {
     chat: ResMut<'w, crate::game::chat::ChatHistory>,
     streaming_state: Res<'w, crate::game::chat::StreamingState>,
     sight_blocked_map: Res<'w, map::SightBlockedMap>,
-    map_info: Res<'w, mapgen::MapInfo>,
 }
 
 fn handle_player_move(
@@ -1047,7 +1046,6 @@ fn handle_player_move(
         ),
         (Without<Player>, Without<Frozen>),
     >,
-    all_map_pos: Query<(Entity, &MapPos), Without<Player>>,
     stairs: Query<&Stairs, (Without<Player>, Without<Creature>, Without<Frozen>)>,
     interactables: Query<&Interactable, Without<Frozen>>,
     q_corpses: Query<
@@ -1077,7 +1075,6 @@ fn handle_player_move(
         mut chat,
         streaming_state,
         sight_blocked_map,
-        map_info,
     } = params;
     let world_entity = world.into_inner();
     let (player_entity, mut pos, maybe_intent, mut player_stats, mut creature) =
@@ -1176,22 +1173,6 @@ fn handle_player_move(
                 let old_pos = *pos;
                 *pos = *destination;
 
-                // Handle freezing/unfreezing if the level changed
-                if let (Some(old_level), Some(new_level)) = (
-                    map_info.get_level(old_pos),
-                    map_info.get_level(*destination),
-                ) {
-                    if old_level.rect != new_level.rect {
-                        for (entity, map_pos) in all_map_pos.iter() {
-                            if new_level.rect.contains(rogue_algebra::Pos::from(map_pos.0)) {
-                                commands.entity(entity).remove::<Frozen>();
-                            } else {
-                                commands.entity(entity).insert(Frozen);
-                            }
-                        }
-                    }
-                }
-
                 commands.entity(player_entity).insert(MoveAnimation {
                     from: old_pos.to_vec3(PLAYER_Z),
                     to: pos.to_vec3(PLAYER_Z),
@@ -1201,12 +1182,6 @@ fn handle_player_move(
                     rotation: None,
                     sway,
                 });
-
-                let new_depth = (destination.0.y / 200).max(0);
-                if new_depth > player_stats.max_depth {
-                    player_stats.max_depth = new_depth;
-                    player_stats.pending_upgrades += 1;
-                }
 
                 moved.0 = true;
             } else {
@@ -2850,17 +2825,39 @@ fn left_sidebar(
 #[derive(Resource, Default)]
 pub struct LastTitleDropLevel(pub Option<rogue_algebra::Rect>);
 
-fn title_drop_new_levels(
+fn update_level_info_on_change(
+    mut commands: Commands,
     mut msg_td: MessageWriter<TitleDropMessage>,
     map_info: Res<MapInfo>,
     mut last_level: ResMut<LastTitleDropLevel>,
-    player_pos: Single<&MapPos, With<Player>>,
+    player: Single<(&MapPos, &mut Player), (With<Player>, Changed<MapPos>)>,
+    all_map_pos: Query<(Entity, &MapPos), Without<Player>>,
 ) {
-    if let Some(cur_map) = map_info.get_level(**player_pos)
+    let (pos, mut player_stats) = player.into_inner();
+    if let Some(cur_map) = map_info.get_level(*pos)
         && Some(cur_map.rect) != last_level.0
     {
         last_level.0 = Some(cur_map.rect);
         msg_td.write(TitleDropMessage(format!("{}", cur_map.ty)));
+
+        // Handle freezing/unfreezing
+        for (entity, map_pos) in all_map_pos.iter() {
+            if cur_map
+                .rect
+                .contains(rogue_algebra::Pos::from(map_pos.0))
+            {
+                commands.entity(entity).remove::<Frozen>();
+            } else {
+                commands.entity(entity).insert(Frozen);
+            }
+        }
+
+        // Update max depth
+        let new_depth = (pos.0.y / 200).max(0);
+        if new_depth > player_stats.max_depth {
+            player_stats.max_depth = new_depth;
+            player_stats.pending_upgrades += 1;
+        }
     }
 }
 

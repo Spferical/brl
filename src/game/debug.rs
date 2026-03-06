@@ -44,6 +44,7 @@ pub(crate) fn teleport_player(
         for p in level.rect {
             if !walk_blocked_map.0.contains(&IVec2::from(p)) {
                 **player = MapPos(IVec2::from(p));
+                break;
             }
         }
     }
