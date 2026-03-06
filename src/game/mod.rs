@@ -146,6 +146,7 @@ pub(super) fn plugin(app: &mut App) {
             (
                 (
                     increment_turn_counter,
+                    process_cooldowns,
                     chat::update_streaming_turn,
                     tick_meters,
                     handle_subscriptions,
@@ -697,7 +698,12 @@ pub enum InteractionType {
     Stairs,
     Eat,
     Workout,
+    Irradiate,
+    MedicalPod,
 }
+
+#[derive(Component)]
+pub struct Cooldown(pub u32);
 
 #[derive(Component)]
 pub struct Interactable {
@@ -958,6 +964,12 @@ fn increment_turn_counter(mut counter: ResMut<TurnCounter>) {
     counter.0 += 1;
 }
 
+fn process_cooldowns(mut q_cooldowns: Query<&mut Cooldown>) {
+    for mut cd in q_cooldowns.iter_mut() {
+        cd.0 = cd.0.saturating_sub(1);
+    }
+}
+
 fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut Creature)>) {
     let (mut player, mut creature) = player.into_inner();
 
@@ -1060,6 +1072,7 @@ fn handle_player_move(
         ),
     >,
     world: Single<Entity, With<GameWorld>>,
+    mut q_cooldowns: Query<&mut Cooldown>,
 ) {
     let PlayerMoveParams {
         mut commands,
@@ -1164,6 +1177,46 @@ fn handle_player_move(
                     InteractionType::Workout => {
                         player_stats.strength += 1;
                         player_stats.hunger += 5;
+                    }
+                    InteractionType::Irradiate => {
+                        player_stats.brainrot += 5;
+                        player_stats.strength = (player_stats.strength - 1).max(1);
+                        floating_text.write(FloatingTextMessage {
+                            entity: Some(player_entity),
+                            world_pos: None,
+                            text: "IRRADIATED".to_string(),
+                            color: Color::srgb(0.0, 1.0, 0.0),
+                        });
+                    }
+                    InteractionType::MedicalPod => {
+                        if let Ok(mut cooldown) = q_cooldowns.get_mut(*entity) {
+                            if cooldown.0 == 0 {
+                                creature.hp = (creature.hp + 5).min(creature.max_hp);
+                                cooldown.0 = 5;
+                                floating_text.write(FloatingTextMessage {
+                                    entity: Some(player_entity),
+                                    world_pos: None,
+                                    text: "HEALED".to_string(),
+                                    color: Color::srgb(0.0, 0.8, 0.8),
+                                });
+                            } else {
+                                floating_text.write(FloatingTextMessage {
+                                    entity: Some(player_entity),
+                                    world_pos: None,
+                                    text: format!("RECHARGING ({})", cooldown.0),
+                                    color: Color::srgb(0.5, 0.5, 0.5),
+                                });
+                            }
+                        } else {
+                            creature.hp = (creature.hp + 5).min(creature.max_hp);
+                            commands.entity(*entity).insert(Cooldown(5));
+                            floating_text.write(FloatingTextMessage {
+                                entity: Some(player_entity),
+                                world_pos: None,
+                                text: "HEALED".to_string(),
+                                color: Color::srgb(0.0, 0.8, 0.8),
+                            });
+                        }
                     }
                 }
             }

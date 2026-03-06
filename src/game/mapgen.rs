@@ -25,6 +25,9 @@ enum TileKind {
     Water,
     Wall,
     WorkoutMachine,
+    Reactor,
+    MedicalPod,
+    Star,
 }
 
 #[derive(Clone, Copy, Debug, Reflect, PartialEq, Eq, Hash)]
@@ -474,6 +477,7 @@ pub struct LevelDraft {
     tiles: HashMap<rogue_algebra::Pos, TileKind>,
     mobs: HashMap<rogue_algebra::Pos, MobKind>,
     destinations: Vec<rogue_algebra::Pos>,
+    override_rect: Option<rogue_algebra::Rect>,
 }
 
 impl LevelDraft {
@@ -500,6 +504,9 @@ impl LevelDraft {
             .extend(new_stairs[needed_entrances..].iter().cloned());
     }
     fn get_containing_rect(&self) -> rogue_algebra::Rect {
+        if let Some(rect) = self.override_rect {
+            return rect;
+        }
         let min_x = self.tiles.keys().map(|k| k.x).min().expect("Empty level");
         let max_x = self.tiles.keys().map(|k| k.x).max().expect("Empty level");
         let min_y = self.tiles.keys().map(|k| k.y).min().expect("Empty level");
@@ -606,6 +613,9 @@ fn draft_level_mapgen_rs(
                 Some(TileKind::Wall) => '#',
                 Some(TileKind::WorkoutMachine) => '&',
                 Some(TileKind::Water) => '~',
+                Some(TileKind::Reactor) => '*',
+                Some(TileKind::MedicalPod) => '+',
+                Some(TileKind::Star) => '\'',
                 None => ' ',
             };
             print!("{c}");
@@ -620,6 +630,7 @@ fn draft_level_mapgen_rs(
         tiles,
         mobs: HashMap::new(),
         destinations: vec![],
+        override_rect: None,
     }
 }
 
@@ -887,6 +898,7 @@ fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
         tiles,
         mobs: Default::default(),
         destinations: vec![],
+        override_rect: None,
     }
 }
 
@@ -962,6 +974,7 @@ fn gen_dungeon_fitness(rng: &mut impl Rng) -> LevelDraft {
         tiles,
         mobs: HashMap::new(),
         destinations: vec![],
+        override_rect: None,
     }
 }
 
@@ -979,6 +992,8 @@ fn create_prefab_room(
                 '#' => TileKind::Wall,
                 '.' => TileKind::Floor,
                 '&' => TileKind::WorkoutMachine,
+                '*' => TileKind::Reactor,
+                '+' => TileKind::MedicalPod,
                 _ => TileKind::Wall,
             };
             tiles.insert(pos, tk);
@@ -994,11 +1009,16 @@ fn create_prefab_room(
     )
 }
 
-fn gen_amogus_spaceship(_rng: &mut impl Rng) -> LevelDraft {
+fn gen_amogus_spaceship(rng: &mut impl Rng) -> LevelDraft {
     let mut tiles = HashMap::new();
-    let bounds = rogue_algebra::Rect::new(0, 95, 0, 48);
-    for p in bounds {
-        tiles.insert(p, TileKind::Wall);
+    let ship_bounds = rogue_algebra::Rect::new(0, 95, 0, 48);
+    let world_bounds = ship_bounds.expand(20);
+    for p in world_bounds {
+        if ship_bounds.contains(p) {
+            tiles.insert(p, TileKind::Wall);
+        } else if rng.random_bool(0.01) {
+            tiles.insert(p, TileKind::Star);
+        }
     }
 
     let cafeteria_prefab = "
@@ -1022,8 +1042,8 @@ fn gen_amogus_spaceship(_rng: &mut impl Rng) -> LevelDraft {
     let reactor_prefab = "
 ###########
 #.........#
-#...###...#
-#...###...#
+#...***...#
+#...***...#
 #.........#
 ###########";
     let engine_prefab = "
@@ -1035,7 +1055,7 @@ fn gen_amogus_spaceship(_rng: &mut impl Rng) -> LevelDraft {
     let medbay_prefab = "
 ###########
 #.........#
-#..#...#..#
+#..+...+..#
 #.........#
 ###########";
     let electrical_prefab = "
@@ -1117,6 +1137,7 @@ fn gen_amogus_spaceship(_rng: &mut impl Rng) -> LevelDraft {
             shields.center(),
             navigation.center(),
         ],
+        override_rect: Some(ship_bounds),
     }
 }
 
@@ -1148,7 +1169,7 @@ fn gen_island(rng: &mut impl Rng) -> LevelDraft {
             },
         );
     }
-    draft.tiles = new_tiles;
+    draft.override_rect = None;
     draft
 }
 
@@ -1225,6 +1246,38 @@ pub(crate) fn spawn_level(
                 let color = Color::srgb(0.4, 0.4, 1.0);
                 let sprite = assets.get_ascii_sprite('~', color);
                 tile.insert((Name::new("Water"), sprite, map::BlocksMovement));
+            }
+            TileKind::Reactor => {
+                let sprite = assets.get_ascii_sprite('*', Color::srgb(0.0, 1.0, 0.0));
+                tile.insert((
+                    sprite,
+                    Name::new("Reactor".to_string()),
+                    Interactable {
+                        action: "Expose to Radiation".to_string(),
+                        description: Some("Increases brainrot, decreases strength".to_string()),
+                        kind: InteractionType::Irradiate,
+                    },
+                    Occluder,
+                    map::BlocksMovement,
+                ));
+            }
+            TileKind::MedicalPod => {
+                let sprite = assets.get_ascii_sprite('+', Color::srgb(0.0, 0.8, 0.8));
+                tile.insert((
+                    sprite,
+                    Name::new("Medical Pod".to_string()),
+                    Interactable {
+                        action: "Heal".to_string(),
+                        description: Some("Heals 5 HP".to_string()),
+                        kind: InteractionType::MedicalPod,
+                    },
+                    map::BlocksMovement,
+                ));
+            }
+            TileKind::Star => {
+                let color = Color::srgb(0.8, 0.8, 0.8);
+                let sprite = assets.get_ascii_sprite('.', color);
+                tile.insert((Name::new("Star"), sprite));
             }
         }
         tile.with_children(|parent| {
@@ -1364,9 +1417,9 @@ pub(crate) fn gen_map(
             gen_amogus_spaceship(rng)
                 .with_walls()
                 .sprinkle_mobs(rng, AMOGUS_DIST, 20),
-            gen_amogus_spaceship(rng)
+            gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
                 .with_walls()
-                .sprinkle_mobs(rng, AMOGUS_DIST, 20),
+                .sprinkle_mobs(rng, GENERIC_DIST, 30),
         ],
         vec![
             draft_level_mapgen_drunk(rng)
