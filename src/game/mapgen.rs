@@ -1257,11 +1257,14 @@ pub(crate) fn spawn_level(
 
     if matches!(draft.title, LevelTitle::Island) {
         commands.entity(level_entity).with_children(|parent| {
-            parent.spawn(MinSpawnZone {
+            let mut spawner = parent.spawn(MinSpawnZone {
                 rect: draft.get_containing_rect() + offset,
                 min_units: 30,
                 distribution: FORTNITE_DIST,
             });
+            if frozen {
+                spawner.insert(crate::game::Frozen);
+            }
         });
     }
 }

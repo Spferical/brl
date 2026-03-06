@@ -1360,7 +1360,7 @@ fn process_spawners(
     mut commands: Commands,
     world: Single<Entity, With<GameWorld>>,
     pos_to_mob: Res<PosToCreature>,
-    q_spawners: Query<(&MapPos, &MobSpawner)>,
+    q_spawners: Query<(&MapPos, &MobSpawner), Without<Frozen>>,
 ) {
     let world_entity = world.into_inner();
     let rng = &mut rand::rng();
@@ -2857,6 +2857,7 @@ fn update_level_info_on_change(
     mut last_level: ResMut<LastTitleDropLevel>,
     player: Single<(&MapPos, &mut Player), (With<Player>, Changed<MapPos>)>,
     all_map_pos: Query<(Entity, &MapPos), Without<Player>>,
+    all_spawn_zones: Query<(Entity, &MinSpawnZone)>,
 ) {
     let (pos, mut player_stats) = player.into_inner();
     if let Some(cur_map) = map_info.get_level(*pos)
@@ -2868,6 +2869,13 @@ fn update_level_info_on_change(
         // Handle freezing/unfreezing
         for (entity, map_pos) in all_map_pos.iter() {
             if cur_map.rect.contains(rogue_algebra::Pos::from(map_pos.0)) {
+                commands.entity(entity).remove::<Frozen>();
+            } else {
+                commands.entity(entity).insert(Frozen);
+            }
+        }
+        for (entity, zone) in all_spawn_zones.iter() {
+            if cur_map.rect.contains(zone.rect.center()) {
                 commands.entity(entity).remove::<Frozen>();
             } else {
                 commands.entity(entity).insert(Frozen);
