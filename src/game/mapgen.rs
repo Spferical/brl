@@ -61,6 +61,8 @@ const FORTNITE_DIST: &[(MobKind, usize)] = &[
     (MobKind::Fortnite(3), 1),
 ];
 
+const AMOGUS_DIST: &[(MobKind, usize)] = &[(MobKind::Amogus, 10), (MobKind::Normie, 1)];
+
 impl MobKind {
     pub(crate) fn get_cooked_meal(&self) -> (&'static str, CookedMeal) {
         match self {
@@ -399,6 +401,7 @@ pub enum LevelTitle {
     Dungeon,
     Office,
     Island,
+    AmogusSpaceship,
 }
 
 impl std::fmt::Display for LevelTitle {
@@ -409,6 +412,7 @@ impl std::fmt::Display for LevelTitle {
             LevelTitle::Dungeon => "The Dungeon",
             LevelTitle::Office => "Some Unpopulated Backrooms",
             LevelTitle::Island => "Mysterious Island",
+            LevelTitle::AmogusSpaceship => "The Skeld",
         })
     }
 }
@@ -907,6 +911,162 @@ fn gen_dungeon_fitness(rng: &mut impl Rng) -> LevelDraft {
     }
 }
 
+fn create_prefab_room(
+    tiles: &mut HashMap<Pos, TileKind>,
+    start_pos: Pos,
+    prefab: &str,
+) -> rogue_algebra::Rect {
+    let mut max_x = 0;
+    let mut max_y = 0;
+    for (y, line) in prefab.lines().enumerate() {
+        for (x, c) in line.chars().enumerate() {
+            let pos = start_pos + rogue_algebra::Offset::new(x as i32, y as i32);
+            let tk = match c {
+                '#' => TileKind::Wall,
+                '.' => TileKind::Floor,
+                '&' => TileKind::WorkoutMachine,
+                _ => TileKind::Wall,
+            };
+            tiles.insert(pos, tk);
+            max_x = max_x.max(x as i32);
+            max_y = max_y.max(y as i32);
+        }
+    }
+    rogue_algebra::Rect::new(
+        start_pos.x,
+        start_pos.x + max_x,
+        start_pos.y,
+        start_pos.y + max_y,
+    )
+}
+
+fn gen_amogus_spaceship(_rng: &mut impl Rng) -> LevelDraft {
+    let mut tiles = HashMap::new();
+    let bounds = rogue_algebra::Rect::new(0, 95, 0, 48);
+    for p in bounds {
+        tiles.insert(p, TileKind::Wall);
+    }
+
+    let cafeteria_prefab = "
+#################
+#...............#
+#...#.......#...#
+#...............#
+#.......#.......#
+#...............#
+#...#.......#...#
+#...............#
+#################";
+    let storage_prefab = "
+#################
+#...............#
+#...#########...#
+#...#########...#
+#...#########...#
+#...............#
+#################";
+    let reactor_prefab = "
+###########
+#.........#
+#...###...#
+#...###...#
+#.........#
+###########";
+    let engine_prefab = "
+#############
+#...........#
+#.....&.....#
+#...........#
+#############";
+    let medbay_prefab = "
+###########
+#.........#
+#..#...#..#
+#.........#
+###########";
+    let electrical_prefab = "
+###########
+#.........#
+#..&...&..#
+#..#####..#
+#.........#
+###########";
+    let admin_navigation_prefab = "
+###########
+#.........#
+#....&....#
+#.........#
+###########";
+
+    // Place larger rooms tightly
+    let reactor = create_prefab_room(&mut tiles, Pos::new(2, 20), reactor_prefab);
+    let upper_engine = create_prefab_room(&mut tiles, Pos::new(15, 5), engine_prefab);
+    let lower_engine = create_prefab_room(&mut tiles, Pos::new(15, 35), engine_prefab);
+    let security = create_prefab_room(&mut tiles, Pos::new(17, 20), medbay_prefab);
+    let medbay = create_prefab_room(&mut tiles, Pos::new(32, 5), medbay_prefab);
+    let electrical = create_prefab_room(&mut tiles, Pos::new(32, 35), electrical_prefab);
+    let cafeteria = create_prefab_room(&mut tiles, Pos::new(48, 2), cafeteria_prefab);
+    let storage = create_prefab_room(&mut tiles, Pos::new(48, 35), storage_prefab);
+    let admin = create_prefab_room(&mut tiles, Pos::new(68, 18), admin_navigation_prefab);
+    let weapons = create_prefab_room(&mut tiles, Pos::new(72, 5), medbay_prefab);
+    let shields = create_prefab_room(&mut tiles, Pos::new(72, 35), medbay_prefab);
+    let navigation = create_prefab_room(&mut tiles, Pos::new(82, 20), admin_navigation_prefab);
+
+    let rooms = [
+        reactor,
+        upper_engine,
+        lower_engine,
+        medbay,
+        electrical,
+        cafeteria,
+        storage,
+        security,
+        admin,
+        navigation,
+        weapons,
+        shields,
+    ];
+
+    // Connect rooms with 1-tile wide corridors
+    let mut corridors = vec![];
+    corridors.push((reactor.center(), upper_engine.center()));
+    corridors.push((reactor.center(), lower_engine.center()));
+    corridors.push((upper_engine.center(), security.center()));
+    corridors.push((lower_engine.center(), security.center()));
+    corridors.push((security.center(), medbay.center()));
+    corridors.push((security.center(), electrical.center()));
+    corridors.push((medbay.center(), cafeteria.center()));
+    corridors.push((electrical.center(), storage.center()));
+    corridors.push((cafeteria.center(), weapons.center()));
+    corridors.push((weapons.center(), navigation.center()));
+    corridors.push((navigation.center(), shields.center()));
+    corridors.push((shields.center(), storage.center()));
+    corridors.push((cafeteria.center(), admin.center()));
+    corridors.push((admin.center(), storage.center()));
+    corridors.push((cafeteria.center(), storage.center()));
+
+    for (p1, p2) in corridors {
+        let mut curr = p1;
+        while curr != p2 {
+            tiles.insert(curr, TileKind::Floor);
+            if curr.x != p2.x {
+                curr.x += (p2.x - curr.x).signum();
+            } else if curr.y != p2.y {
+                curr.y += (p2.y - curr.y).signum();
+            }
+        }
+        tiles.insert(p2, TileKind::Floor);
+    }
+
+    LevelDraft {
+        title: LevelTitle::AmogusSpaceship,
+        entrances: vec![cafeteria.center()],
+        exits: vec![navigation.center()],
+        tiles,
+        mobs: HashMap::new(),
+    }
+}
+
 fn gen_island(rng: &mut impl Rng) -> LevelDraft {
     let ocean_rect = rogue_algebra::Rect::new(-20, 60, -20, 60);
 
@@ -1197,6 +1357,14 @@ pub(crate) fn gen_map(
             gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
                 .with_walls()
                 .sprinkle_mobs(rng, GENERIC_DIST, 30),
+        ],
+        vec![
+            gen_amogus_spaceship(rng)
+                .with_walls()
+                .sprinkle_mobs(rng, AMOGUS_DIST, 20),
+            gen_amogus_spaceship(rng)
+                .with_walls()
+                .sprinkle_mobs(rng, AMOGUS_DIST, 20),
         ],
         vec![
             draft_level_mapgen_drunk(rng)
