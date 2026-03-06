@@ -2591,11 +2591,8 @@ pub fn enter(
         InheritedVisibility::VISIBLE,
     );
     let world = commands.spawn(world).id();
-    examine::init_examine_highlight(world, &mut commands, &assets);
-    lighting::enable_lighting(&mut commands, *q_camera);
-    mapgen::gen_map(world, &mut commands, assets, &mut params.map_info);
 
-    // Reset game state
+    // Reset game state BEFORE generation
     *params.phone = phone::PhoneState::default();
     *params.map_info = mapgen::MapInfo::default();
     *params.streaming_state = chat::StreamingState::default();
@@ -2616,6 +2613,10 @@ pub fn enter(
     params
         .next_dungeon_dash_screen
         .set(mobile_apps::DungeonDashScreen::Menu);
+
+    examine::init_examine_highlight(world, &mut commands, &assets);
+    lighting::enable_lighting(&mut commands, *q_camera);
+    mapgen::gen_map(world, &mut commands, assets, &mut params.map_info);
 
     commands.run_schedule(Turn);
 }
