@@ -780,7 +780,7 @@ fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
         .collect::<Vec<_>>();
 
     LevelDraft {
-        title: LevelTitle::Caves,
+        title: LevelTitle::Office,
         entrances: stairs[0..3].to_vec(),
         exits: stairs[3..].to_vec(),
         tiles,
