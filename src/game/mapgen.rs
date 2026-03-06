@@ -1058,6 +1058,12 @@ fn gen_amogus_spaceship(rng: &mut impl Rng) -> LevelDraft {
 #..+...+..#
 #.........#
 ###########";
+    let small_room_prefab = "
+###########
+#.........#
+#.........#
+#.........#
+###########";
     let electrical_prefab = "
 ###########
 #.........#
@@ -1076,14 +1082,14 @@ fn gen_amogus_spaceship(rng: &mut impl Rng) -> LevelDraft {
     let reactor = create_prefab_room(&mut tiles, Pos::new(2, 20), reactor_prefab);
     let upper_engine = create_prefab_room(&mut tiles, Pos::new(15, 5), engine_prefab);
     let lower_engine = create_prefab_room(&mut tiles, Pos::new(15, 35), engine_prefab);
-    let security = create_prefab_room(&mut tiles, Pos::new(17, 20), medbay_prefab);
+    let security = create_prefab_room(&mut tiles, Pos::new(17, 20), small_room_prefab);
     let medbay = create_prefab_room(&mut tiles, Pos::new(32, 5), medbay_prefab);
     let electrical = create_prefab_room(&mut tiles, Pos::new(32, 35), electrical_prefab);
     let cafeteria = create_prefab_room(&mut tiles, Pos::new(48, 2), cafeteria_prefab);
     let storage = create_prefab_room(&mut tiles, Pos::new(48, 35), storage_prefab);
     let admin = create_prefab_room(&mut tiles, Pos::new(68, 18), admin_navigation_prefab);
-    let weapons = create_prefab_room(&mut tiles, Pos::new(72, 5), medbay_prefab);
-    let shields = create_prefab_room(&mut tiles, Pos::new(72, 35), medbay_prefab);
+    let weapons = create_prefab_room(&mut tiles, Pos::new(72, 5), small_room_prefab);
+    let shields = create_prefab_room(&mut tiles, Pos::new(72, 35), small_room_prefab);
     let navigation = create_prefab_room(&mut tiles, Pos::new(82, 20), admin_navigation_prefab);
 
     // Connect rooms with 1-tile wide corridors
@@ -1183,7 +1189,16 @@ pub(crate) fn spawn_level(
     offset: rogue_algebra::Offset,
     frozen: bool,
 ) {
-    let signal_map = signal::generate_signal_map(draft.get_containing_rect(), rng.random());
+    let (strength, frequency) = match draft.title {
+        LevelTitle::AmogusSpaceship => (1.2, 0.05),
+        _ => (1.0, 0.1),
+    };
+    let signal_map = signal::generate_signal_map(
+        draft.get_containing_rect() + offset,
+        rng.random(),
+        strength,
+        frequency,
+    );
 
     let mut level_entity_cmds = commands.spawn((
         Name::new(name),

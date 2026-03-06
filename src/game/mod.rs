@@ -146,7 +146,6 @@ pub(super) fn plugin(app: &mut App) {
             (
                 (
                     increment_turn_counter,
-                    process_cooldowns,
                     chat::update_streaming_turn,
                     tick_meters,
                     handle_subscriptions,
@@ -308,9 +307,12 @@ pub(crate) fn draw_interactable_popup(
     let (camera, camera_transform) = *q_camera;
 
     for (_entity, pos, name, interactable, food) in interactable_query.iter() {
-        if pos.0 == player_pos.0 {
+        let is_at_pos = pos.0 == player_pos.0;
+        let is_adjacent = (pos.0 - player_pos.0).abs().max_element() <= 1;
+
+        if is_at_pos || is_adjacent {
             // Get screen position
-            let world_pos = player_pos.to_vec3(PLAYER_Z);
+            let world_pos = pos.to_vec3(PLAYER_Z);
             let Ok(viewport_pos) = camera.world_to_viewport(camera_transform, world_pos) else {
                 continue;
             };
@@ -327,17 +329,21 @@ pub(crate) fn draw_interactable_popup(
                     Some(food_item.effects.to_string()),
                 )
             } else {
+                let name_str = name.map(|n| n.as_str()).unwrap_or("");
                 (
-                    format!(
-                        "{} {}? (e)",
-                        interactable.action,
-                        name.map(|n| n.as_str()).unwrap_or("")
-                    ),
+                    format!("{} {}? (e)", interactable.action, name_str),
                     interactable.description.clone(),
                 )
             };
 
-            draw_world_popup(ctx, viewport_pos, title, description, player.brainrot);
+            draw_world_popup(
+                ctx,
+                viewport_pos,
+                title,
+                description,
+                player.brainrot,
+                _entity,
+            );
         }
     }
 }
@@ -703,9 +709,6 @@ pub enum InteractionType {
 }
 
 #[derive(Component)]
-pub struct Cooldown(pub u32);
-
-#[derive(Component)]
 pub struct Interactable {
     pub action: String,
     pub description: Option<String>,
@@ -785,8 +788,9 @@ pub(crate) fn draw_world_popup(
     title: String,
     description: Option<String>,
     brainrot: i32,
+    id_entity: Entity,
 ) {
-    egui::Area::new(egui::Id::new(&title))
+    egui::Area::new(egui::Id::new(id_entity))
         .fixed_pos(egui::pos2(viewport_pos.x - 100.0, viewport_pos.y - 120.0))
         .show(ctx, |ui| {
             egui::Frame::window(ui.style())
@@ -964,12 +968,6 @@ fn increment_turn_counter(mut counter: ResMut<TurnCounter>) {
     counter.0 += 1;
 }
 
-fn process_cooldowns(mut q_cooldowns: Query<&mut Cooldown>) {
-    for mut cd in q_cooldowns.iter_mut() {
-        cd.0 = cd.0.saturating_sub(1);
-    }
-}
-
 fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut Creature)>) {
     let (mut player, mut creature) = player.into_inner();
 
@@ -1072,7 +1070,6 @@ fn handle_player_move(
         ),
     >,
     world: Single<Entity, With<GameWorld>>,
-    mut q_cooldowns: Query<&mut Cooldown>,
 ) {
     let PlayerMoveParams {
         mut commands,
@@ -1122,6 +1119,15 @@ fn handle_player_move(
             }
 
             if walk_blocked_map.contains(&target.0) {
+                if let Some(entity) = pos_to_interactable.0.get(target).and_then(|v| v.first()) {
+                    // Turn move into interaction
+                    commands
+                        .entity(player_entity)
+                        .insert(PlayerIntent::Interact(*entity));
+                    // Re-run schedule to process the interaction immediately
+                    commands.run_schedule(Turn);
+                    return;
+                }
                 moved.0 = false;
                 return;
             }
@@ -1189,34 +1195,20 @@ fn handle_player_move(
                         });
                     }
                     InteractionType::MedicalPod => {
-                        if let Ok(mut cooldown) = q_cooldowns.get_mut(*entity) {
-                            if cooldown.0 == 0 {
-                                creature.hp = (creature.hp + 5).min(creature.max_hp);
-                                cooldown.0 = 5;
-                                floating_text.write(FloatingTextMessage {
-                                    entity: Some(player_entity),
-                                    world_pos: None,
-                                    text: "HEALED".to_string(),
-                                    color: Color::srgb(0.0, 0.8, 0.8),
-                                });
-                            } else {
-                                floating_text.write(FloatingTextMessage {
-                                    entity: Some(player_entity),
-                                    world_pos: None,
-                                    text: format!("RECHARGING ({})", cooldown.0),
-                                    color: Color::srgb(0.5, 0.5, 0.5),
-                                });
-                            }
-                        } else {
-                            creature.hp = (creature.hp + 5).min(creature.max_hp);
-                            commands.entity(*entity).insert(Cooldown(5));
-                            floating_text.write(FloatingTextMessage {
-                                entity: Some(player_entity),
-                                world_pos: None,
-                                text: "HEALED".to_string(),
-                                color: Color::srgb(0.0, 0.8, 0.8),
-                            });
-                        }
+                        creature.hp = (creature.hp + 5).min(creature.max_hp);
+                        commands.entity(*entity).remove::<Interactable>();
+                        commands
+                            .entity(*entity)
+                            .insert(assets.get_ascii_sprite('x', Color::srgb(0.2, 0.4, 0.4)));
+                        commands
+                            .entity(*entity)
+                            .insert(Name::new("Depleted Medical Pod"));
+                        floating_text.write(FloatingTextMessage {
+                            entity: Some(player_entity),
+                            world_pos: None,
+                            text: "HEALED".to_string(),
+                            color: Color::srgb(0.0, 0.8, 0.8),
+                        });
                     }
                 }
             }
