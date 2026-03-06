@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 
-use crate::game::Player;
+use crate::{PrimaryCamera, game::Player};
 
 #[derive(Component)]
 pub(crate) struct CameraFollow;
@@ -11,8 +11,8 @@ pub struct ScreenShake {
 }
 
 pub(crate) fn update_camera(
-    mut camera: Single<&mut Transform, (With<Camera2d>, Without<CameraFollow>)>,
-    follow: Single<&Transform, (With<CameraFollow>, Without<Camera2d>)>,
+    mut camera: Single<&mut Transform, (With<PrimaryCamera>, Without<CameraFollow>)>,
+    follow: Single<&Transform, (With<CameraFollow>, Without<PrimaryCamera>)>,
     player: Query<&Player>,
     mut screen_shake: ResMut<ScreenShake>,
     time: Res<Time>,

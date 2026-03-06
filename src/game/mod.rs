@@ -16,14 +16,16 @@ use rand::{
 };
 
 use crate::{
+    PrimaryCamera,
     asset_tracking::LoadResource as _,
     game::{
+        animation::TitleDropMessage,
         animation::{DamageAnimationMessage, FloatingTextMessage, MoveAnimation},
         assets::{WorldAssets, get_egui_image_from_sprite},
         debug::{DebugSettings, redo_faction_map},
         input::{AbilityClicked, EatEvent, InputMode, PlayerIntent, StairsClicked},
         map::{MapPos, PosToCreature, PosToInteractable, TILE_HEIGHT, TILE_WIDTH},
-        mapgen::MobKind,
+        mapgen::{MapInfo, MobKind},
         phone::PhoneState,
     },
     screens::Screen,
@@ -60,6 +62,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<map::SightBlockedMap>();
     app.init_resource::<map::PlayerVisibilityMap>();
     app.init_resource::<map::PlayerMemoryMap>();
+    app.init_resource::<mapgen::MapInfo>();
     app.init_resource::<camera::ScreenShake>();
     app.init_resource::<PendingDamage>();
     app.init_resource::<PlayerMoved>();
@@ -83,6 +86,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_state::<mobile_apps::DungeonDashScreen>();
     app.add_message::<DamageAnimationMessage>();
     app.add_message::<FloatingTextMessage>();
+    app.add_message::<animation::TitleDropMessage>();
     app.add_message::<input::AbilityClicked>();
     app.add_message::<input::StairsClicked>();
     app.add_message::<input::EatEvent>();
@@ -106,12 +110,14 @@ pub(super) fn plugin(app: &mut App) {
             chat::update_streaming_stats,
             chat::update_money_timer,
             chat::update_chat,
+            title_drop_new_levels,
             (
                 animation::process_move_animations,
                 animation::process_attack_animations,
                 animation::spawn_damage_animations,
                 animation::spawn_floating_messages,
                 animation::update_floating_text,
+                animation::update_title_drop,
             )
                 .chain(),
             camera::update_camera,
@@ -211,7 +217,7 @@ pub(crate) fn draw_interactable_popup(
         &Interactable,
         Option<&delivery::Food>,
     )>,
-    q_camera: Single<(&Camera, &GlobalTransform), With<Camera2d>>,
+    q_camera: Single<(&Camera, &GlobalTransform), With<PrimaryCamera>>,
 ) {
     let (_player_entity, player_pos, player) = player_query.into_inner();
     let (camera, camera_transform) = *q_camera;
@@ -2535,11 +2541,26 @@ fn left_sidebar(
         });
 }
 
+fn title_drop_new_levels(
+    mut msg_td: MessageWriter<TitleDropMessage>,
+    map_info: Res<MapInfo>,
+    mut last_level: Local<Option<rogue_algebra::Rect>>,
+    player_pos: Single<&MapPos, With<Player>>,
+) {
+    if let Some(cur_map) = map_info.get_level(**player_pos)
+        && Some(cur_map.rect) != *last_level
+    {
+        *last_level = Some(cur_map.rect);
+        msg_td.write(TitleDropMessage(format!("{}", cur_map.ty)));
+    }
+}
+
 pub fn enter(
     mut commands: Commands,
     assets: Res<assets::WorldAssets>,
-    q_camera: Single<Entity, With<Camera2d>>,
+    q_camera: Single<Entity, With<PrimaryCamera>>,
     mut phone: ResMut<PhoneState>,
+    mut map_info: ResMut<MapInfo>,
 ) {
     let world = (
         GameWorld,
@@ -2551,14 +2572,14 @@ pub fn enter(
     let world = commands.spawn(world).id();
     examine::init_examine_highlight(world, &mut commands, &assets);
     lighting::enable_lighting(&mut commands, *q_camera);
-    mapgen::gen_map(world, &mut commands, assets);
+    mapgen::gen_map(world, &mut commands, assets, &mut map_info);
     *phone = PhoneState::default();
     commands.run_schedule(Turn);
 }
 
 pub fn exit(
     mut commands: Commands,
-    q_camera: Single<Entity, With<Camera2d>>,
+    q_camera: Single<Entity, With<PrimaryCamera>>,
     game_world: Query<Entity, With<GameWorld>>,
 ) {
     commands.entity(game_world.single().unwrap()).despawn();

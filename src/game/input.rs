@@ -3,11 +3,14 @@ use std::sync::LazyLock;
 use bevy::{input::keyboard::Key, platform::collections::HashMap, prelude::*};
 use bevy_egui::EguiContexts;
 
-use crate::game::{
-    Ability, AbilityTarget, Player, Turn,
-    examine::ExaminePos,
-    map::{MapPos, PosToInteractable},
-    targeting::ValidTargets,
+use crate::{
+    PrimaryCamera,
+    game::{
+        Ability, AbilityTarget, Player, Turn,
+        examine::ExaminePos,
+        map::{MapPos, PosToInteractable},
+        targeting::ValidTargets,
+    },
 };
 
 static DIRECTION_KEYS: LazyLock<HashMap<Key, IVec2>> = LazyLock::new(|| {
@@ -108,7 +111,7 @@ pub(crate) fn handle_input(
     mut mode: ResMut<InputMode>,
     mut examine_pos: ResMut<ExaminePos>,
     valid_targets: Res<ValidTargets>,
-    camera: Single<(&Camera, &GlobalTransform)>,
+    camera: Single<(&Camera, &GlobalTransform), With<PrimaryCamera>>,
     pos_to_interactable: Res<PosToInteractable>,
 ) {
     let (player_entity, player, player_pos, player_transform) = player.into_inner();

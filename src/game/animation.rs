@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bevy::prelude::*;
+use bevy::{camera::visibility::RenderLayers, prelude::*};
 use bevy_egui::egui::{self, Align, FontSelection, RichText};
 
 use crate::game::{DAMAGE_Z, DamageType, apply_brainrot_ui};
@@ -280,6 +280,50 @@ pub fn update_floating_text(
         color.0.set_alpha(alpha);
 
         if floating.timer.is_finished() {
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+#[derive(Message)]
+pub struct TitleDropMessage(pub String);
+
+#[derive(Component)]
+pub struct TitleDrop {
+    pub timer: Timer,
+}
+
+pub fn update_title_drop(
+    mut commands: Commands,
+    mut msg_title_drop: MessageReader<TitleDropMessage>,
+    query: Query<(Entity, &mut TitleDrop, &mut Transform)>,
+    time: Res<Time>,
+) {
+    for TitleDropMessage(text) in msg_title_drop.read() {
+        commands.spawn((
+            TitleDrop {
+                timer: Timer::from_seconds(5.0, TimerMode::Once),
+            },
+            Text2d::new(text),
+            TextFont {
+                font_size: 64.0,
+                ..default()
+            },
+            TextColor(Color::WHITE),
+            RenderLayers::layer(1),
+        ));
+    }
+    for (entity, mut td, mut transform) in query {
+        td.timer.tick(time.delta().min(MAX_TICK));
+        transform.translation.y = 64.0;
+        transform.translation.x = if td.timer.fraction() < 0.5 {
+            EasingCurve::new(4000.0, 0.0, EaseFunction::QuinticOut)
+                .sample_clamped(td.timer.fraction() * 2.0)
+        } else {
+            EasingCurve::new(0.0, -4000.0, EaseFunction::QuinticIn)
+                .sample_clamped((td.timer.fraction() - 0.5) * 2.0)
+        };
+        if td.timer.is_finished() {
             commands.entity(entity).despawn();
         }
     }

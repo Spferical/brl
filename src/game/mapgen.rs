@@ -350,7 +350,23 @@ impl MobKind {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum LevelType {
+    Caves,
+    Gym,
+}
+
+impl std::fmt::Display for LevelType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            LevelType::Caves => "Caves",
+            LevelType::Gym => "Dungeon Fitness",
+        })
+    }
+}
+
 pub struct LevelDraft {
+    ty: LevelType,
     entrances: Vec<rogue_algebra::Pos>,
     exits: Vec<rogue_algebra::Pos>,
     tiles: HashMap<rogue_algebra::Pos, TileKind>,
@@ -493,6 +509,7 @@ fn draft_level_mapgen_rs(
     }
 
     LevelDraft {
+        ty: LevelType::Caves,
         entrances: vec![start_pos],
         exits: vec![furthest_tile],
         tiles,
@@ -758,6 +775,7 @@ fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
         .collect::<Vec<_>>();
 
     LevelDraft {
+        ty: LevelType::Caves,
         entrances: stairs[0..3].to_vec(),
         exits: stairs[3..].to_vec(),
         tiles,
@@ -831,6 +849,7 @@ fn gen_dungeon_fitness(rng: &mut impl Rng) -> LevelDraft {
     }
 
     LevelDraft {
+        ty: LevelType::Gym,
         entrances: stairs[0..3].to_vec(),
         exits: stairs[3..].to_vec(),
         tiles,
@@ -1035,8 +1054,35 @@ pub(crate) fn draft_level_mapgen_drunk(rng: &mut impl Rng) -> LevelDraft {
     )
 }
 
-pub(crate) fn gen_map(world: Entity, commands: &mut Commands, assets: Res<WorldAssets>) {
+#[derive(Clone, Debug)]
+pub(crate) struct LevelInfo {
+    pub name: String,
+    pub ty: LevelType,
+    pub depth: usize,
+    pub rect: rogue_algebra::Rect,
+}
+
+#[derive(Resource, Default, Debug)]
+pub(crate) struct MapInfo {
+    pub levels: Vec<LevelInfo>,
+}
+
+impl MapInfo {
+    pub fn get_level(&self, pos: MapPos) -> Option<&LevelInfo> {
+        self.levels
+            .iter()
+            .find(|&level| level.rect.contains(Pos::from(pos.0)))
+    }
+}
+
+pub(crate) fn gen_map(
+    world: Entity,
+    commands: &mut Commands,
+    assets: Res<WorldAssets>,
+    map_info: &mut MapInfo,
+) {
     let rng = &mut rand::rng();
+    map_info.levels.clear();
 
     let level_1_draft = gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
         .with_walls()
@@ -1120,7 +1166,14 @@ pub(crate) fn gen_map(world: Entity, commands: &mut Commands, assets: Res<WorldA
         for (i, level) in level_drafts.into_iter().enumerate() {
             // note: we measure depth reached by y value for progression
             let offset = rogue_algebra::Offset::new(i as i32 * 200, depth as i32 * 200);
-            levels.push((offset, format!("Level {depth}-{i}"), level));
+            let name = format!("Level {depth}-{i}");
+            map_info.levels.push(LevelInfo {
+                ty: level.ty,
+                name: name.clone(),
+                depth,
+                rect: level.get_containing_rect() + offset,
+            });
+            levels.push((offset, name, level));
         }
     }
 

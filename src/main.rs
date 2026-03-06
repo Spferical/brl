@@ -11,7 +11,7 @@ mod menus;
 mod screens;
 mod theme;
 
-use bevy::{asset::AssetMetaCheck, prelude::*};
+use bevy::{asset::AssetMetaCheck, camera::visibility::RenderLayers, prelude::*};
 use bevy_egui::EguiPlugin;
 
 fn main() -> AppExit {
@@ -74,7 +74,7 @@ impl Plugin for AppPlugin {
         app.configure_sets(Update, PausableSystems.run_if(in_state(Pause(false))));
 
         // Spawn the main camera.
-        app.add_systems(Startup, spawn_camera);
+        app.add_systems(Startup, spawn_cameras);
         app.insert_resource(ClearColor(Color::BLACK));
     }
 }
@@ -100,6 +100,22 @@ struct Pause(pub bool);
 #[derive(SystemSet, Copy, Clone, Eq, PartialEq, Hash, Debug)]
 struct PausableSystems;
 
-fn spawn_camera(mut commands: Commands) {
-    commands.spawn((Name::new("Camera"), Camera2d));
+#[derive(Component)]
+pub(crate) struct PrimaryCamera;
+#[derive(Component)]
+pub(crate) struct OverlayCamera;
+
+fn spawn_cameras(mut commands: Commands) {
+    commands.spawn((Name::new("Camera"), Camera2d, PrimaryCamera));
+    commands.spawn((
+        Name::new("Overlay Camera"),
+        Camera2d,
+        OverlayCamera,
+        Camera {
+            order: 1,
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
+        RenderLayers::layer(1),
+    ));
 }
