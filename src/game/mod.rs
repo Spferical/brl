@@ -1446,8 +1446,6 @@ fn check_bullet_collision(
             });
             if player_q.get(*mob).is_ok() {
                 screen_shake.trauma = (screen_shake.trauma + 0.6).min(1.0);
-            } else {
-                screen_shake.trauma = (screen_shake.trauma + 0.2).min(1.0);
             }
         }
         if pos_to_mob.0.contains_key(&pos.0) || walk_blocked_map.0.contains(&pos.0) {
