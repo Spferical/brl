@@ -48,7 +48,7 @@ pub fn bfs_paths<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>>(
     maxdist: usize,
     reachable: impl FnMut(Pos) -> T,
 ) -> impl Iterator<Item = Vec<Pos>> {
-    Bfs {
+    BfsPaths {
         periphery: starts.iter().map(|p| vec![p.clone()]).collect(),
         new_periphery: vec![],
         visited: starts.iter().cloned().collect::<HashSet<_>>(),
@@ -58,7 +58,7 @@ pub fn bfs_paths<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>>(
     }
 }
 
-struct Bfs<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>, R: FnMut(Pos) -> T> {
+struct BfsPaths<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>, R: FnMut(Pos) -> T> {
     periphery: Vec<Vec<Pos>>,
     new_periphery: Vec<Vec<Pos>>,
     visited: HashSet<Pos>,
@@ -68,7 +68,7 @@ struct Bfs<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>, R: FnMut(Pos) ->
 }
 
 impl<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>, R: FnMut(Pos) -> T> Iterator
-    for Bfs<Pos, T, R>
+    for BfsPaths<Pos, T, R>
 {
     type Item = Vec<Pos>;
 
@@ -99,6 +99,60 @@ impl<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>, R: FnMut(Pos) -> T> It
     }
 }
 
+pub fn bfs_dist<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>>(
+    starts: &[Pos],
+    maxdist: usize,
+    reachable: impl FnMut(Pos) -> T,
+) -> impl Iterator<Item = (usize, Pos)> {
+    BfsDist {
+        periphery: starts.iter().cloned().map(|p| (0, p)).collect(),
+        new_periphery: vec![],
+        visited: starts.iter().cloned().collect::<HashSet<Pos>>(),
+        reachable,
+        to_emit: starts.iter().cloned().map(|p| (0, p)).collect(),
+        maxdist,
+    }
+}
+
+struct BfsDist<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>, R: FnMut(Pos) -> T> {
+    periphery: Vec<(usize, Pos)>,
+    new_periphery: Vec<(usize, Pos)>,
+    visited: HashSet<Pos>,
+    reachable: R,
+    to_emit: Vec<(usize, Pos)>,
+    maxdist: usize,
+}
+
+impl<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>, R: FnMut(Pos) -> T> Iterator
+    for BfsDist<Pos, T, R>
+{
+    type Item = (usize, Pos);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            if let Some(path) = self.to_emit.pop() {
+                return Some(path);
+            }
+            if let Some((dist, node)) = self.periphery.pop() {
+                let reachable = (self.reachable)(node.clone()).into_iter();
+                for pos in reachable.into_iter() {
+                    if !self.visited.contains(&pos) {
+                        self.visited.insert(pos.clone());
+                        self.to_emit.push((dist + 1, pos.clone()));
+                        if dist < self.maxdist {
+                            self.new_periphery.push((dist + 1, pos.clone()));
+                        }
+                    }
+                }
+            } else if !self.new_periphery.is_empty() {
+                std::mem::swap(&mut self.periphery, &mut self.new_periphery);
+            } else {
+                return None;
+            }
+        }
+    }
+}
+
 pub fn bfs<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>>(
     starts: &[Pos],
     maxdist: usize,
@@ -107,17 +161,13 @@ pub fn bfs<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>>(
     bfs_paths(starts, maxdist, reachable).map(|mut path| path.pop().unwrap())
 }
 
-pub fn build_dijkstra_map<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>>(
-    starts: &[Pos],
+pub fn build_dijkstra_map<'a, Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos> + 'a>(
+    starts: &'a [Pos],
     maxdist: usize,
-    reachable: impl FnMut(Pos) -> T,
-) -> HashMap<Pos, usize> {
+    reachable: impl FnMut(Pos) -> T + 'a,
+) -> impl Iterator<Item = (Pos, usize)> + 'a {
     starts
         .iter()
         .map(|p| (p.clone(), 0))
-        .chain(
-            bfs_paths(starts, maxdist, reachable)
-                .map(|path| (path.last().unwrap().clone(), path.len())),
-        )
-        .collect()
+        .chain(bfs_dist(starts, maxdist, reachable).map(|(dist, pos)| (pos, dist)))
 }

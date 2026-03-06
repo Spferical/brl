@@ -597,7 +597,8 @@ fn draft_level_mapgen_rs(
             .map(|o| p + o)
             .into_iter()
             .filter(|p| *tiles.get(p).unwrap_or(&TileKind::Wall) == TileKind::Floor)
-    });
+    })
+    .collect::<HashMap<_, _>>();
     let mut furthest_tile = start_pos;
     for (&pos, &dist) in dijkstra_map.iter() {
         if dist == usize::MAX {

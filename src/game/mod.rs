@@ -1764,7 +1764,7 @@ fn move_bullets(
 
 #[derive(Resource, Default)]
 pub(crate) struct FactionMap {
-    dijkstra_map_per_faction: HashMap<i32, std::collections::HashMap<MapPos, usize>>,
+    dijkstra_map_per_faction: HashMap<i32, HashMap<MapPos, usize>>,
 }
 
 fn reachable(
@@ -1793,9 +1793,9 @@ fn build_faction_map(
             .or_default()
             .insert(pos.0);
     }
-    let mut dijkstra_map_per_faction =
-        HashMap::<i32, std::collections::HashMap<MapPos, usize>>::new();
+    let mut dijkstra_map_per_faction = HashMap::<i32, HashMap<MapPos, usize>>::new();
     for (faction, friendly_positions) in positions_per_faction.iter() {
+        let _span = info_span!("building faction map", faction = &faction).entered();
         if *faction == 0 {
             // Player doesn't need a dijkstra map to find targets.
             continue;
@@ -1819,7 +1819,8 @@ fn build_faction_map(
         let maxdist = 100;
         dijkstra_map_per_faction.insert(
             *faction,
-            rogue_algebra::path::build_dijkstra_map(&enemy_positions, maxdist, reachable_cb),
+            rogue_algebra::path::build_dijkstra_map(&enemy_positions, maxdist, reachable_cb)
+                .collect(),
         );
     }
     faction_map.dijkstra_map_per_faction = dijkstra_map_per_faction;
