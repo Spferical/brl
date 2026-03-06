@@ -498,6 +498,14 @@ impl Player {
             self.strength = 0;
         }
     }
+
+    pub fn apply_boredom(&mut self, creature: &mut Creature, amount: i32) {
+        self.boredom += amount;
+        if self.boredom >= 100 {
+            creature.hp -= 1;
+        }
+        self.boredom = self.boredom.clamp(0, 100);
+    }
     #[allow(unused)]
     fn add_or_remove_ability(&mut self, condition: bool, ability: Ability) {
         let ability_idx = self.abilities.iter().position(|a| *a == ability);
@@ -616,7 +624,7 @@ pub(crate) fn handle_eat(
             } else if let Some(cooked) = cooked {
                 player.hunger = (player.hunger - cooked.hunger).clamp(0, 100);
                 player.strength += cooked.strength;
-                player.boredom = (player.boredom - cooked.boredom).clamp(0, 100);
+                player.apply_boredom(&mut creature, -cooked.boredom);
                 creature.hp = (creature.hp + cooked.hp).clamp(0, creature.max_hp);
             }
             commands.entity(event.0).despawn();
@@ -814,11 +822,7 @@ fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut
     if turn_counter.0.is_multiple_of(5) {
         player.apply_hunger_damage(&mut creature, 1);
 
-        if player.boredom >= 100 {
-            creature.hp -= 1;
-        }
-        player.boredom += 1;
-        player.boredom = player.boredom.clamp(0, 100);
+        player.apply_boredom(&mut creature, 1);
 
         if player.has_subscription(Subscription::DungeonFitness) && player.strength < 60 {
             player.strength += 1;
@@ -1137,7 +1141,7 @@ fn handle_player_move(
                 {
                     let boredom_increase = if player_stats.brainrot < 30 { 5 } else { 10 };
                     player_stats.brainrot = (player_stats.brainrot - 20).max(0);
-                    player_stats.boredom = (player_stats.boredom + boredom_increase).min(100);
+                    player_stats.apply_boredom(&mut creature, boredom_increase);
                     player_stats.ability_cooldowns.insert(Ability::ReadBook, 10);
                 } else {
                     moved.0 = false;

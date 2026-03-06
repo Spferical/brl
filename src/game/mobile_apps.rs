@@ -1269,12 +1269,11 @@ pub fn update_cockatrice(
         if state.turn_timer >= 2.0 {
             state.turn_timer -= 2.0;
 
-            let (entity, mut player, creature) = player_query.into_inner();
+            let (entity, mut player, mut creature) = player_query.into_inner();
             if creature.hp > 0 {
                 player.brainrot += 5;
                 player.brainrot = player.brainrot.clamp(0, 100);
-                player.boredom -= 10;
-                player.boredom = player.boredom.clamp(0, 100);
+                player.apply_boredom(&mut creature, -10);
 
                 commands
                     .entity(entity)

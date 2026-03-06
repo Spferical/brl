@@ -34,6 +34,7 @@ pub struct PhoneState {
     pub is_creeping: bool,
     pub is_hovered: bool,
     pub unread_notification: Option<AppId>,
+    pub forced_open: bool,
 }
 
 impl PhoneState {
@@ -66,6 +67,9 @@ pub fn toggle_phone(
     mut phone_state: ResMut<PhoneState>,
 ) {
     if keyboard_input.just_pressed(KeyCode::Space) {
+        if phone_state.is_open && phone_state.forced_open {
+            return;
+        }
         phone_state.is_open = !phone_state.is_open;
     }
 }
@@ -75,10 +79,22 @@ pub fn update_phone(
     mut phone_state: ResMut<PhoneState>,
     mut contexts: EguiContexts,
     current_screen: Res<State<PhoneScreen>>,
+    mut next_screen: ResMut<NextState<PhoneScreen>>,
     player: Single<&Player>,
 ) {
     if let PhoneScreen::App(i) = *current_screen.get() {
         phone_state.last_opened_app = Some(i);
+    }
+
+    if player.boredom > 95 {
+        phone_state.is_open = true;
+        phone_state.forced_open = true;
+        if !matches!(*current_screen.get(), PhoneScreen::App(AppId::Cockatrice)) {
+            next_screen.set(PhoneScreen::App(AppId::Cockatrice));
+        }
+    } else if phone_state.forced_open && player.boredom < 65 {
+        phone_state.forced_open = false;
+        phone_state.is_open = false;
     }
 
     let target = if phone_state.is_open { 1.0 } else { 0.0 };
@@ -274,7 +290,7 @@ pub fn draw_phone(
                     0.0,
                     Color32::from_rgba_premultiplied(0, 0, 0, dim_alpha),
                 );
-                if response.clicked() {
+                if response.clicked() && !phone_state.forced_open {
                     phone_state.is_open = false;
                 }
             });
@@ -664,8 +680,9 @@ pub fn draw_phone(
                 ui.interact(home_rect, ui.id().with("home_button"), egui::Sense::click());
 
             let is_not_home = *current_screen.get() != PhoneScreen::Home;
+            let can_go_home = is_not_home && !phone_state.forced_open;
 
-            if is_not_home {
+            if can_go_home {
                 let time = ui.ctx().input(|i| i.time);
                 let pulse = (time * 3.0).sin() as f32 * 2.0 + 0.5;
                 let alpha = (120.0 + 120.0 * pulse).clamp(0.0, 255.0) as u8;
@@ -678,7 +695,7 @@ pub fn draw_phone(
 
             let hover_t = ui.ctx().animate_bool(
                 ui.id().with("home_hover"),
-                response.hovered() && is_not_home,
+                response.hovered() && can_go_home,
             );
             if hover_t > 0.0 {
                 let scale = 1.0 + hover_t * 0.15;
@@ -692,7 +709,7 @@ pub fn draw_phone(
                 );
             }
 
-            if response.clicked() && is_not_home {
+            if response.clicked() && is_not_home && !phone_state.forced_open {
                 next_screen.set(PhoneScreen::Home);
             }
         });
