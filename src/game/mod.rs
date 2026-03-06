@@ -1143,27 +1143,37 @@ fn spawn_klarna_kop(
     assets: Res<assets::WorldAssets>,
     tiles: Query<&MapPos, (With<map::Tile>, Without<map::BlocksMovement>)>,
 ) {
-    if turn_counter.0 > 0 && turn_counter.0 % 10 == 0 && player.0.money < -5 {
-        let ppos = player.1.0;
-        let mut rng = rand::rng();
-        let mut valid_spots = Vec::new();
-        // Limit search to a 100x100 area around the player for performance
-        let search_range = 100;
-        for &MapPos(pos) in tiles.iter() {
-            let diff = (pos - ppos).abs();
-            let dist = diff.max_element();
-            if dist > 2 && dist <= search_range && !pos_to_creature.0.contains_key(&pos) {
-                valid_spots.push(MapPos(pos));
+    let debt = -player.0.money;
+    if turn_counter.0 > 0 && debt > 5 {
+        let spawn_rate = if debt > 50 { 5 } else { 10 };
+        if turn_counter.0 % spawn_rate == 0 {
+            let ppos = player.1.0;
+            let mut rng = rand::rng();
+            let mut valid_spots = Vec::new();
+            // Limit search to a 100x100 area around the player for performance
+            let search_range = 100;
+            for &MapPos(pos) in tiles.iter() {
+                let diff = (pos - ppos).abs();
+                let dist = diff.max_element();
+                if dist > 2 && dist <= search_range && !pos_to_creature.0.contains_key(&pos) {
+                    valid_spots.push(MapPos(pos));
+                }
             }
-        }
 
-        if !valid_spots.is_empty() {
-            if let Some(pos) = valid_spots.choose(&mut rng) {
-                let map_pos = *pos;
-                let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
-                let bundle = mapgen::MobKind::KlarnaKop.get_bundle(&assets);
-                let new_mob = commands.spawn((bundle, map_pos, transform)).id();
-                commands.entity(world.into_inner()).add_child(new_mob);
+            if !valid_spots.is_empty() {
+                if let Some(pos) = valid_spots.choose(&mut rng) {
+                    let map_pos = *pos;
+                    let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
+                    let mut bundle = mapgen::MobKind::KlarnaKop.get_bundle(&assets);
+
+                    if debt > 100 {
+                        bundle.creature.hp *= 2;
+                        bundle.creature.max_hp *= 2;
+                    }
+
+                    let new_mob = commands.spawn((bundle, map_pos, transform)).id();
+                    commands.entity(world.into_inner()).add_child(new_mob);
+                }
             }
         }
     }
