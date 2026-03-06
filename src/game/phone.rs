@@ -208,7 +208,9 @@ pub fn update_phone(
         phone_state.app_launch_progress = 0.0;
     }
 
-    if needs_repaint && let Ok(ctx) = contexts.ctx_mut() {
+    if (needs_repaint || (phone_state.is_open && *current_screen.get() != PhoneScreen::Home))
+        && let Ok(ctx) = contexts.ctx_mut()
+    {
         ctx.request_repaint();
     }
 }
@@ -648,9 +650,9 @@ pub fn draw_phone(
             }
 
             // Home Button Interaction
-            let home_x = rect.min.x + 467.0 * scale_x;
-            let home_y = rect.min.y + 1366.0 * scale_y;
-            let home_radius = 70.0 * scale_x;
+            let home_x = rect.min.x + 457.0 * scale_x;
+            let home_y = rect.min.y + 1375.0 * scale_y;
+            let home_radius = 46.0 * scale_x;
             let home_rect = egui::Rect::from_center_size(
                 egui::pos2(home_x, home_y),
                 egui::vec2(home_radius * 2.0, home_radius * 2.0),
@@ -660,7 +662,37 @@ pub fn draw_phone(
             // But having it active always doesn't hurt.
             let response =
                 ui.interact(home_rect, ui.id().with("home_button"), egui::Sense::click());
-            if response.clicked() && *current_screen.get() != PhoneScreen::Home {
+
+            let is_not_home = *current_screen.get() != PhoneScreen::Home;
+
+            if is_not_home {
+                let time = ui.ctx().input(|i| i.time);
+                let pulse = (time * 3.0).sin() as f32 * 2.0 + 0.5;
+                let alpha = (120.0 + 120.0 * pulse).clamp(0.0, 255.0) as u8;
+                ui.painter().circle_filled(
+                    home_rect.center(),
+                    home_radius * (1.1 + 0.1 * pulse),
+                    Color32::from_rgba_unmultiplied(255, 215, 0, alpha / 4),
+                );
+            }
+
+            let hover_t = ui.ctx().animate_bool(
+                ui.id().with("home_hover"),
+                response.hovered() && is_not_home,
+            );
+            if hover_t > 0.0 {
+                let scale = 1.0 + hover_t * 0.15;
+                ui.painter().circle_stroke(
+                    home_rect.center(),
+                    home_radius * scale,
+                    egui::Stroke::new(
+                        3.0 * scale,
+                        Color32::from_rgba_unmultiplied(255, 255, 255, (200.0 * hover_t) as u8),
+                    ),
+                );
+            }
+
+            if response.clicked() && is_not_home {
                 next_screen.set(PhoneScreen::Home);
             }
         });
