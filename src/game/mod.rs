@@ -1864,25 +1864,23 @@ fn process_mob_turn(
 
         if mob.attrs.knows_player_location {
             mob.target = Some(player_pos.0);
-        } else {
-            if let Some(target) = get_fov_target(
-                *pos,
-                creature,
-                &sight_blocked_map,
-                &pos_to_creature,
-                &all_creatures,
-            ) {
-                mob.target = Some(target);
-            } else if let Some(t) = mob.target
-                && pos.0 == t
-            {
-                mob.target = None;
-            }
+        } else if let Some(target) = get_fov_target(
+            *pos,
+            creature,
+            &sight_blocked_map,
+            &pos_to_creature,
+            &all_creatures,
+        ) {
+            mob.target = Some(target);
+        } else if let Some(t) = mob.target
+            && pos.0 == t
+        {
+            mob.target = None;
         }
 
         if mob.target.is_none() {
-            if creature.faction == 2 {
-                if let Some(action) = get_crew_move(
+            if creature.faction == 2
+                && let Some(action) = get_crew_move(
                     *pos,
                     &mut mob,
                     rng,
@@ -1890,12 +1888,11 @@ fn process_mob_turn(
                     &walk_blocked_map,
                     &pos_to_creature,
                     &claimed_locations,
-                ) {
-                    if let Action::Move(target) = action {
-                        claimed_locations.insert(target.0);
-                        mob_moves.insert(entity, action);
-                    }
-                }
+                )
+                && let Action::Move(target) = action
+            {
+                claimed_locations.insert(target.0);
+                mob_moves.insert(entity, action);
             }
             continue;
         }
@@ -2185,12 +2182,11 @@ fn get_crew_move(
     pos_to_creature: &PosToCreature,
     claimed_locations: &HashSet<IVec2>,
 ) -> Option<Action> {
-    if mob.destination.is_none() || mob.destination == Some(pos.0) {
-        if let Some(level) = map_info.get_level(pos) {
-            if !level.destinations.is_empty() {
-                mob.destination = Some(IVec2::from(*level.destinations.choose(rng).unwrap()));
-            }
-        }
+    if (mob.destination.is_none() || mob.destination == Some(pos.0))
+        && let Some(level) = map_info.get_level(pos)
+        && !level.destinations.is_empty()
+    {
+        mob.destination = Some(IVec2::from(*level.destinations.choose(rng).unwrap()));
     }
 
     if let Some(destination) = mob.destination {

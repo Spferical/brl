@@ -15,7 +15,7 @@ pub(crate) fn spawn_mob(
     assets: &WorldAssets,
 ) {
     let bundle = mob_kind.get_bundle(assets);
-    let map_pos = MapPos(IVec2::from(pos.0));
+    let map_pos = MapPos(pos.0);
     let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
     let mut entity_cmds = commands.spawn((bundle, map_pos, transform));
     if mob_kind == MobKind::BrainrotEnemy {
