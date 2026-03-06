@@ -1,26 +1,32 @@
 {
-    "activeFile": "urizen_onebit_tileset__v2d0.tsx",
+    "activeFile": "emotes/ffz_tileset.tsx",
     "expandedProjectPaths": [
     ],
     "fileStates": {
+        "emotes/ffz_tileset.tsx": {
+            "scaleInDock": 1,
+            "scaleInEditor": 1
+        },
         "urizen_onebit_tileset__v2d0.tsx": {
             "scaleInDock": 1,
             "scaleInEditor": 1.8511
         }
     },
-    "last.imagePath": "/home/matthew/dev/games/bevyrl/assets",
+    "last.imagePath": "/home/srinivas/Programming/brl/assets/emotes",
     "openFiles": [
-        "urizen_onebit_tileset__v2d0.tsx"
+        "urizen_onebit_tileset__v2d0.tsx",
+        "emotes/ffz_tileset.tsx"
     ],
     "project": "bevyrl.tiled-project",
     "recentFiles": [
-        "urizen_onebit_tileset__v2d0.tsx"
+        "urizen_onebit_tileset__v2d0.tsx",
+        "emotes/ffz_tileset.tsx"
     ],
     "tileset.lastUsedFormat": "tsx",
-    "tileset.margin": 1,
-    "tileset.spacing": 1,
+    "tileset.margin": 0,
+    "tileset.spacing": 0,
     "tileset.tileSize": {
-        "height": 12,
-        "width": 12
+        "height": 112,
+        "width": 112
     }
 }

@@ -34,6 +34,7 @@ pub(crate) enum MobKind {
     Amogus,
     Capybara,
     KlarnaKop,
+    BrainrotEnemy,
 }
 
 const GENERIC_DIST: &[(MobKind, usize)] = &[
@@ -61,6 +62,8 @@ impl MobKind {
                     hunger: 25,
                     hp: 0,
                     strength: 10,
+                    rizz: 0,
+                    brainrot: 0,
                     boredom: 0,
                 },
             ),
@@ -70,6 +73,8 @@ impl MobKind {
                     hunger: 30,
                     hp: 0,
                     strength: 0,
+                    rizz: 0,
+                    brainrot: 0,
                     boredom: 0,
                 },
             ),
@@ -79,6 +84,8 @@ impl MobKind {
                     hunger: 15,
                     hp: 0,
                     strength: 0,
+                    rizz: 0,
+                    brainrot: 0,
                     boredom: 20,
                 },
             ),
@@ -88,6 +95,8 @@ impl MobKind {
                     hunger: 40,
                     hp: 0,
                     strength: 0,
+                    rizz: 0,
+                    brainrot: 0,
                     boredom: 0,
                 },
             ),
@@ -97,6 +106,8 @@ impl MobKind {
                     hunger: 10,
                     hp: 0,
                     strength: 2,
+                    rizz: 0,
+                    brainrot: 0,
                     boredom: 0,
                 },
             ),
@@ -106,6 +117,8 @@ impl MobKind {
                     hunger: 15,
                     hp: 5,
                     strength: 0,
+                    rizz: 0,
+                    brainrot: 0,
                     boredom: 30,
                 },
             ),
@@ -115,7 +128,20 @@ impl MobKind {
                     hunger: 20,
                     hp: 0,
                     strength: 0,
+                    rizz: 0,
+                    brainrot: 0,
                     boredom: 0,
+                },
+            ),
+            MobKind::BrainrotEnemy => (
+                "Rotten Brain",
+                CookedMeal {
+                    hunger: 5,
+                    hp: 0,
+                    strength: 0,
+                    rizz: 0,
+                    brainrot: 0,
+                    boredom: 50,
                 },
             ),
         }
@@ -294,6 +320,29 @@ impl MobKind {
                     sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
                     nutrition: 4,
                     name: "Klarna Kop".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::BrainrotEnemy => MobBundle {
+                name: Name::new("????"),
+                creature: Creature {
+                    hp: 5,
+                    max_hp: 5,
+                    faction: -1,
+                },
+                mob: Mob {
+                    melee_damage: 2,
+                    target: None,
+                    ranged: false,
+                    attrs: MobAttrs {
+                        ..Default::default()
+                    },
+                },
+                sprite: assets.get_ascii_sprite(' ', Color::NONE),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 1,
+                    name: "Brainrot".to_string(),
                     kind: *self,
                 },
             },
@@ -874,7 +923,11 @@ pub(crate) fn spawn_level(
         let bundle = mob_kind.get_bundle(assets);
         let map_pos = MapPos(IVec2::from(pos));
         let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
-        let new_mob = commands.spawn((bundle, map_pos, transform)).id();
+        let mut entity_cmds = commands.spawn((bundle, map_pos, transform));
+        if mob_kind == MobKind::BrainrotEnemy {
+            entity_cmds.insert(assets.get_brainrot_sprite());
+        }
+        let new_mob = entity_cmds.id();
         commands.entity(level_entity).add_child(new_mob);
     }
 }

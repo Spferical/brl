@@ -1272,7 +1272,6 @@ pub fn update_cockatrice(
             let (entity, mut player, mut creature) = player_query.into_inner();
             if creature.hp > 0 {
                 player.brainrot += 5;
-                player.brainrot = player.brainrot.clamp(0, 100);
                 player.apply_boredom(&mut creature, -10);
 
                 commands

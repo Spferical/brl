@@ -30,12 +30,22 @@ pub struct WorldAssets {
     urizen: Handle<Image>,
     urizen_mask: Handle<Image>,
     urizen_layout: Handle<TextureAtlasLayout>,
+    ffz_tileset: Handle<Image>,
+    ffz_layout: Handle<TextureAtlasLayout>,
+    pub valid_emote_indices: Option<Vec<usize>>,
     pub urizen_hulls: Vec<Vec<Vec2>>,
     pub char_hulls: HashMap<char, Vec<Vec2>>,
     solid_mask: Handle<Image>,
     pub phone: Handle<Image>,
     pub phone_app_icons: PhoneAppIcons,
 }
+
+pub const FORBIDDEN_EMOTE_IDS: &[u32] = &[
+    28, 41, 64, 75, 82, 128, 151, 175, 189, 208, 275, 276, 325, 333, 345, 361, 362, 368, 379, 386,
+    492, 535, 564, 558, 559, 588, 607, 611, 619, 635, 643, 659, 660, 661, 662, 685, 687, 704, 716,
+    717, 720, 722, 732, 751, 769, 790, 794, 808, 822, 835, 843, 847, 854, 860, 874, 913, 923, 935,
+    938, 941, 948, 953, 958, 982, 985, 1002, 1011, 1022, 1023,
+];
 
 #[derive(Component, Clone, Copy, Reflect)]
 pub struct BaseColor(pub Color);
@@ -61,6 +71,26 @@ impl WorldAssets {
             self.urizen.clone(),
             TextureAtlas {
                 layout: self.urizen_layout.clone(),
+                index,
+            },
+        );
+        sprite.custom_size = Some(Vec2::new(TILE_WIDTH, TILE_HEIGHT));
+        sprite
+    }
+
+    pub(crate) fn get_brainrot_sprite(&self) -> Sprite {
+        use rand::seq::IndexedRandom;
+        let mut rng = rand::rng();
+        let index = self
+            .valid_emote_indices
+            .as_ref()
+            .and_then(|indices| indices.choose(&mut rng).copied())
+            .unwrap_or(0);
+
+        let mut sprite = Sprite::from_atlas_image(
+            self.ffz_tileset.clone(),
+            TextureAtlas {
+                layout: self.ffz_layout.clone(),
                 index,
             },
         );
@@ -170,10 +200,50 @@ impl FromWorld for WorldAssets {
 
         let mut tals = world.resource_mut::<Assets<TextureAtlasLayout>>();
         let urizen_layout = tals.add(grid_layout);
+        let ffz_grid_layout = TextureAtlasLayout::from_grid(UVec2::splat(112), 32, 32, None, None);
+        let ffz_layout = tals.add(ffz_grid_layout.clone());
 
         let mut images = world.resource_mut::<Assets<Image>>();
         let urizen = images.add(image);
         let urizen_mask = images.add(mask_image);
+
+        let ffz_image = Image::from_buffer(
+            include_bytes!("../../assets/emotes/ffz_tileset.png"),
+            ImageType::Extension("png"),
+            CompressedImageFormats::NONE,
+            true,
+            ImageSampler::Default,
+            RenderAssetUsages::default() | RenderAssetUsages::MAIN_WORLD,
+        )
+        .expect("FFZ tileset should be valid");
+
+        let mut valid_emote_indices = Vec::new();
+        if let Some(ffz_data) = &ffz_image.data {
+            let ffz_width = ffz_image.width() as usize;
+            for (index, rect) in ffz_grid_layout.textures.iter().enumerate() {
+                if FORBIDDEN_EMOTE_IDS.contains(&(index as u32)) {
+                    continue;
+                }
+
+                let mut non_empty_pixels = 0;
+                for y in rect.min.y..rect.max.y {
+                    for x in rect.min.x..rect.max.x {
+                        let pixel_idx = (y as usize * ffz_width + x as usize) * 4;
+                        if ffz_data[pixel_idx + 3] > 0 {
+                            non_empty_pixels += 1;
+                        }
+                    }
+                }
+
+                let total_pixels = (rect.max.x - rect.min.x) * (rect.max.y - rect.min.y);
+                if non_empty_pixels * 2 >= total_pixels {
+                    valid_emote_indices.push(index);
+                }
+            }
+        }
+
+        let ffz_tileset = images.add(ffz_image);
+        let valid_emote_indices = Some(valid_emote_indices);
 
         let solid_mask_image = Image::new(
             Extent3d {
@@ -304,6 +374,9 @@ impl FromWorld for WorldAssets {
             urizen,
             urizen_mask,
             urizen_layout,
+            ffz_tileset,
+            ffz_layout,
+            valid_emote_indices,
             urizen_hulls,
             char_hulls,
             solid_mask,

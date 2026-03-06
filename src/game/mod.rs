@@ -19,7 +19,7 @@ use crate::{
     asset_tracking::LoadResource as _,
     game::{
         animation::{DamageAnimationMessage, FloatingTextMessage, MoveAnimation},
-        assets::WorldAssets,
+        assets::{WorldAssets, get_egui_image_from_sprite},
         debug::{DebugSettings, redo_faction_map},
         input::{AbilityClicked, EatEvent, InputMode, PlayerIntent, StairsClicked},
         map::{MapPos, PosToCreature, PosToInteractable, TILE_HEIGHT, TILE_WIDTH},
@@ -148,6 +148,9 @@ pub(super) fn plugin(app: &mut App) {
                 map::update_pos_to_creature,
                 process_spawners,
                 spawn_klarna_kop,
+                spawn_brainrot_enemies,
+                transform_brainrot_enemies,
+                transform_brainrot_corpses,
                 map::update_pos_to_creature,
                 // bullets
                 (check_bullet_collision, move_bullets, check_bullet_collision).chain(),
@@ -624,19 +627,31 @@ pub(crate) struct CookedMeal {
     pub hunger: i32,
     pub hp: i32,
     pub strength: i32,
+    pub rizz: i32,
+    pub brainrot: i32,
     pub boredom: i32,
 }
 
 pub(crate) fn handle_eat(
     mut events: MessageReader<EatEvent>,
     player_query: Single<(&mut Player, &mut Creature)>,
-    food_query: Query<(Option<&delivery::Food>, Option<&CookedMeal>)>,
+    food_query: Query<(Option<&delivery::Food>, Option<&CookedMeal>, Has<Ambrosia>)>,
     mut commands: Commands,
 ) {
     let (mut player, mut creature) = player_query.into_inner();
     for event in events.read() {
-        if let Ok((food, cooked)) = food_query.get(event.0) {
-            if let Some(food) = food {
+        if let Ok((food, cooked, is_ambrosia)) = food_query.get(event.0) {
+            if is_ambrosia {
+                use rand::Rng;
+                let mut rng = rand::rng();
+                let amount = rng.random_range(5..=15);
+                match rng.random_range(0..3) {
+                    0 => player.brainrot += amount,
+                    1 => player.rizz += amount,
+                    _ => player.strength += amount,
+                }
+                creature.hp = (creature.hp + 1).clamp(0, creature.max_hp);
+            } else if let Some(food) = food {
                 let food_item = delivery::FOODS[food.food_idx];
                 player.hunger = (player.hunger + food_item.hunger).clamp(0, 100);
                 player.strength += food_item.strength;
@@ -645,6 +660,8 @@ pub(crate) fn handle_eat(
             } else if let Some(cooked) = cooked {
                 player.hunger = (player.hunger - cooked.hunger).clamp(0, 100);
                 player.strength += cooked.strength;
+                player.rizz += cooked.rizz;
+                player.brainrot += cooked.brainrot;
                 player.apply_boredom(&mut creature, -cooked.boredom);
                 creature.hp = (creature.hp + cooked.hp).clamp(0, creature.max_hp);
             }
@@ -652,6 +669,9 @@ pub(crate) fn handle_eat(
         }
     }
 }
+
+#[derive(Component)]
+pub(crate) struct Ambrosia;
 
 #[derive(Component)]
 #[require(Interactable)]
@@ -786,6 +806,9 @@ pub(crate) struct Mob {
     pub attrs: MobAttrs,
     pub target: Option<IVec2>,
 }
+
+#[derive(Component)]
+pub(crate) struct BrainrotEnemyMarker;
 
 impl Mob {
     fn get_melee_damage_type(&self) -> DamageType {
@@ -1205,6 +1228,51 @@ fn process_spawners(
     }
 }
 
+fn get_valid_spawn_spots(
+    ppos: IVec2,
+    tiles: &Query<&MapPos, (With<map::Tile>, Without<map::BlocksMovement>)>,
+    pos_to_creature: &Res<map::PosToCreature>,
+) -> Vec<MapPos> {
+    let mut valid_spots = Vec::new();
+    let search_range = 100;
+    for &MapPos(pos) in tiles.iter() {
+        let diff = (pos - ppos).abs();
+        let dist = diff.max_element();
+        if dist > 2 && dist <= search_range && !pos_to_creature.0.contains_key(&pos) {
+            valid_spots.push(MapPos(pos));
+        }
+    }
+    valid_spots
+}
+
+fn get_random_brainrot_attrs(rng: &mut impl rand::Rng) -> MobAttrs {
+    let mut attrs = MobAttrs {
+        knows_player_location: true,
+        ..Default::default()
+    };
+
+    // Randomly assign some traits
+    attrs.sus = rng.random_bool(0.1);
+    attrs.basic = rng.random_bool(0.2);
+    attrs.based = rng.random_bool(0.05);
+
+    // Randomly assign resistances
+    fn random_resist(rng: &mut impl rand::Rng) -> Resist {
+        match rng.random_range(0..10) {
+            0..=1 => Resist::Weak,
+            2..=3 => Resist::Strong,
+            _ => Resist::Normal,
+        }
+    }
+
+    attrs.aura_resist = random_resist(rng);
+    attrs.physical_resist = random_resist(rng);
+    attrs.psychic_resist = random_resist(rng);
+    attrs.boredom_resist = random_resist(rng);
+
+    attrs
+}
+
 fn spawn_klarna_kop(
     turn_counter: Res<TurnCounter>,
     player: Single<(&Player, &MapPos)>,
@@ -1214,22 +1282,13 @@ fn spawn_klarna_kop(
     assets: Res<assets::WorldAssets>,
     tiles: Query<&MapPos, (With<map::Tile>, Without<map::BlocksMovement>)>,
 ) {
-    let debt = -player.0.money;
+    let (player_stats, player_pos) = player.into_inner();
+    let debt = -player_stats.money;
     if turn_counter.0 > 0 && debt > 5 {
         let spawn_rate = if debt > 50 { 5 } else { 10 };
         if turn_counter.0.is_multiple_of(spawn_rate) {
-            let ppos = player.1.0;
             let mut rng = rand::rng();
-            let mut valid_spots = Vec::new();
-            // Limit search to a 100x100 area around the player for performance
-            let search_range = 100;
-            for &MapPos(pos) in tiles.iter() {
-                let diff = (pos - ppos).abs();
-                let dist = diff.max_element();
-                if dist > 2 && dist <= search_range && !pos_to_creature.0.contains_key(&pos) {
-                    valid_spots.push(MapPos(pos));
-                }
-            }
+            let valid_spots = get_valid_spawn_spots(player_pos.0, &tiles, &pos_to_creature);
 
             if !valid_spots.is_empty()
                 && let Some(pos) = valid_spots.choose(&mut rng)
@@ -1246,6 +1305,95 @@ fn spawn_klarna_kop(
                 let new_mob = commands.spawn((bundle, map_pos, transform)).id();
                 commands.entity(world.into_inner()).add_child(new_mob);
             }
+        }
+    }
+}
+
+fn spawn_brainrot_enemies(
+    turn_counter: Res<TurnCounter>,
+    player: Single<(&Player, &MapPos)>,
+    pos_to_creature: Res<map::PosToCreature>,
+    mut commands: Commands,
+    world: Single<Entity, With<GameWorld>>,
+    assets: Res<assets::WorldAssets>,
+    tiles: Query<&MapPos, (With<map::Tile>, Without<map::BlocksMovement>)>,
+) {
+    let (player_stats, player_pos) = player.into_inner();
+    let brainrot = player_stats.brainrot;
+    if brainrot > 100 {
+        let spawn_rate = if brainrot > 120 { 5 } else { 10 };
+        if turn_counter.0 > 0 && turn_counter.0.is_multiple_of(spawn_rate) {
+            let mut rng = rand::rng();
+            let valid_spots = get_valid_spawn_spots(player_pos.0, &tiles, &pos_to_creature);
+
+            if !valid_spots.is_empty()
+                && let Some(pos) = valid_spots.choose(&mut rng)
+            {
+                let map_pos = *pos;
+                let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
+                let mut bundle = mapgen::MobKind::BrainrotEnemy.get_bundle(&assets);
+
+                // Randomly assigned stats with reduced ranges
+                use rand::Rng;
+                let hp = rng.random_range(3..11);
+                bundle.creature.hp = hp;
+                bundle.creature.max_hp = hp;
+                bundle.mob.melee_damage = rng.random_range(1..6);
+                bundle.mob.attrs = get_random_brainrot_attrs(&mut rng);
+
+                let entity_cmds = commands.spawn((
+                    bundle,
+                    map_pos,
+                    transform,
+                    BrainrotEnemyMarker,
+                    assets.get_brainrot_sprite(),
+                ));
+                let new_mob = entity_cmds.id();
+                commands.entity(world.into_inner()).add_child(new_mob);
+            }
+        }
+    }
+}
+
+fn transform_brainrot_enemies(
+    mut commands: Commands,
+    player: Single<&Player>,
+    assets: Res<assets::WorldAssets>,
+    brainrot_enemies: Query<(Entity, &MapPos), With<BrainrotEnemyMarker>>,
+) {
+    if player.brainrot < 100 && !brainrot_enemies.is_empty() {
+        for (entity, _pos) in brainrot_enemies.iter() {
+            let bundle = mapgen::MobKind::Capybara.get_bundle(&assets);
+            // Replace everything but MapPos and Transform
+            commands
+                .entity(entity)
+                .remove::<BrainrotEnemyMarker>()
+                .insert(bundle);
+        }
+    }
+}
+
+fn transform_brainrot_corpses(
+    mut commands: Commands,
+    player: Single<&Player>,
+    assets: Res<assets::WorldAssets>,
+    brainrot_corpses: Query<Entity, With<Ambrosia>>,
+) {
+    if player.brainrot < 100 && !brainrot_corpses.is_empty() {
+        for entity in brainrot_corpses.iter() {
+            let normie_bundle = mapgen::MobKind::Normie.get_bundle(&assets);
+            let normie_corpse = normie_bundle.corpse;
+            commands.entity(entity).remove::<Ambrosia>().insert((
+                Corpse {
+                    nutrition: normie_corpse.nutrition,
+                    name: normie_corpse.name.clone(),
+                    kind: normie_corpse.kind,
+                },
+                Name::new(normie_corpse.name),
+                normie_corpse.sprite,
+            ));
+            // Normie corpses aren't directly edible, so remove Interactable
+            commands.entity(entity).remove::<Interactable>();
         }
     }
 }
@@ -1314,10 +1462,6 @@ fn apply_damage(
                     DamageType::Physical => creature.hp -= amount,
                     DamageType::Psychic => {
                         player.brainrot += amount;
-                        if player.brainrot > 100 {
-                            creature.hp -= player.brainrot - 100;
-                            player.brainrot = 100;
-                        }
                     }
                     DamageType::Aura => {
                         player.rizz -= amount;
@@ -1670,19 +1814,31 @@ fn prune_dead(
             }) = corpse
             {
                 let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
-                let corpse_id = commands
-                    .spawn((
-                        Corpse {
-                            nutrition: *nutrition,
-                            name: name.clone(),
-                            kind: *kind,
+                let mut entity_cmds = commands.spawn((
+                    Corpse {
+                        nutrition: *nutrition,
+                        name: name.clone(),
+                        kind: *kind,
+                    },
+                    DespawnAfterTurns(50),
+                    sprite.clone(),
+                    *map_pos,
+                    transform,
+                ));
+
+                if *kind == mapgen::MobKind::BrainrotEnemy {
+                    entity_cmds.insert((
+                        Ambrosia,
+                        Name::new("Ambrosia"),
+                        Interactable {
+                            action: "Eat".to_string(),
+                            description: Some("Directly edible brainrot essence.".to_string()),
+                            kind: InteractionType::Eat,
                         },
-                        DespawnAfterTurns(50),
-                        sprite.clone(),
-                        *map_pos,
-                        transform,
-                    ))
-                    .id();
+                    ));
+                }
+
+                let corpse_id = entity_cmds.id();
                 commands.entity(world_entity).add_child(corpse_id);
             }
         }
@@ -1691,13 +1847,32 @@ fn prune_dead(
 
 #[derive(Default, Resource)]
 struct NearbyMobs {
-    mobs: Vec<(MapPos, Creature, Option<Mob>, String, Color, Name)>,
+    mobs: Vec<(
+        MapPos,
+        Creature,
+        Option<Mob>,
+        Option<String>,
+        Option<Color>,
+        Option<Sprite>,
+        Name,
+    )>,
 }
 
 fn update_nearby_mobs(
     mut nearby_mobs: ResMut<NearbyMobs>,
     player: Query<&MapPos, With<Player>>,
-    mobs: Query<(&MapPos, &Creature, Option<&Mob>, &Text2d, &TextColor, &Name), Without<Player>>,
+    mobs: Query<
+        (
+            &MapPos,
+            &Creature,
+            Option<&Mob>,
+            Option<&Text2d>,
+            Option<&TextColor>,
+            Option<&Sprite>,
+            &Name,
+        ),
+        Without<Player>,
+    >,
     pos_to_creature: Res<PosToCreature>,
     player_vis_map: Res<map::PlayerVisibilityMap>,
 ) {
@@ -1708,15 +1883,16 @@ fn update_nearby_mobs(
     for path in rogue_algebra::path::bfs_paths(&[player_pos], maxdist, reachable) {
         if let Some(pos) = path.last()
             && player_vis_map.contains(&pos.0)
-            && let Some(mob) = pos_to_creature.0.get(&pos.0)
-            && let Ok((pos, creature, mob, text, color, name)) = mobs.get(*mob)
+            && let Some(mob_entity) = pos_to_creature.0.get(&pos.0)
+            && let Ok((pos, creature, mob, text, color, sprite, name)) = mobs.get(*mob_entity)
         {
             nearby_mobs.mobs.push((
                 *pos,
                 creature.clone(),
                 mob.cloned(),
-                text.0.clone(),
-                color.0,
+                text.map(|t| t.0.clone()),
+                color.map(|c| c.0),
+                sprite.cloned(),
                 name.clone(),
             ));
         }
@@ -1796,6 +1972,19 @@ fn sidebar(
         .get_urizen_egui_image(&mut contexts, &atlas_assets, 1262)
         .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
 
+    let mut mob_images = Vec::new();
+    for (_, _, _, _, _, sprite, _) in nearby_mobs.mobs.iter() {
+        if let Some(sprite) = sprite {
+            mob_images.push(Some(get_egui_image_from_sprite(
+                &mut contexts,
+                &atlas_assets,
+                sprite,
+            )));
+        } else {
+            mob_images.push(None);
+        }
+    }
+
     let ctx = contexts.ctx_mut().unwrap();
     egui::SidePanel::right("sidebar")
         .min_width(TILE_WIDTH * 8.0)
@@ -1805,7 +1994,9 @@ fn sidebar(
             ui.group(|ui| {
                 ui.set_min_height(400.0);
 
-                for (pos, creature, mob, text, color, name) in nearby_mobs.mobs.iter() {
+                for (i, (pos, creature, mob, text, color, _sprite, name)) in
+                    nearby_mobs.mobs.iter().enumerate()
+                {
                     let highlight = Some(*pos) == examine_pos;
                     let mut frame = egui::Frame::new().inner_margin(Margin::same(4));
                     if highlight {
@@ -1813,29 +2004,10 @@ fn sidebar(
                     }
                     frame.show(ui, |ui| {
                         ui.vertical(|ui| {
-                            ui.add(
-                                egui::Label::new(apply_brainrot_ui(
-                                    RichText::new(name.as_str()).strong(),
-                                    player.brainrot,
-                                    ui.style(),
-                                    FontSelection::Default,
-                                    Align::LEFT,
-                                ))
-                                .selectable(false),
-                            );
-                            ui.horizontal(|ui| {
-                                let [r, g, b, a] = color.to_srgba().to_u8_array();
-                                let c32 = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
+                            if !name.as_str().is_empty() {
                                 ui.add(
                                     egui::Label::new(apply_brainrot_ui(
-                                        RichText::new(text)
-                                            .size(TILE_HEIGHT)
-                                            .color(c32)
-                                            .background_color(if highlight {
-                                                ui.style().visuals.code_bg_color
-                                            } else {
-                                                egui::Color32::TRANSPARENT
-                                            }),
+                                        RichText::new(name.as_str()).strong(),
                                         player.brainrot,
                                         ui.style(),
                                         FontSelection::Default,
@@ -1843,6 +2015,37 @@ fn sidebar(
                                     ))
                                     .selectable(false),
                                 );
+                            }
+                            ui.horizontal(|ui| {
+                                if let Some(text) = text
+                                    && let Some(color) = color
+                                {
+                                    let [r, g, b, a] = color.to_srgba().to_u8_array();
+                                    let c32 = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
+                                    ui.add(
+                                        egui::Label::new(apply_brainrot_ui(
+                                            RichText::new(text)
+                                                .size(TILE_HEIGHT)
+                                                .color(c32)
+                                                .background_color(if highlight {
+                                                    ui.style().visuals.code_bg_color
+                                                } else {
+                                                    egui::Color32::TRANSPARENT
+                                                }),
+                                            player.brainrot,
+                                            ui.style(),
+                                            FontSelection::Default,
+                                            Align::LEFT,
+                                        ))
+                                        .selectable(false),
+                                    );
+                                } else if let Some(sprite_img) = &mob_images[i] {
+                                    ui.add(
+                                        sprite_img
+                                            .clone()
+                                            .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT)),
+                                    );
+                                }
                                 let ratio = creature.hp as f32 / creature.max_hp as f32;
                                 draw_meter(
                                     ui,

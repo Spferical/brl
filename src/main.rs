@@ -44,6 +44,8 @@ impl Plugin for AppPlugin {
                 }),
         );
 
+        bevy::asset::embedded_asset!(app, "../assets/emotes/ffz_tileset.png");
+
         // Add other plugins.
         app.add_plugins((
             EguiPlugin::default(),
