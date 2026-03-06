@@ -1,12 +1,17 @@
 use bevy::prelude::*;
 use bevy_egui::egui::Ui;
 
-use crate::game::FactionMap;
+use crate::game::{
+    FactionMap, Player,
+    map::{MapPos, WalkBlockedMap},
+    mapgen::MapInfo,
+};
 
 #[derive(Resource, Default)]
 pub struct DebugSettings {
     show_faction_map: Option<i32>,
     pub nohurt: bool,
+    pub teleport_to: Option<usize>,
 }
 
 pub fn ui_settings(ui: &mut Ui, settings: &mut DebugSettings) {
@@ -16,8 +21,32 @@ pub fn ui_settings(ui: &mut Ui, settings: &mut DebugSettings) {
         ui.radio_value(&mut settings.show_faction_map, Some(-1), "-1");
         ui.radio_value(&mut settings.show_faction_map, Some(0), "0");
         ui.radio_value(&mut settings.show_faction_map, Some(1), "1");
+        ui.checkbox(&mut settings.nohurt, "nohurt");
+        ui.label("TP");
+        for i in 0..10 {
+            if ui.button(i.to_string()).clicked() {
+                settings.teleport_to = Some(i);
+            }
+        }
     });
-    ui.checkbox(&mut settings.nohurt, "nohurt");
+}
+
+pub(crate) fn teleport_player(
+    mut debug: ResMut<DebugSettings>,
+    map_info: Res<MapInfo>,
+    mut player: Single<&mut MapPos, With<Player>>,
+    walk_blocked_map: Res<WalkBlockedMap>,
+) {
+    if let Some(i) = debug.teleport_to
+        && let Some(level) = map_info.levels.get(i)
+    {
+        debug.teleport_to = None;
+        for p in level.rect {
+            if !walk_blocked_map.0.contains(&IVec2::from(p)) {
+                **player = MapPos(IVec2::from(p));
+            }
+        }
+    }
 }
 
 #[derive(Component)]

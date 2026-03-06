@@ -125,6 +125,7 @@ pub(super) fn plugin(app: &mut App) {
             examine::highlight_examine_tile,
             delivery::draw_delivery_indicators,
             upgrades::handle_upgrades,
+            debug::teleport_player,
         )
             .run_if(in_state(Screen::Gameplay))
             .chain(),
