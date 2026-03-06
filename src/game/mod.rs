@@ -2874,14 +2874,14 @@ struct MinSpawnZone {
 fn process_spawn_zones(
     mut commands: Commands,
     pos_to_mob: Res<PosToCreature>,
-    q_zones: Query<(Entity, &MinSpawnZone)>,
+    q_zones: Query<(Entity, &MinSpawnZone), Without<Frozen>>,
     walk_blocked_map: Res<WalkBlockedMap>,
     player_vis_map: Res<PlayerVisibilityMap>,
     assets: Res<WorldAssets>,
 ) {
     let rng = &mut rand::rng();
 
-    for (entity, zone) in q_zones {
+    for (entity, zone) in q_zones.iter() {
         let num_mobs = zone
             .rect
             .into_iter()
@@ -2908,6 +2908,7 @@ fn process_spawn_zones(
                     MapPos(IVec2::from(*p)),
                     mob_kind,
                     &assets,
+                    false,
                 );
             }
         }
