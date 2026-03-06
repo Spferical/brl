@@ -1481,8 +1481,7 @@ fn apply_damage(
                     }
                     DamageType::Boredom => {
                         player.boredom += amount;
-                        player.brainrot -= amount;
-                        player.brainrot = player.brainrot.clamp(0, 100);
+                        player.brainrot = (player.brainrot - amount).max(0);
                         if player.boredom > 100 {
                             creature.hp -= player.boredom - 100;
                             player.boredom = 100;
