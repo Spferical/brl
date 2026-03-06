@@ -139,6 +139,7 @@ pub(super) fn plugin(app: &mut App) {
                     handle_subscriptions,
                     signal::update_player_signal,
                     delivery::process_deliveries,
+                    process_despawns,
                 )
                     .chain(),
                 // kill mobs from any player damage
@@ -706,6 +707,9 @@ pub(crate) struct Corpse {
     pub kind: MobKind,
 }
 
+#[derive(Component)]
+pub(crate) struct DespawnAfterTurns(pub u32);
+
 #[derive(Component, Clone)]
 pub(crate) struct DropsCorpse {
     pub sprite: assets::AsciiSprite,
@@ -854,6 +858,21 @@ fn handle_subscriptions(turn_counter: Res<TurnCounter>, mut player: Single<&mut 
     if turn_counter.0 > 0 && turn_counter.0.is_multiple_of(100) {
         for sub in player.subscriptions.clone() {
             player.money -= sub.cost();
+        }
+    }
+}
+
+fn process_despawns(
+    mut commands: Commands,
+    mut q_despawns: Query<(Entity, &mut DespawnAfterTurns)>,
+) {
+    for (entity, mut despawn) in q_despawns.iter_mut() {
+        if despawn.0 > 0 {
+            despawn.0 -= 1;
+        }
+
+        if despawn.0 == 0 {
+            commands.entity(entity).despawn();
         }
     }
 }
@@ -1122,6 +1141,7 @@ fn handle_player_move(
                                 name: format!("Cooked {}", corpse.name),
                                 kind: corpse.kind,
                             },
+                            DespawnAfterTurns(50),
                             meal_stats,
                             Interactable {
                                 action: "Eat".to_string(),
@@ -1657,6 +1677,7 @@ fn prune_dead(
                             name: name.clone(),
                             kind: *kind,
                         },
+                        DespawnAfterTurns(50),
                         sprite.clone(),
                         *map_pos,
                         transform,

@@ -1,7 +1,8 @@
 use crate::game::DamageType;
 use crate::game::{
-    CORPSE_Z, Corpse, DamageInstance, GameWorld, HIGHLIGHT_Z, Interactable, InteractionType,
-    PendingDamage, Player, PosToCreature, animation::FloatingTextMessage, assets::WorldAssets, map,
+    CORPSE_Z, Corpse, DamageInstance, DespawnAfterTurns, GameWorld, HIGHLIGHT_Z, Interactable,
+    InteractionType, PendingDamage, Player, PosToCreature, animation::FloatingTextMessage,
+    assets::WorldAssets, map,
 };
 use bevy::prelude::*;
 
@@ -186,6 +187,7 @@ pub(crate) fn process_deliveries(
                         name: food.name.to_string(),
                         kind: crate::game::mapgen::MobKind::Normie,
                     },
+                    DespawnAfterTurns(50),
                     Food {
                         food_idx: delivery.food_idx,
                     },
