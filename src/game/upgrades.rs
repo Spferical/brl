@@ -68,6 +68,7 @@ impl std::fmt::Display for Effect {
 pub struct Upgrade {
     pub name: &'static str,
     pub effects: Vec<Effect>,
+    pub frequency: f64,
 }
 impl Upgrade {
     pub fn describe(&self) -> String {
@@ -120,9 +121,11 @@ pub(crate) fn handle_upgrades(
         let valid_options = (0..upgrades.len())
             .filter(|i| !player.upgrades.contains(i))
             .collect::<Vec<_>>();
-        player
-            .upgrade_options
-            .extend(valid_options.choose_multiple(rng, 3));
+        if let Ok(choices) =
+            valid_options.choose_multiple_weighted(rng, 3, |u| UPGRADES[*u].frequency)
+        {
+            player.upgrade_options.extend(choices);
+        }
     }
 }
 
@@ -131,70 +134,87 @@ pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
         Upgrade {
             name: "Cardio",
             effects: vec![Effect::AttrChange(Attr::MaxHp, 10)],
+            frequency: 5.0,
         },
         Upgrade {
             name: "Trust Fund",
-            effects: vec![Effect::AttrChange(Attr::Money, 20)],
+            effects: vec![Effect::AttrChange(Attr::Money, 100)],
+            frequency: 1.0,
         },
         Upgrade {
             name: "Group Chat",
             effects: vec![Effect::AttrChange(Attr::Boredom, -25)],
+            frequency: 1.0,
         },
         Upgrade {
             name: "Organic",
             effects: vec![Effect::AttrChange(Attr::MaxHp, 10)],
+            frequency: 1.0,
         },
         Upgrade {
             name: "Protein Goblin",
             effects: vec![Effect::AttrChange(Attr::Strength, 5)],
+            frequency: 1.0,
         },
         Upgrade {
             name: "Grip Strengthener",
             effects: vec![Effect::AttrChange(Attr::Strength, 5)],
+            frequency: 1.0,
         },
         Upgrade {
             name: "Mewing",
             effects: vec![Effect::AttrChange(Attr::Rizz, 5)],
+            frequency: 5.0,
         },
         Upgrade {
             name: "Sprint",
             effects: vec![Effect::GainAbility(Ability::Sprint)],
+            frequency: 1.0,
         },
         Upgrade {
             name: "Shoulder Check",
             effects: vec![Effect::GainAbility(Ability::ShoulderCheck)],
+            frequency: 1.0,
         },
         Upgrade {
             name: "Mog",
             effects: vec![Effect::GainAbility(Ability::Mog)],
+            frequency: 5.0,
         },
         Upgrade {
             name: "Cook",
             effects: vec![Effect::GainAbility(Ability::Cook)],
+            frequency: 5.0,
         },
         Upgrade {
             name: "Memelord",
             effects: vec![Effect::AttrChange(Attr::Brainrot, 50)],
+            frequency: 1.0,
         },
         Upgrade {
             name: "DungeonDash Platinum",
             effects: vec![Effect::Subscription(Subscription::DungeonDashPlatinum)],
+            frequency: 1.0,
         },
         Upgrade {
             name: "UndergroundTV Pro",
             effects: vec![Effect::Subscription(Subscription::UndergroundTVPro)],
+            frequency: 1.0,
         },
         Upgrade {
             name: "5G LTE",
             effects: vec![Effect::Subscription(Subscription::FiveGLTE)],
+            frequency: 1.0,
         },
         Upgrade {
             name: "Dungeon Fitness Membership",
             effects: vec![Effect::Subscription(Subscription::DungeonFitness)],
+            frequency: 1.0,
         },
         Upgrade {
             name: "Library Card",
             effects: vec![Effect::GainAbility(Ability::ReadBook)],
+            frequency: 5.0,
         },
     ]
 });
