@@ -233,8 +233,8 @@ pub fn update_streaming_turn(
 
     if streaming_state.is_streaming {
         if player.signal > 2 {
-            // 1 brainrot every 30 turns
-            if turn_counter.0.is_multiple_of(30) {
+            // 1 brainrot every 10 turns
+            if turn_counter.0.is_multiple_of(10) {
                 player.brainrot += 1;
             }
 
