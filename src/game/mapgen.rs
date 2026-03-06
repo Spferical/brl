@@ -709,8 +709,8 @@ fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
         .collect::<Vec<_>>();
 
     LevelDraft {
-        entrances: stairs[0..3].iter().cloned().collect(),
-        exits: stairs[3..].iter().cloned().collect(),
+        entrances: stairs[0..3].to_vec(),
+        exits: stairs[3..].to_vec(),
         tiles,
         mobs: Default::default(),
     }

@@ -819,7 +819,7 @@ fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut
 }
 
 fn handle_subscriptions(turn_counter: Res<TurnCounter>, mut player: Single<&mut Player>) {
-    if turn_counter.0 > 0 && turn_counter.0 % 100 == 0 {
+    if turn_counter.0 > 0 && turn_counter.0.is_multiple_of(100) {
         for sub in player.subscriptions.clone() {
             let cost = match sub {
                 Subscription::DungeonDashPlatinum => 20,
@@ -1073,47 +1073,46 @@ fn handle_player_move(
                 }
             }
             Ability::Cook => {
-                if player_stats.brainrot < 10 {
-                    if let Some((corpse_entity, corpse_pos, corpse)) =
+                if player_stats.brainrot < 10
+                    && let Some((corpse_entity, corpse_pos, corpse)) =
                         q_corpses.iter().find(|(_, corpse_pos, corpse)| {
                             corpse_pos.0 == pos.0 && corpse.nutrition > 0
                         })
-                    {
-                        let (meal_name, meal_stats) = corpse.kind.get_cooked_meal();
+                {
+                    let (meal_name, meal_stats) = corpse.kind.get_cooked_meal();
 
-                        let transform = Transform::from_translation(corpse_pos.to_vec3(CORPSE_Z));
-                        let sprite = assets.get_ascii_sprite('%', Color::srgb(0.5, 0.25, 0.0));
-                        let meal_id = commands
-                            .spawn((
-                                Name::new(meal_name),
-                                Corpse {
-                                    nutrition: 0,
-                                    name: format!("Cooked {}", corpse.name),
-                                    kind: corpse.kind,
-                                },
-                                meal_stats,
-                                Interactable {
-                                    action: "Eat".to_string(),
-                                    description: Some(format!("A freshly cooked {}!", meal_name)),
-                                    kind: InteractionType::Eat,
-                                },
-                                sprite,
-                                *corpse_pos,
-                                transform,
-                                GlobalTransform::IDENTITY,
-                                InheritedVisibility::VISIBLE,
-                            ))
-                            .id();
-                        commands.entity(world_entity).add_child(meal_id);
-                        floating_text.write(FloatingTextMessage {
-                            entity: Some(meal_id),
-                            world_pos: None,
-                            text: format!("Cooked {}!", meal_name),
-                            color: Color::srgb(1.0, 1.0, 0.0),
-                        });
+                    let transform = Transform::from_translation(corpse_pos.to_vec3(CORPSE_Z));
+                    let sprite = assets.get_ascii_sprite('%', Color::srgb(0.5, 0.25, 0.0));
+                    let meal_id = commands
+                        .spawn((
+                            Name::new(meal_name),
+                            Corpse {
+                                nutrition: 0,
+                                name: format!("Cooked {}", corpse.name),
+                                kind: corpse.kind,
+                            },
+                            meal_stats,
+                            Interactable {
+                                action: "Eat".to_string(),
+                                description: Some(format!("A freshly cooked {}!", meal_name)),
+                                kind: InteractionType::Eat,
+                            },
+                            sprite,
+                            *corpse_pos,
+                            transform,
+                            GlobalTransform::IDENTITY,
+                            InheritedVisibility::VISIBLE,
+                        ))
+                        .id();
+                    commands.entity(world_entity).add_child(meal_id);
+                    floating_text.write(FloatingTextMessage {
+                        entity: Some(meal_id),
+                        world_pos: None,
+                        text: format!("Cooked {}!", meal_name),
+                        color: Color::srgb(1.0, 1.0, 0.0),
+                    });
 
-                        commands.entity(corpse_entity).despawn();
-                    }
+                    commands.entity(corpse_entity).despawn();
                 }
             }
             Ability::ReadBook => {
@@ -1167,7 +1166,7 @@ fn spawn_klarna_kop(
     let debt = -player.0.money;
     if turn_counter.0 > 0 && debt > 5 {
         let spawn_rate = if debt > 50 { 5 } else { 10 };
-        if turn_counter.0 % spawn_rate == 0 {
+        if turn_counter.0.is_multiple_of(spawn_rate) {
             let ppos = player.1.0;
             let mut rng = rand::rng();
             let mut valid_spots = Vec::new();
@@ -1181,20 +1180,20 @@ fn spawn_klarna_kop(
                 }
             }
 
-            if !valid_spots.is_empty() {
-                if let Some(pos) = valid_spots.choose(&mut rng) {
-                    let map_pos = *pos;
-                    let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
-                    let mut bundle = mapgen::MobKind::KlarnaKop.get_bundle(&assets);
+            if !valid_spots.is_empty()
+                && let Some(pos) = valid_spots.choose(&mut rng)
+            {
+                let map_pos = *pos;
+                let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
+                let mut bundle = mapgen::MobKind::KlarnaKop.get_bundle(&assets);
 
-                    if debt > 100 {
-                        bundle.creature.hp *= 2;
-                        bundle.creature.max_hp *= 2;
-                    }
-
-                    let new_mob = commands.spawn((bundle, map_pos, transform)).id();
-                    commands.entity(world.into_inner()).add_child(new_mob);
+                if debt > 100 {
+                    bundle.creature.hp *= 2;
+                    bundle.creature.max_hp *= 2;
                 }
+
+                let new_mob = commands.spawn((bundle, map_pos, transform)).id();
+                commands.entity(world.into_inner()).add_child(new_mob);
             }
         }
     }

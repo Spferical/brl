@@ -1247,27 +1247,27 @@ pub fn update_cockatrice(
         state.initialized = true;
     }
 
-    if let PhoneScreen::App(AppId::Cockatrice) = current_screen.get() {
-        if phone_state.is_open {
-            let delta = time.delta_secs();
-            state.scroll_timer += delta as f64;
-            state.turn_timer += delta;
+    if let PhoneScreen::App(AppId::Cockatrice) = current_screen.get()
+        && phone_state.is_open
+    {
+        let delta = time.delta_secs();
+        state.scroll_timer += delta as f64;
+        state.turn_timer += delta;
 
-            if state.turn_timer >= 2.0 {
-                state.turn_timer -= 2.0;
+        if state.turn_timer >= 2.0 {
+            state.turn_timer -= 2.0;
 
-                let (entity, mut player, creature) = player_query.into_inner();
-                if creature.hp > 0 {
-                    player.brainrot += 5;
-                    player.brainrot = player.brainrot.clamp(0, 100);
-                    player.boredom -= 10;
-                    player.boredom = player.boredom.clamp(0, 100);
+            let (entity, mut player, creature) = player_query.into_inner();
+            if creature.hp > 0 {
+                player.brainrot += 5;
+                player.brainrot = player.brainrot.clamp(0, 100);
+                player.boredom -= 10;
+                player.boredom = player.boredom.clamp(0, 100);
 
-                    commands
-                        .entity(entity)
-                        .insert(crate::game::input::PlayerIntent::Wait);
-                    commands.run_schedule(crate::game::Turn);
-                }
+                commands
+                    .entity(entity)
+                    .insert(crate::game::input::PlayerIntent::Wait);
+                commands.run_schedule(crate::game::Turn);
             }
         }
     }
