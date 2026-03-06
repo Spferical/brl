@@ -1,11 +1,12 @@
 use crate::game::{
-    CookedMeal, Creature, DropsCorpse, Interactable, InteractionType, Mob, MobAttrs, MobBundle,
-    PLAYER_Z, Player, Resist, Stairs, TILE_Z,
+    CookedMeal, Creature, DropsCorpse, Interactable, InteractionType, MinSpawnZone, Mob, MobAttrs,
+    MobBundle, PLAYER_Z, Player, Resist, TILE_Z,
     assets::WorldAssets,
     camera::CameraFollow,
     lighting::Occluder,
     map::{self, MapPos, Tile},
     signal,
+    spawn::{spawn_mob, spawn_stairs},
 };
 use bevy::{
     platform::collections::{HashMap, HashSet},
@@ -1228,86 +1229,24 @@ pub(crate) fn spawn_level(
 
     for (&pos, &mob_kind) in draft.mobs.iter() {
         let pos = pos + offset;
-        let bundle = mob_kind.get_bundle(assets);
-        let map_pos = MapPos(IVec2::from(pos));
-        let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
-        let mut entity_cmds = commands.spawn((bundle, map_pos, transform));
-        if mob_kind == MobKind::BrainrotEnemy {
-            entity_cmds.insert(assets.get_brainrot_sprite());
-        }
-        let new_mob = entity_cmds.id();
-        commands.entity(level_entity).add_child(new_mob);
+        spawn_mob(
+            commands,
+            level_entity,
+            MapPos(IVec2::from(pos)),
+            mob_kind,
+            assets,
+        );
     }
-}
 
-pub(crate) fn spawn_stairs(
-    world: Entity,
-    commands: &mut Commands,
-    assets: &WorldAssets,
-    down_pos: rogue_algebra::Pos,
-    up_pos: rogue_algebra::Pos,
-) {
-    let up_pos = MapPos(IVec2::from(up_pos));
-    let down_pos = MapPos(IVec2::from(down_pos));
-    let color = Color::srgb(0.4, 0.4, 0.4);
-    commands.entity(world).with_children(|parent| {
-        parent
-            .spawn((
-                Name::new("Up Stairs"),
-                up_pos,
-                Transform::from_translation(up_pos.to_vec3(TILE_Z)),
-                Stairs {
-                    destination: down_pos,
-                },
-                Interactable {
-                    action: "Go Up".to_string(),
-                    description: None,
-                    kind: InteractionType::Stairs,
-                },
-                assets.get_ascii_sprite('<', color),
-                GlobalTransform::IDENTITY,
-                InheritedVisibility::VISIBLE,
-            ))
-            .with_children(|p| {
-                p.spawn((
-                    Sprite {
-                        image: assets.get_solid_mask(),
-                        color: Color::srgb(0.1, 0.1, 0.1),
-                        custom_size: Some(Vec2::new(map::TILE_WIDTH, map::TILE_HEIGHT)),
-                        ..default()
-                    },
-                    Transform::from_translation(Vec3::new(0.0, 0.0, -0.1)),
-                ));
+    if matches!(draft.title, LevelTitle::Island) {
+        commands.entity(level_entity).with_children(|parent| {
+            parent.spawn(MinSpawnZone {
+                rect: draft.get_containing_rect() + offset,
+                min_units: 30,
+                distribution: FORTNITE_DIST,
             });
-        parent
-            .spawn((
-                Name::new("Down Stairs"),
-                down_pos,
-                Transform::from_translation(down_pos.to_vec3(TILE_Z)),
-                Stairs {
-                    destination: up_pos,
-                },
-                Interactable {
-                    action: "Go Down".to_string(),
-                    description: None,
-                    kind: InteractionType::Stairs,
-                },
-                assets.get_ascii_sprite('>', color),
-                GlobalTransform::IDENTITY,
-                InheritedVisibility::VISIBLE,
-            ))
-            .with_children(|p| {
-                p.spawn((
-                    Sprite {
-                        image: assets.get_solid_mask(),
-                        color: Color::srgb(0.1, 0.1, 0.1),
-                        custom_size: Some(Vec2::new(map::TILE_WIDTH, map::TILE_HEIGHT)),
-                        ..default()
-                    },
-                    Transform::from_translation(Vec3::new(0.0, 0.0, -0.1)),
-                ));
-            });
-    });
+        });
+    }
 }
 
 pub(crate) fn draft_level_mapgen_simple(rng: &mut impl Rng) -> LevelDraft {

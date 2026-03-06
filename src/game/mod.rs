@@ -23,8 +23,12 @@ use crate::{
         assets::{WorldAssets, get_egui_image_from_sprite},
         debug::{DebugSettings, redo_faction_map},
         input::{AbilityClicked, EatEvent, InputMode, PlayerIntent, StairsClicked},
-        map::{MapPos, PlayerMemoryMap, PosToCreature, PosToInteractable, TILE_HEIGHT, TILE_WIDTH},
+        map::{
+            MapPos, PlayerMemoryMap, PlayerVisibilityMap, PosToCreature, PosToInteractable,
+            TILE_HEIGHT, TILE_WIDTH, WalkBlockedMap,
+        },
         mapgen::{MapInfo, MobKind},
+        spawn::spawn_mob,
     },
     screens::Screen,
 };
@@ -43,6 +47,7 @@ mod mapgen;
 mod mobile_apps;
 mod phone;
 mod signal;
+mod spawn;
 mod targeting;
 mod upgrades;
 
@@ -154,6 +159,7 @@ pub(super) fn plugin(app: &mut App) {
                 // environment
                 map::update_pos_to_creature,
                 process_spawners,
+                process_spawn_zones,
                 spawn_klarna_kop,
                 spawn_brainrot_enemies,
                 transform_brainrot_enemies,
@@ -1927,7 +1933,6 @@ fn process_mob_turn(
     }
 }
 
-
 fn prune_dead(
     mut commands: Commands,
     world: Single<Entity, With<GameWorld>>,
@@ -2799,6 +2804,56 @@ fn title_drop_new_levels(
     {
         last_level.0 = Some(cur_map.rect);
         msg_td.write(TitleDropMessage(format!("{}", cur_map.ty)));
+    }
+}
+
+#[derive(Component)]
+struct MinSpawnZone {
+    rect: rogue_algebra::Rect,
+    min_units: usize,
+    distribution: &'static [(MobKind, usize)],
+}
+
+fn process_spawn_zones(
+    mut commands: Commands,
+    pos_to_mob: Res<PosToCreature>,
+    q_zones: Query<(Entity, &MinSpawnZone)>,
+    walk_blocked_map: Res<WalkBlockedMap>,
+    player_vis_map: Res<PlayerVisibilityMap>,
+    assets: Res<WorldAssets>,
+) {
+    let rng = &mut rand::rng();
+
+    for (entity, zone) in q_zones {
+        let num_mobs = zone
+            .rect
+            .into_iter()
+            .filter(|p| pos_to_mob.0.contains_key(&IVec2::from(*p)))
+            .count();
+        let num_missing = zone.min_units.saturating_sub(num_mobs);
+        if num_missing > 0 {
+            let available_spots = zone
+                .rect
+                .into_iter()
+                .filter(|p| !pos_to_mob.0.contains_key(&IVec2::from(*p)))
+                .filter(|p| !walk_blocked_map.0.contains(&IVec2::from(*p)))
+                .filter(|p| !player_vis_map.0.contains(&IVec2::from(*p)))
+                .collect::<Vec<rogue_algebra::Pos>>();
+            for p in available_spots.choose_multiple(rng, num_missing) {
+                let mob_kind = zone
+                    .distribution
+                    .choose_weighted(rng, |(_k, w)| *w)
+                    .unwrap()
+                    .0;
+                spawn_mob(
+                    &mut commands,
+                    entity,
+                    MapPos(IVec2::from(*p)),
+                    mob_kind,
+                    &assets,
+                );
+            }
+        }
     }
 }
 
