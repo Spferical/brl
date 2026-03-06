@@ -3,7 +3,7 @@ use std::time::Duration;
 use bevy::prelude::*;
 use bevy_egui::egui::{self, Align, FontSelection, RichText};
 
-use crate::game::{DAMAGE_Z, apply_brainrot_ui, assets::WorldAssets};
+use crate::game::{DAMAGE_Z, DamageType, apply_brainrot_ui};
 
 const MAX_TICK: Duration = Duration::from_nanos(1_000_000_000 / 30);
 
@@ -124,44 +124,162 @@ pub fn process_attack_animations(
 #[derive(Message)]
 pub struct DamageAnimationMessage {
     pub entity: Entity,
+    pub amount: i32,
+    pub ty: DamageType,
+    pub world_pos: Vec3,
+    pub is_player: bool,
+}
+
+#[derive(Message)]
+pub struct FloatingTextMessage {
+    pub entity: Option<Entity>,
+    pub world_pos: Option<Vec3>,
+    pub text: String,
+    pub color: Color,
+}
+
+#[derive(Component)]
+pub struct FloatingText {
+    pub timer: Timer,
 }
 
 pub fn spawn_damage_animations(
     mut commands: Commands,
     mut messages: MessageReader<DamageAnimationMessage>,
-    assets: Res<WorldAssets>,
+    _q_transforms: Query<&Transform>,
 ) {
-    let sprite = assets.get_ascii_sprite('!', Color::srgb(1.0, 0.0, 0.0));
-    for DamageAnimationMessage { entity } in messages.read() {
-        let mut transform = Transform::IDENTITY;
-        transform.translation.z = DAMAGE_Z;
-        if commands.get_entity(*entity).is_ok() {
-            let id = commands
-                .spawn((
-                    sprite.clone(),
-                    transform,
-                    DamageAnimation(Timer::from_seconds(0.5, TimerMode::Once)),
-                ))
-                .id();
-            commands.entity(*entity).add_child(id);
-        }
+    for msg in messages.read() {
+        let (text, color) = match msg.ty {
+            DamageType::Physical => {
+                if msg.is_player {
+                    (format!("-{} HP", msg.amount), Color::srgb(1.0, 0.2, 0.2))
+                } else {
+                    (
+                        format!("-{} physical damage", msg.amount),
+                        Color::srgb(1.0, 0.2, 0.2),
+                    )
+                }
+            }
+            DamageType::Psychic => {
+                if msg.is_player {
+                    (
+                        format!("+{} Brainrot", msg.amount),
+                        Color::srgb(0.8, 0.2, 1.0),
+                    )
+                } else {
+                    (
+                        format!("-{} psychic damage", msg.amount),
+                        Color::srgb(0.8, 0.2, 1.0),
+                    )
+                }
+            }
+            DamageType::Aura => {
+                if msg.is_player {
+                    (format!("-{} Rizz", msg.amount), Color::srgb(0.2, 0.8, 1.0))
+                } else {
+                    (
+                        format!("-{} aura damage", msg.amount),
+                        Color::srgb(0.2, 0.8, 1.0),
+                    )
+                }
+            }
+            DamageType::Boredom => {
+                if msg.is_player {
+                    (
+                        format!("+{} Boredom", msg.amount),
+                        Color::srgb(0.6, 0.6, 0.6),
+                    )
+                } else {
+                    (
+                        format!("-{} boredom damage", msg.amount),
+                        Color::srgb(0.6, 0.6, 0.6),
+                    )
+                }
+            }
+            DamageType::Hunger => {
+                if msg.is_player {
+                    (
+                        format!("+{} Hunger", msg.amount),
+                        Color::srgb(1.0, 0.5, 0.0),
+                    )
+                } else {
+                    (
+                        format!("-{} hunger damage", msg.amount),
+                        Color::srgb(1.0, 0.5, 0.0),
+                    )
+                }
+            }
+            DamageType::Strength => {
+                if msg.is_player {
+                    (
+                        format!("-{} Strength", msg.amount),
+                        Color::srgb(0.2, 1.0, 0.2),
+                    )
+                } else {
+                    (
+                        format!("-{} strength damage", msg.amount),
+                        Color::srgb(0.2, 1.0, 0.2),
+                    )
+                }
+            }
+        };
+
+        spawn_floating_text(&mut commands, text, color, msg.world_pos);
     }
 }
 
-#[derive(Component)]
-pub struct DamageAnimation(pub Timer);
-
-pub fn update_damage_animations(
+pub fn spawn_floating_messages(
     mut commands: Commands,
-    mut query: Query<(Entity, &mut DamageAnimation, &mut TextColor)>,
+    mut messages: MessageReader<FloatingTextMessage>,
+    q_transforms: Query<&Transform>,
+) {
+    for msg in messages.read() {
+        let base_pos = if let Some(entity) = msg.entity {
+            q_transforms
+                .get(entity)
+                .map(|t| t.translation)
+                .unwrap_or_default()
+        } else {
+            msg.world_pos.unwrap_or_default()
+        };
+
+        spawn_floating_text(&mut commands, msg.text.clone(), msg.color, base_pos);
+    }
+}
+
+fn spawn_floating_text(commands: &mut Commands, text: String, color: Color, mut pos: Vec3) {
+    pos.z = DAMAGE_Z + 10.0;
+    commands.spawn((
+        Text2d::new(text),
+        TextFont {
+            font_size: 12.0,
+            ..default()
+        },
+        TextColor(color),
+        Transform::from_translation(pos),
+        FloatingText {
+            timer: Timer::from_seconds(1.0, TimerMode::Once),
+        },
+    ));
+}
+
+pub fn update_floating_text(
+    mut commands: Commands,
+    mut query: Query<(Entity, &mut FloatingText, &mut Transform, &mut TextColor)>,
     time: Res<Time>,
 ) {
-    for (entity, mut anim, mut color) in query.iter_mut() {
-        anim.0.tick(time.delta().min(MAX_TICK));
-        let ease =
-            EasingCurve::new(1.0, 0.0, EaseFunction::CubicOut).sample_clamped(anim.0.fraction());
-        color.0.set_alpha(ease);
-        if anim.0.is_finished() {
+    for (entity, mut floating, mut transform, mut color) in query.iter_mut() {
+        floating.timer.tick(time.delta().min(MAX_TICK));
+        let fraction = floating.timer.fraction();
+
+        // Float up
+        transform.translation.y += 30.0 * time.delta_secs();
+
+        // Fade out
+        let alpha = EasingCurve::new(1.0, 0.0, EaseFunction::CubicIn).sample_clamped(fraction);
+        color.0.set_alpha(alpha);
+
+        if floating.timer.is_finished() {
             commands.entity(entity).despawn();
         }
     }

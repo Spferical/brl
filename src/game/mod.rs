@@ -18,7 +18,7 @@ use rand::{
 use crate::{
     asset_tracking::LoadResource as _,
     game::{
-        animation::{DamageAnimationMessage, MoveAnimation, spawn_damage_animations},
+        animation::{DamageAnimationMessage, FloatingTextMessage, MoveAnimation},
         assets::WorldAssets,
         debug::{DebugSettings, redo_faction_map},
         input::{AbilityClicked, EatEvent, InputMode, PlayerIntent, StairsClicked},
@@ -82,6 +82,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_state::<phone::PhoneScreen>();
     app.init_state::<mobile_apps::DungeonDashScreen>();
     app.add_message::<DamageAnimationMessage>();
+    app.add_message::<FloatingTextMessage>();
     app.add_message::<input::AbilityClicked>();
     app.add_message::<input::StairsClicked>();
     app.add_message::<input::EatEvent>();
@@ -112,7 +113,9 @@ pub(super) fn plugin(app: &mut App) {
             (
                 animation::process_move_animations,
                 animation::process_attack_animations,
-                animation::update_damage_animations,
+                animation::spawn_damage_animations,
+                animation::spawn_floating_messages,
+                animation::update_floating_text,
             )
                 .chain(),
             camera::update_camera,
@@ -156,7 +159,6 @@ pub(super) fn plugin(app: &mut App) {
                 check_bullet_collision,
                 // damage
                 apply_damage,
-                spawn_damage_animations,
                 prune_dead,
                 map::update_pos_to_creature,
                 // end-of-turn bookkeeping
@@ -840,7 +842,7 @@ struct PlayerMoveParams<'w, 's> {
     screen_shake: ResMut<'w, camera::ScreenShake>,
     pos_to_interactable: Res<'w, PosToInteractable>,
     assets: Res<'w, assets::WorldAssets>,
-    damage_animation: MessageWriter<'w, DamageAnimationMessage>,
+    floating_text: MessageWriter<'w, FloatingTextMessage>,
 }
 
 fn handle_player_move(
@@ -876,7 +878,7 @@ fn handle_player_move(
         mut screen_shake,
         pos_to_interactable,
         assets,
-        mut damage_animation,
+        mut floating_text,
     } = params;
     let world_entity = world.into_inner();
     let (player_entity, mut pos, intent, mut player_stats, mut creature) = player.into_inner();
@@ -1094,7 +1096,12 @@ fn handle_player_move(
                             ))
                             .id();
                         commands.entity(world_entity).add_child(meal_id);
-                        damage_animation.write(DamageAnimationMessage { entity: meal_id });
+                        floating_text.write(FloatingTextMessage {
+                            entity: Some(meal_id),
+                            world_pos: None,
+                            text: format!("Cooked {}!", meal_name),
+                            color: Color::srgb(1.0, 1.0, 0.0),
+                        });
 
                         commands.entity(corpse_entity).despawn();
                     }
@@ -1236,10 +1243,13 @@ fn check_bullet_collision(
 fn apply_damage(
     mut damage: ResMut<PendingDamage>,
     mut animation: MessageWriter<DamageAnimationMessage>,
-    mut creature: Query<(&mut Creature, Option<&mut Player>, Option<&Mob>)>,
+    mut creature: Query<(&mut Creature, Option<&mut Player>, Option<&Mob>, &Transform)>,
 ) {
     for DamageInstance { entity, amount, ty } in damage.0.drain(..) {
-        if let Ok((mut creature, player, mob)) = creature.get_mut(entity) {
+        if let Ok((mut creature, player, mob, transform)) = creature.get_mut(entity) {
+            let world_pos = transform.translation;
+            let is_player = player.is_some();
+            let mut final_amount = amount;
             match player {
                 Some(mut player) => match ty {
                     DamageType::Physical => creature.hp -= amount,
@@ -1277,15 +1287,22 @@ fn apply_damage(
                     let resist = mob
                         .map(|m| m.get_damage_resist(ty))
                         .unwrap_or(Resist::Normal);
-                    creature.hp -= match resist {
+                    final_amount = match resist {
                         Resist::Weak => amount * 2,
                         Resist::Normal => amount,
                         Resist::Strong => amount / 2,
                     };
+                    creature.hp -= final_amount;
                 }
             }
+            animation.write(DamageAnimationMessage {
+                entity,
+                amount: final_amount,
+                ty,
+                world_pos,
+                is_player,
+            });
         }
-        animation.write(DamageAnimationMessage { entity });
     }
 }
 
@@ -1573,7 +1590,6 @@ fn process_mob_turn(
 fn prune_dead(
     mut commands: Commands,
     world: Single<Entity, With<GameWorld>>,
-    mut damage_animation: MessageWriter<DamageAnimationMessage>,
     q_creatures: Query<(Entity, &Creature, &MapPos, Option<&DropsCorpse>), Without<Player>>,
     mut player: Single<&mut Player>,
     streaming_state: Res<chat::StreamingState>,
@@ -1608,7 +1624,6 @@ fn prune_dead(
                     ))
                     .id();
                 commands.entity(world_entity).add_child(corpse_id);
-                damage_animation.write(DamageAnimationMessage { entity: corpse_id });
             }
         }
     }

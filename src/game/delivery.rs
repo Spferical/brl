@@ -1,8 +1,7 @@
 use crate::game::DamageType;
 use crate::game::{
     CORPSE_Z, Corpse, DamageInstance, GameWorld, HIGHLIGHT_Z, Interactable, InteractionType,
-    PendingDamage, Player, PosToCreature, animation::DamageAnimationMessage, assets::WorldAssets,
-    map,
+    PendingDamage, Player, PosToCreature, animation::FloatingTextMessage, assets::WorldAssets, map,
 };
 use bevy::prelude::*;
 
@@ -100,7 +99,7 @@ pub(crate) fn process_deliveries(
     pos_to_creature: Res<PosToCreature>,
     players: Query<Entity, With<Player>>,
     mut damage: ResMut<PendingDamage>,
-    mut damage_animation: MessageWriter<DamageAnimationMessage>,
+    mut floating_text: MessageWriter<FloatingTextMessage>,
     mut chat: ResMut<crate::game::chat::ChatHistory>,
     streaming_state: Res<crate::game::chat::StreamingState>,
 ) {
@@ -152,7 +151,12 @@ pub(crate) fn process_deliveries(
                 ))
                 .id();
             commands.entity(world_entity).add_child(drop_id);
-            damage_animation.write(DamageAnimationMessage { entity: drop_id });
+            floating_text.write(FloatingTextMessage {
+                entity: Some(drop_id),
+                world_pos: None,
+                text: format!("{} Delivered!", food.name),
+                color: Color::srgb(1.0, 1.0, 1.0),
+            });
 
             // Chat reaction
             crate::game::chat::queue_food_delivery_message(&mut chat, &streaming_state);
