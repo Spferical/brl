@@ -21,6 +21,7 @@ use rogue_algebra::Pos;
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum TileKind {
     Floor,
+    Water,
     Wall,
     WorkoutMachine,
 }
@@ -35,6 +36,7 @@ pub(crate) enum MobKind {
     Capybara,
     KlarnaKop,
     BrainrotEnemy,
+    Fortnite(i32),
 }
 
 const GENERIC_DIST: &[(MobKind, usize)] = &[
@@ -51,6 +53,12 @@ const GYM_DIST: &[(MobKind, usize)] = &[
     (MobKind::Normie, 1),
     (MobKind::Influencer, 1),
     (MobKind::GiantFrog, 1),
+];
+
+const FORTNITE_DIST: &[(MobKind, usize)] = &[
+    (MobKind::Fortnite(1), 1),
+    (MobKind::Fortnite(2), 1),
+    (MobKind::Fortnite(3), 1),
 ];
 
 impl MobKind {
@@ -142,6 +150,17 @@ impl MobKind {
                     rizz: 0,
                     brainrot: 0,
                     boredom: 50,
+                },
+            ),
+            MobKind::Fortnite(_) => (
+                "Chicken Dinner",
+                CookedMeal {
+                    hunger: 10,
+                    hp: 0,
+                    strength: 0,
+                    rizz: 0,
+                    brainrot: 1,
+                    boredom: 0,
                 },
             ),
         }
@@ -346,6 +365,29 @@ impl MobKind {
                     kind: *self,
                 },
             },
+            MobKind::Fortnite(faction) => MobBundle {
+                name: Name::new("????"),
+                creature: Creature {
+                    hp: 5,
+                    max_hp: 5,
+                    faction: *faction,
+                },
+                mob: Mob {
+                    melee_damage: 2,
+                    target: None,
+                    ranged: true,
+                    attrs: MobAttrs {
+                        ..Default::default()
+                    },
+                },
+                sprite: assets.get_ascii_sprite(' ', Color::NONE),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 1,
+                    name: "Brainrot".to_string(),
+                    kind: *self,
+                },
+            },
         }
     }
 }
@@ -356,6 +398,7 @@ pub enum LevelTitle {
     Gym,
     Dungeon,
     Office,
+    Island,
 }
 
 impl std::fmt::Display for LevelTitle {
@@ -365,6 +408,7 @@ impl std::fmt::Display for LevelTitle {
             LevelTitle::Gym => "Dungeon Fitness",
             LevelTitle::Dungeon => "The Dungeon",
             LevelTitle::Office => "Some Unpopulated Backrooms",
+            LevelTitle::Island => "Mysterious Island",
         })
     }
 }
@@ -506,6 +550,7 @@ fn draft_level_mapgen_rs(
                 Some(TileKind::Floor) => '.',
                 Some(TileKind::Wall) => '#',
                 Some(TileKind::WorkoutMachine) => '&',
+                Some(TileKind::Water) => '~',
                 None => ' ',
             };
             print!("{c}");
@@ -862,6 +907,38 @@ fn gen_dungeon_fitness(rng: &mut impl Rng) -> LevelDraft {
     }
 }
 
+fn gen_island(rng: &mut impl Rng) -> LevelDraft {
+    let ocean_rect = rogue_algebra::Rect::new(-20, 60, -20, 60);
+
+    let mut mapgen_builder = mapgen::MapBuilder::new(40, 40);
+    mapgen_builder
+        .with(mapgen::NoiseGenerator::uniform())
+        .with(mapgen::CellularAutomata::new())
+        .with(mapgen::AreaStartingPosition::new(
+            mapgen::XStart::CENTER,
+            mapgen::YStart::CENTER,
+        ))
+        .with(mapgen::CullUnreachable::new());
+    let mut draft = draft_level_mapgen_rs(
+        mapgen_builder,
+        &mut rand_8::rngs::StdRng::from_seed(rng.random()),
+        LevelTitle::Dungeon,
+    );
+
+    let mut new_tiles = HashMap::<Pos, TileKind>::new();
+    for p in ocean_rect {
+        new_tiles.insert(
+            p,
+            match draft.tiles.get(&p) {
+                Some(TileKind::Floor) => TileKind::Floor,
+                _ => TileKind::Water,
+            },
+        );
+    }
+    draft.tiles = new_tiles;
+    draft
+}
+
 pub(crate) fn spawn_level(
     name: String,
     rng: &mut impl rand::Rng,
@@ -924,6 +1001,16 @@ pub(crate) fn spawn_level(
                         kind: InteractionType::Workout,
                     },
                 ));
+            }
+            TileKind::Water => {
+                let r = rng.random::<f32>();
+                let color = Color::srgb(0.4, 0.4, 1.0);
+                let sprite = if r <= 0.8 {
+                    assets.get_ascii_sprite('~', color)
+                } else {
+                    assets.get_ascii_sprite(' ', color)
+                };
+                tile.insert((sprite, map::BlocksMovement));
             }
         }
         tile.with_children(|parent| {
@@ -1107,12 +1194,10 @@ pub(crate) fn gen_map(
                 .sprinkle_mobs(rng, GYM_DIST, 20),
         ],
         vec![
+            gen_island(rng).sprinkle_mobs(rng, FORTNITE_DIST, 30),
             gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
                 .with_walls()
-                .sprinkle_mobs(rng, GENERIC_DIST, 20),
-            gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
-                .with_walls()
-                .sprinkle_mobs(rng, GENERIC_DIST, 20),
+                .sprinkle_mobs(rng, GENERIC_DIST, 30),
         ],
         vec![
             draft_level_mapgen_drunk(rng)
