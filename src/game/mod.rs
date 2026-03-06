@@ -1753,17 +1753,8 @@ fn sidebar(
     mut msg_ability_clicked: MessageWriter<AbilityClicked>,
 ) {
     let (player, _) = player.into_inner();
-    let heart = world_assets
-        .get_urizen_egui_image(&mut contexts, &atlas_assets, 7700)
-        .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
-    let half_heart = world_assets
-        .get_urizen_egui_image(&mut contexts, &atlas_assets, 7703)
-        .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
     let sword = world_assets
         .get_urizen_egui_image(&mut contexts, &atlas_assets, 1262)
-        .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
-    let half_sword = world_assets
-        .get_urizen_egui_image(&mut contexts, &atlas_assets, 1280)
         .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
 
     let ctx = contexts.ctx_mut().unwrap();
@@ -1813,19 +1804,19 @@ fn sidebar(
                                     ))
                                     .selectable(false),
                                 );
-                                for _ in 0..creature.hp / 2 {
-                                    ui.add(heart.clone());
-                                }
-                                if creature.hp % 2 == 1 {
-                                    ui.add(half_heart.clone());
-                                }
+                                let ratio = creature.hp as f32 / creature.max_hp as f32;
+                                draw_meter(
+                                    ui,
+                                    ratio,
+                                    format!("{}/{}", creature.hp, creature.max_hp),
+                                    egui::Color32::from_rgb(0, 150, 0),
+                                    player.brainrot,
+                                );
+                            });
+                            ui.horizontal(|ui| {
                                 if let Some(mob) = mob {
-                                    for _ in 0..mob.melee_damage / 2 {
-                                        ui.add(sword.clone());
-                                    }
-                                    if mob.melee_damage % 2 == 1 {
-                                        ui.add(half_sword.clone());
-                                    }
+                                    ui.add(sword.clone());
+                                    ui.label(mob.melee_damage.to_string());
                                     for (attr, name, color, tooltip) in [
                                         (
                                             mob.attrs.based,
