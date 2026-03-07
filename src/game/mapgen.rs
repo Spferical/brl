@@ -208,7 +208,6 @@ impl MobKind {
                         psychic_resist: Resist::Weak,
                         boredom_resist: Resist::Weak,
                         aura_resist: Resist::Strong,
-                        knows_player_location: true,
                         ..Default::default()
                     },
                     ..default()
