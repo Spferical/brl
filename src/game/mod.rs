@@ -2788,6 +2788,12 @@ fn sidebar(
                                     ui.label(mob.melee_damage.to_string());
                                     for (attr, name, color, tooltip) in [
                                         (
+                                            mob.ranged,
+                                            "Gun",
+                                            egui::Color32::RED,
+                                            "oh shit he got a gun",
+                                        ),
+                                        (
                                             mob.attrs.based,
                                             "Based",
                                             egui::Color32::PURPLE,
