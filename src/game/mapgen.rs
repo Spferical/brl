@@ -22,8 +22,14 @@ use rand_8::SeedableRng;
 use rogue_algebra::Pos;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
+enum FloorKind {
+    Sand,
+    Rock,
+}
+
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum TileKind {
-    Floor,
+    Floor(FloorKind),
     Water,
     Wall,
     WorkoutMachine,
@@ -33,6 +39,12 @@ enum TileKind {
     ArcadeMachine,
     Table,
     Upgrade(Option<&'static str>),
+}
+
+impl TileKind {
+    fn is_floor(&self) -> bool {
+        matches!(self, Self::Floor(..))
+    }
 }
 
 #[derive(Clone, Copy, Debug, Reflect, PartialEq, Eq, Hash)]
@@ -550,7 +562,7 @@ impl LevelDraft {
         let all_floors = self
             .tiles
             .iter()
-            .filter(|(_p, t)| **t == TileKind::Floor)
+            .filter(|(_p, t)| t.is_floor())
             .map(|(p, _t)| *p)
             .collect::<Vec<_>>();
         *all_floors.choose(rng).expect("get_random_floor: no floors")
@@ -559,7 +571,7 @@ impl LevelDraft {
         let mut all_floors = self
             .tiles
             .iter()
-            .filter(|(_p, t)| **t == TileKind::Floor)
+            .filter(|(_p, t)| t.is_floor())
             .map(|(p, _t)| *p)
             .collect::<HashSet<_>>();
         for e in self.entrances.iter().chain(self.exits.iter()) {
@@ -620,7 +632,7 @@ impl LevelDraft {
         let floors = self
             .tiles
             .iter()
-            .filter(|(_, tk)| **tk == TileKind::Floor)
+            .filter(|(_, tk)| tk.is_floor())
             .map(|(pos, _)| pos)
             .copied()
             .collect::<Vec<rogue_algebra::Pos>>();
@@ -649,7 +661,7 @@ fn draft_level_mapgen_rs(
             tiles.insert(
                 pos,
                 if buf.is_walkable(x, y) {
-                    TileKind::Floor
+                    TileKind::Floor(FloorKind::Rock)
                 } else {
                     TileKind::Wall
                 },
@@ -670,7 +682,7 @@ fn draft_level_mapgen_rs(
         rogue_algebra::CARDINALS
             .map(|o| p + o)
             .into_iter()
-            .filter(|p| *tiles.get(p).unwrap_or(&TileKind::Wall) == TileKind::Floor)
+            .filter(|p| tiles.get(p).unwrap_or(&TileKind::Wall).is_floor())
     })
     .collect::<HashMap<_, _>>();
     let mut furthest_tile = start_pos;
@@ -937,11 +949,11 @@ fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
     }
     for room in rooms.iter() {
         for pos in *room {
-            tiles.insert(pos, TileKind::Floor);
+            tiles.insert(pos, TileKind::Floor(FloorKind::Rock));
         }
     }
     for door in doors {
-        tiles.insert(door, TileKind::Floor);
+        tiles.insert(door, TileKind::Floor(FloorKind::Rock));
     }
 
     let stairs = rooms
@@ -1004,11 +1016,11 @@ fn gen_dungeon_fitness(rng: &mut impl Rng) -> LevelDraft {
     }
     for room in rooms.iter() {
         for pos in *room {
-            tiles.insert(pos, TileKind::Floor);
+            tiles.insert(pos, TileKind::Floor(FloorKind::Rock));
         }
     }
     for door in doors {
-        tiles.insert(door, TileKind::Floor);
+        tiles.insert(door, TileKind::Floor(FloorKind::Rock));
     }
 
     rooms.shuffle(rng);
@@ -1048,7 +1060,7 @@ fn create_prefab_room(
             let pos = start_pos + rogue_algebra::Offset::new(x as i32, y as i32);
             let tk = match c {
                 '#' => TileKind::Wall,
-                '.' => TileKind::Floor,
+                '.' => TileKind::Floor(FloorKind::Rock),
                 '$' => TileKind::ArcadeMachine,
                 '&' => TileKind::WorkoutMachine,
                 '*' => TileKind::Reactor,
@@ -1177,14 +1189,14 @@ fn gen_amogus_spaceship(rng: &mut impl Rng) -> LevelDraft {
     for (p1, p2) in corridors {
         let mut curr = p1;
         while curr != p2 {
-            tiles.insert(curr, TileKind::Floor);
+            tiles.insert(curr, TileKind::Floor(FloorKind::Rock));
             if curr.x != p2.x {
                 curr.x += (p2.x - curr.x).signum();
             } else if curr.y != p2.y {
                 curr.y += (p2.y - curr.y).signum();
             }
         }
-        tiles.insert(p2, TileKind::Floor);
+        tiles.insert(p2, TileKind::Floor(FloorKind::Rock));
     }
 
     LevelDraft {
@@ -1234,7 +1246,7 @@ fn gen_island(rng: &mut impl Rng) -> LevelDraft {
         new_tiles.insert(
             p,
             match draft.tiles.get(&p) {
-                Some(TileKind::Floor) => TileKind::Floor,
+                Some(TileKind::Floor(..)) => TileKind::Floor(FloorKind::Sand),
                 _ => TileKind::Water,
             },
         );
@@ -1342,17 +1354,33 @@ pub(crate) fn spawn_level(
             InheritedVisibility::VISIBLE,
         ));
         match tile_kind {
-            TileKind::Floor => {
+            TileKind::Floor(fk) => {
                 let r = rng.random::<f32>();
-                let color = Color::srgb(0.4, 0.4, 0.4);
-                let sprite = if r <= 0.1 {
-                    assets.get_ascii_sprite('.', color)
-                } else if r <= 0.2 {
-                    assets.get_ascii_sprite(',', color)
-                } else {
-                    assets.get_ascii_sprite(' ', color)
+                let (color, ch) = match fk {
+                    FloorKind::Rock => (
+                        Color::srgb(0.4, 0.4, 0.4),
+                        if r <= 0.1 {
+                            '.'
+                        } else if r <= 0.2 {
+                            ','
+                        } else {
+                            ' '
+                        },
+                    ),
+                    FloorKind::Sand => (
+                        Color::srgb(0.703, 0.658, 0.428),
+                        if r <= 0.3 {
+                            '~'
+                        } else if r <= 0.5 {
+                            ','
+                        } else if r <= 0.7 {
+                            '`'
+                        } else {
+                            '.'
+                        },
+                    ),
                 };
-                tile.insert(sprite);
+                tile.insert(assets.get_ascii_sprite(ch, color));
             }
             TileKind::Wall => {
                 let sprite = assets.get_ascii_sprite('#', Color::srgb(0.6, 0.6, 0.6));
