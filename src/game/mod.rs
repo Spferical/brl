@@ -2950,6 +2950,7 @@ fn update_level_info_on_change(
 }
 
 #[derive(Component)]
+#[require(InheritedVisibility, GlobalTransform, Transform)]
 struct MinSpawnZone {
     rect: rogue_algebra::Rect,
     min_units: usize,
