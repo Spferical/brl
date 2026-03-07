@@ -13,7 +13,7 @@ pub(crate) fn spawn_mob(
     pos: MapPos,
     mob_kind: MobKind,
     assets: &WorldAssets,
-) {
+) -> Entity {
     let bundle = mob_kind.get_bundle(assets);
     let map_pos = MapPos(pos.0);
     let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
@@ -23,6 +23,7 @@ pub(crate) fn spawn_mob(
     }
     let new_mob = entity_cmds.id();
     commands.entity(parent).add_child(new_mob);
+    new_mob
 }
 
 pub(crate) fn spawn_stairs(

@@ -208,6 +208,7 @@ pub(crate) fn process_deliveries(
                 world_pos: None,
                 text: format!("{} Delivered!", food.name),
                 color: Color::srgb(1.0, 1.0, 1.0),
+                ..default()
             });
 
             // Chat reaction
@@ -227,6 +228,8 @@ pub(crate) fn process_deliveries(
 
 pub(crate) fn draw_delivery_indicators(
     active_delivery: Res<ActiveDelivery>,
+    dd_selection: Res<crate::game::mobile_apps::DungeonDashSelection>,
+    q_camera: Single<(&Camera, &GlobalTransform), With<crate::PrimaryCamera>>,
     mut gizmos: Gizmos,
     time: Res<Time>,
 ) {
@@ -248,6 +251,75 @@ pub(crate) fn draw_delivery_indicators(
                     center + Vec2::new(offset, -offset),
                     Color::WHITE,
                 );
+            }
+        }
+    }
+
+    if let Some(target) = dd_selection.job_target {
+        let map_pos = target;
+        let center = map_pos.to_vec3(HIGHLIGHT_Z).truncate();
+
+        let t = time.elapsed_secs() * 5.0; // slower blink
+        if t.sin() > 0.0 {
+            gizmos.circle_2d(center, map::TILE_WIDTH / 2.0, Color::srgb(0.0, 1.0, 0.0));
+            let offset = map::TILE_WIDTH / 4.0;
+            gizmos.line_2d(
+                center + Vec2::new(-offset, -offset),
+                center + Vec2::new(offset, offset),
+                Color::WHITE,
+            );
+            gizmos.line_2d(
+                center + Vec2::new(-offset, offset),
+                center + Vec2::new(offset, -offset),
+                Color::WHITE,
+            );
+        }
+
+        // Draw offscreen arrow
+        let (camera, camera_transform) = *q_camera;
+        if let Some(ndc) = camera.world_to_ndc(camera_transform, center.extend(0.0)) {
+            // Check if point is outside the screen in NDC space (-1 to 1)
+            if ndc.x < -1.0 || ndc.x > 1.0 || ndc.y < -1.0 || ndc.y > 1.0 {
+                // Direction from center of screen to target in NDC
+                let dir = ndc.truncate().normalize();
+
+                // Raycast to find intersection with screen edge in NDC space
+                let mut edge_ndc = dir;
+
+                // Scale until we hit an edge
+                let scale_x = if dir.x.abs() > 0.0 {
+                    1.0 / dir.x.abs()
+                } else {
+                    f32::MAX
+                };
+                let scale_y = if dir.y.abs() > 0.0 {
+                    1.0 / dir.y.abs()
+                } else {
+                    f32::MAX
+                };
+                let scale = scale_x.min(scale_y);
+
+                edge_ndc *= scale;
+                // Pull back slightly so arrow isn't cut off
+                edge_ndc *= 0.9;
+
+                // Convert back to world space for gizmos
+                if let Some(world_pos) = camera.ndc_to_world(camera_transform, edge_ndc.extend(0.0))
+                {
+                    let arrow_center = world_pos.truncate();
+                    let arrow_length = 30.0;
+                    let arrow_width = 15.0;
+
+                    let back = arrow_center - dir * arrow_length;
+                    let left =
+                        arrow_center - dir * arrow_width + Vec2::new(-dir.y, dir.x) * arrow_width;
+                    let right =
+                        arrow_center - dir * arrow_width + Vec2::new(dir.y, -dir.x) * arrow_width;
+
+                    gizmos.line_2d(back, arrow_center, Color::srgb(0.0, 1.0, 0.0));
+                    gizmos.line_2d(left, arrow_center, Color::srgb(0.0, 1.0, 0.0));
+                    gizmos.line_2d(right, arrow_center, Color::srgb(0.0, 1.0, 0.0));
+                }
             }
         }
     }

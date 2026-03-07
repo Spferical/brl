@@ -160,6 +160,7 @@ pub(super) fn plugin(app: &mut App) {
                     handle_subscriptions,
                     signal::update_player_signal,
                     delivery::process_deliveries,
+                    mobile_apps::process_dungeon_dash_jobs,
                     process_despawns,
                 )
                     .chain(),
@@ -759,7 +760,7 @@ pub(crate) struct CookedMeal {
 
 pub(crate) fn handle_eat(
     mut events: MessageReader<EatEvent>,
-    player_query: Single<(&mut Player, &mut Creature)>,
+    player_query: Single<(&mut Player, &mut Creature, Entity)>,
     food_query: Query<(
         Option<&delivery::Food>,
         Option<&CookedMeal>,
@@ -769,11 +770,34 @@ pub(crate) fn handle_eat(
     mut commands: Commands,
     streaming_state: Res<chat::StreamingState>,
     mut chat: ResMut<chat::ChatHistory>,
+    dd_selection: Option<ResMut<crate::game::mobile_apps::DungeonDashSelection>>,
+    mut floating_text: MessageWriter<crate::game::animation::FloatingTextMessage>,
 ) {
-    let (mut player, mut creature) = player_query.into_inner();
+    let mut dd_selection = dd_selection;
+    let (mut player, mut creature, player_entity) = player_query.into_inner();
     for event in events.read() {
         if let Ok((food, cooked, is_ambrosia, name)) = food_query.get(event.0) {
             let mut name_str = name.map(|n| n.as_str()).unwrap_or("Something unknown");
+
+            if let Some(ref mut dd) = dd_selection {
+                if Some(event.0) == dd.dropped_food_entity {
+                    let amount = dd.active_job_amount.unwrap_or(10);
+                    player.money -= amount * 2;
+                    floating_text.write(crate::game::animation::FloatingTextMessage {
+                        entity: Some(player_entity),
+                        world_pos: None,
+                        text: "You bit it, you bought it!".to_string(),
+                        color: Color::srgb(1.0, 0.0, 0.0),
+                        ..default()
+                    });
+                    dd.active_job_turns = None;
+                    dd.active_job_amount = None;
+                    dd.job_target = None;
+                    dd.failed_job_turns = Some(10);
+                    dd.dropped_food_entity = None;
+                }
+            }
+
             if is_ambrosia {
                 use rand::Rng;
                 let mut rng = rand::rng();
@@ -935,6 +959,7 @@ pub(crate) struct MobAttrs {
     pub basic: bool,
     pub mog_risk: bool,
     pub sus: bool,
+    pub friendly: bool,
     pub knows_player_location: bool,
     pub aura_resist: Resist,
     pub physical_resist: Resist,
@@ -1233,6 +1258,7 @@ fn handle_player_move(
                             world_pos: None,
                             text: "IRRADIATED".to_string(),
                             color: Color::srgb(0.0, 1.0, 0.0),
+                            ..default()
                         });
                     }
                     InteractionType::MedicalPod => {
@@ -1249,6 +1275,7 @@ fn handle_player_move(
                             world_pos: None,
                             text: "HEALED".to_string(),
                             color: Color::srgb(0.0, 0.8, 0.8),
+                            ..default()
                         });
                     }
                     InteractionType::Upgrade(idx) => {
@@ -1266,6 +1293,7 @@ fn handle_player_move(
                             world_pos: None,
                             text: "UPGRADE".to_string(),
                             color: Color::srgb(0.2, 0.2, 0.8),
+                            ..default()
                         });
                     }
                 }
@@ -1433,6 +1461,7 @@ fn handle_player_move(
                         world_pos: None,
                         text: format!("Cooked {}!", meal_name),
                         color: Color::srgb(1.0, 1.0, 0.0),
+                        ..default()
                     });
 
                     commands.entity(corpse_entity).despawn();
@@ -1488,14 +1517,22 @@ fn get_valid_spawn_spots(
         ),
     >,
     pos_to_creature: &Res<map::PosToCreature>,
+    map_info: &Res<mapgen::MapInfo>,
 ) -> Vec<MapPos> {
     let mut valid_spots = Vec::new();
     let search_range = 100;
+    let cur_level = map_info.get_level(MapPos(ppos));
     for &MapPos(pos) in tiles.iter() {
         let diff = (pos - ppos).abs();
         let dist = diff.max_element();
         if dist > 2 && dist <= search_range && !pos_to_creature.0.contains_key(&pos) {
-            valid_spots.push(MapPos(pos));
+            if let Some(level) = cur_level {
+                if level.rect.contains(rogue_algebra::Pos::from(pos)) {
+                    valid_spots.push(MapPos(pos));
+                }
+            } else {
+                valid_spots.push(MapPos(pos));
+            }
         }
     }
     valid_spots
@@ -1536,6 +1573,7 @@ fn spawn_klarna_kop(
     mut commands: Commands,
     world: Single<Entity, With<GameWorld>>,
     assets: Res<assets::WorldAssets>,
+    map_info: Res<mapgen::MapInfo>,
     tiles: Query<
         &MapPos,
         (
@@ -1551,7 +1589,8 @@ fn spawn_klarna_kop(
         let spawn_rate = if debt > 50 { 5 } else { 10 };
         if turn_counter.0.is_multiple_of(spawn_rate) {
             let mut rng = rand::rng();
-            let valid_spots = get_valid_spawn_spots(player_pos.0, &tiles, &pos_to_creature);
+            let valid_spots =
+                get_valid_spawn_spots(player_pos.0, &tiles, &pos_to_creature, &map_info);
 
             if !valid_spots.is_empty()
                 && let Some(pos) = valid_spots.choose(&mut rng)
@@ -1575,6 +1614,7 @@ fn spawn_brainrot_enemies(
     mut commands: Commands,
     world: Single<Entity, With<GameWorld>>,
     assets: Res<assets::WorldAssets>,
+    map_info: Res<mapgen::MapInfo>,
     tiles: Query<
         &MapPos,
         (
@@ -1590,7 +1630,8 @@ fn spawn_brainrot_enemies(
         let spawn_rate = if brainrot > 120 { 5 } else { 10 };
         if turn_counter.0 > 0 && turn_counter.0.is_multiple_of(spawn_rate) {
             let mut rng = rand::rng();
-            let valid_spots = get_valid_spawn_spots(player_pos.0, &tiles, &pos_to_creature);
+            let valid_spots =
+                get_valid_spawn_spots(player_pos.0, &tiles, &pos_to_creature, &map_info);
 
             if !valid_spots.is_empty()
                 && let Some(pos) = valid_spots.choose(&mut rng)
@@ -1718,7 +1759,10 @@ fn apply_damage(
     mut animation: MessageWriter<DamageAnimationMessage>,
     mut creature: Query<(&mut Creature, Option<&mut Player>, Option<&Mob>, &Transform)>,
     player_q: Query<Entity, With<Player>>,
+    dd_selection: Option<ResMut<crate::game::mobile_apps::DungeonDashSelection>>,
+    mut floating_text: MessageWriter<crate::game::animation::FloatingTextMessage>,
 ) {
+    let mut dd_selection = dd_selection;
     let player_entity = player_q.single().ok();
     for DamageInstance {
         entity,
@@ -1727,6 +1771,32 @@ fn apply_damage(
         ty,
     } in damage.0.drain(..)
     {
+        if let Some(attacker) = attacker {
+            if Some(attacker) == player_entity {
+                if let Some(ref mut dd) = dd_selection {
+                    if Some(entity) == dd.customer_entity {
+                        if dd.active_job_turns.is_some() {
+                            dd.active_job_turns = None;
+                            dd.active_job_amount = None;
+                            dd.job_target = None;
+                            dd.failed_job_turns = Some(10);
+
+                            if let Ok((_, Some(mut player), _, _)) = creature.get_mut(attacker) {
+                                player.money -= 10;
+                            }
+                            floating_text.write(crate::game::animation::FloatingTextMessage {
+                                entity: Some(attacker),
+                                world_pos: None,
+                                text: "Do not attack the customer! -$10".to_string(),
+                                color: Color::srgb(1.0, 0.0, 0.0),
+                                ..default()
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
         if let Ok((mut creature, player, mob, transform)) = creature.get_mut(entity) {
             let world_pos = transform.translation;
             let is_player = player.is_some();
@@ -2082,6 +2152,7 @@ fn process_mob_turn(
                     world_pos: None,
                     text: "Teleported!".to_string(),
                     color: Color::srgb(1.0, 0.0, 1.0),
+                    ..default()
                 });
             }
         }
@@ -2243,6 +2314,7 @@ fn get_crew_move(
     claimed_locations: &HashSet<IVec2>,
 ) -> Option<Action> {
     if (mob.destination.is_none() || mob.destination == Some(pos.0))
+        && !mob.attrs.friendly
         && let Some(level) = map_info.get_level(pos)
         && !level.destinations.is_empty()
     {
@@ -2501,6 +2573,12 @@ fn sidebar(
                                             "Sus",
                                             egui::Color32::RED,
                                             "Can teleport when attacking",
+                                        ),
+                                        (
+                                            mob.attrs.friendly && !mob.attrs.sus,
+                                            "Friendly",
+                                            egui::Color32::LIGHT_BLUE,
+                                            "Will not attack unless provoked",
                                         ),
                                     ] {
                                         if attr {
@@ -2975,6 +3053,7 @@ fn update_level_info_on_change(
     player: Single<(&MapPos, &mut Player), (With<Player>, Changed<MapPos>)>,
     all_map_pos: Query<(Entity, &MapPos), Without<Player>>,
     all_spawn_zones: Query<(Entity, &MinSpawnZone)>,
+    mut dd_selection: ResMut<mobile_apps::DungeonDashSelection>,
 ) {
     let (pos, mut player_stats) = player.into_inner();
     if let Some(cur_map) = map_info.get_level(*pos)
@@ -2982,6 +3061,14 @@ fn update_level_info_on_change(
     {
         last_level.0 = Some(cur_map.rect);
         msg_td.write(TitleDropMessage(format!("{}", cur_map.ty)));
+
+        dd_selection.deliveries_this_level = 0;
+
+        if let Some(target) = dd_selection.job_target {
+            if !cur_map.rect.contains(rogue_algebra::Pos::from(target.0)) {
+                dd_selection.job_target = None;
+            }
+        }
 
         // Handle freezing/unfreezing
         for (entity, map_pos) in all_map_pos.iter() {
@@ -3142,7 +3229,7 @@ pub fn enter(
     params.next_phone_screen.set(phone::PhoneScreen::Home);
     params
         .next_dungeon_dash_screen
-        .set(mobile_apps::DungeonDashScreen::Menu);
+        .set(mobile_apps::DungeonDashScreen::RoleSelection);
 
     examine::init_examine_highlight(world, &mut commands, &assets);
     #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]

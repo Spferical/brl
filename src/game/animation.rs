@@ -130,17 +130,19 @@ pub struct DamageAnimationMessage {
     pub is_player: bool,
 }
 
-#[derive(Message)]
+#[derive(Message, Default)]
 pub struct FloatingTextMessage {
     pub entity: Option<Entity>,
     pub world_pos: Option<Vec3>,
     pub text: String,
     pub color: Color,
+    pub delay: f32,
 }
 
 #[derive(Component)]
 pub struct FloatingText {
     pub timer: Timer,
+    pub delay_timer: Option<Timer>,
 }
 
 pub fn spawn_damage_animations(
@@ -224,7 +226,7 @@ pub fn spawn_damage_animations(
             }
         };
 
-        spawn_floating_text(&mut commands, text, color, msg.world_pos);
+        spawn_floating_text(&mut commands, text, color, msg.world_pos, 0.0);
     }
 }
 
@@ -243,12 +245,32 @@ pub fn spawn_floating_messages(
             msg.world_pos.unwrap_or_default()
         };
 
-        spawn_floating_text(&mut commands, msg.text.clone(), msg.color, base_pos);
+        spawn_floating_text(
+            &mut commands,
+            msg.text.clone(),
+            msg.color,
+            base_pos,
+            msg.delay,
+        );
     }
 }
 
-fn spawn_floating_text(commands: &mut Commands, text: String, color: Color, mut pos: Vec3) {
+fn spawn_floating_text(
+    commands: &mut Commands,
+    text: String,
+    mut color: Color,
+    mut pos: Vec3,
+    delay: f32,
+) {
     pos.z = DAMAGE_Z + 10.0;
+
+    let delay_timer = if delay > 0.0 {
+        color.set_alpha(0.0); // hide initially
+        Some(Timer::from_seconds(delay, TimerMode::Once))
+    } else {
+        None
+    };
+
     commands.spawn((
         Text2d::new(text),
         TextFont {
@@ -259,6 +281,7 @@ fn spawn_floating_text(commands: &mut Commands, text: String, color: Color, mut 
         Transform::from_translation(pos),
         FloatingText {
             timer: Timer::from_seconds(1.0, TimerMode::Once),
+            delay_timer,
         },
     ));
 }
@@ -269,6 +292,13 @@ pub fn update_floating_text(
     time: Res<Time>,
 ) {
     for (entity, mut floating, mut transform, mut color) in query.iter_mut() {
+        if let Some(ref mut delay) = floating.delay_timer {
+            delay.tick(time.delta().min(MAX_TICK));
+            if !delay.is_finished() {
+                continue;
+            }
+        }
+
         floating.timer.tick(time.delta().min(MAX_TICK));
         let fraction = floating.timer.fraction();
 

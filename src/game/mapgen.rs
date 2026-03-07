@@ -56,6 +56,7 @@ pub(crate) enum MobKind {
     GymBro,
     Influencer,
     Normie,
+    FriendlyNormie,
     AmogusCrew,
     AmogusImpostor,
     Capybara,
@@ -141,7 +142,7 @@ impl MobKind {
                     boredom: 20,
                 },
             ),
-            MobKind::Normie => (
+            MobKind::Normie | MobKind::FriendlyNormie => (
                 "Long Pork",
                 CookedMeal {
                     hunger: 40,
@@ -375,6 +376,33 @@ impl MobKind {
                     kind: *self,
                 },
             },
+            MobKind::FriendlyNormie => MobBundle {
+                name: Name::new("Normie"),
+                creature: Creature {
+                    hp: 2,
+                    max_hp: 2,
+                    faction: FRIENDLY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 1,
+                    attrs: MobAttrs {
+                        basic: true,
+                        friendly: true,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('n', Color::srgb(0.5, 0.5, 1.0)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 3,
+                    name: "Normie".to_string(),
+                    kind: *self,
+                },
+            },
             MobKind::AmogusCrew => MobBundle {
                 name: Name::new("Amogus"),
                 creature: Creature {
@@ -389,6 +417,7 @@ impl MobKind {
                     melee_damage: 1,
                     attrs: MobAttrs {
                         sus: true,
+                        friendly: true,
                         ..Default::default()
                     },
                     ..default()

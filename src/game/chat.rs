@@ -499,6 +499,7 @@ pub fn draw_streaming_indicator(
     streaming_state: Res<StreamingState>,
     player: Single<&Player>,
     active_delivery: Res<crate::game::delivery::ActiveDelivery>,
+    dd_selection: Res<crate::game::mobile_apps::DungeonDashSelection>,
 ) {
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
@@ -537,6 +538,56 @@ pub fn draw_streaming_indicator(
                     ui.label(
                         RichText::new(format!("Delivery in {} turns", delivery.turns_remaining))
                             .color(Color32::from_rgb(255, 165, 0)) // Orange
+                            .font(egui::FontId::new(
+                                16.0,
+                                egui::FontFamily::Name("press_start".into()),
+                            ))
+                            .strong(),
+                    );
+                });
+            }
+
+            if let Some(turns) = dd_selection.active_job_turns {
+                ui.horizontal(|ui| {
+                    ui.add_space(30.0); // Indent a bit
+                    if dd_selection.dropped_food_entity.is_some() {
+                        ui.label(
+                            RichText::new("Waiting for customer...")
+                                .color(Color32::from_rgb(0, 255, 0))
+                                .font(egui::FontId::new(
+                                    16.0,
+                                    egui::FontFamily::Name("press_start".into()),
+                                ))
+                                .strong(),
+                        );
+                    } else if dd_selection.job_target.is_none() {
+                        ui.label(
+                            RichText::new("Wrong Level!")
+                                .color(Color32::RED)
+                                .font(egui::FontId::new(
+                                    16.0,
+                                    egui::FontFamily::Name("press_start".into()),
+                                ))
+                                .strong(),
+                        );
+                    } else {
+                        ui.label(
+                            RichText::new(format!("Deliver order in {} turns", turns))
+                                .color(Color32::from_rgb(0, 255, 0)) // Green for active jobs
+                                .font(egui::FontId::new(
+                                    16.0,
+                                    egui::FontFamily::Name("press_start".into()),
+                                ))
+                                .strong(),
+                        );
+                    }
+                });
+            } else if dd_selection.failed_job_turns.is_some() {
+                ui.horizontal(|ui| {
+                    ui.add_space(30.0); // Indent a bit
+                    ui.label(
+                        RichText::new("Failed to deliver order! $-10")
+                            .color(Color32::RED)
                             .font(egui::FontId::new(
                                 16.0,
                                 egui::FontFamily::Name("press_start".into()),
