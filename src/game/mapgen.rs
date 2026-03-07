@@ -1501,7 +1501,7 @@ pub(crate) fn gen_map(
                 .sprinkle_mobs(rng, FORTNITE_DIST, 30),
             gen_freddy(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, FREDDY_DIST, 10),
+                .sprinkle_mobs(rng, FREDDY_DIST, 4),
         ],
         vec![
             gen_amogus_spaceship(rng)
