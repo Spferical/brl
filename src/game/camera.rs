@@ -13,10 +13,18 @@ pub struct ScreenShake {
 pub(crate) fn update_camera(
     mut camera: Single<&mut Transform, (With<PrimaryCamera>, Without<CameraFollow>)>,
     follow: Single<&Transform, (With<CameraFollow>, Without<PrimaryCamera>)>,
-    player: Query<&Player>,
+    player: Single<&Player>,
     mut screen_shake: ResMut<ScreenShake>,
     time: Res<Time>,
 ) {
+    let br = player.brainrot as f32;
+    let p_zoom = ((br - 80.0) / 20.0).clamp(0.0, 1.0);
+    let p_rot = ((br - 70.0) / 30.0).clamp(0.0, 1.0);
+    let zoom_scale = 0.8 - (p_zoom * 0.3);
+    let rotation_p = p_rot;
+
+    camera.scale = Vec3::new(zoom_scale, zoom_scale, 1.0);
+
     let Vec3 { x, y, .. } = follow.translation;
     let target = Vec3::new(x, y, camera.translation.z);
     let t = 1.0 - (-10.0 * time.delta_secs()).exp();
@@ -38,14 +46,9 @@ pub(crate) fn update_camera(
         }
     }
 
-    if let Some(player) = player.iter().next() {
-        let p = ((player.brainrot as f32 - 70.0) / 30.0).clamp(0.0, 1.0);
-        if p > 0.0 {
-            let max_angle = 5.0_f32.to_radians();
-            camera.rotation = Quat::from_rotation_z(p * max_angle);
-        } else {
-            camera.rotation = Quat::IDENTITY;
-        }
+    if rotation_p > 0.0 {
+        let max_angle = 5.0_f32.to_radians();
+        camera.rotation = Quat::from_rotation_z(rotation_p * max_angle);
     } else {
         camera.rotation = Quat::IDENTITY;
     }
