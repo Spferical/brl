@@ -2774,14 +2774,16 @@ fn sidebar(
                                     }
                                 });
                                 let ratio = creature.hp as f32 / creature.max_hp as f32;
-                                draw_meter(
-                                    ui,
-                                    ratio,
-                                    format!("{}/{}", creature.hp, creature.max_hp),
-                                    egui::Color32::from_rgb(0, 150, 0),
-                                    player.brainrot,
-                                );
                                 ui.horizontal(|ui| {
+                                    draw_meter(
+                                        ui,
+                                        ratio,
+                                        format!("{}/{}", creature.hp, creature.max_hp),
+                                        egui::Color32::from_rgb(0, 150, 0),
+                                        player.brainrot,
+                                    );
+                                });
+                                ui.horizontal_wrapped(|ui| {
                                     if let Some(mob) = mob {
                                         ui.add(sword.clone());
                                         ui.label(mob.melee_damage.to_string());
@@ -2841,6 +2843,18 @@ fn sidebar(
                                                     .selectable(false),
                                                 )
                                                 .on_hover_text(tooltip);
+                                                if highlight {
+                                                    ui.add(
+                                                        egui::Label::new(apply_brainrot_ui(
+                                                            tooltip,
+                                                            player.brainrot,
+                                                            ui.style(),
+                                                            FontSelection::Default,
+                                                            Align::LEFT,
+                                                        ))
+                                                        .selectable(false),
+                                                    );
+                                                }
                                             }
                                         }
                                         fn resist_name(
@@ -2914,6 +2928,18 @@ fn sidebar(
                                                     .selectable(false),
                                                 )
                                                 .on_hover_text(tooltip);
+                                                if highlight {
+                                                    ui.add(
+                                                        egui::Label::new(apply_brainrot_ui(
+                                                            tooltip,
+                                                            player.brainrot,
+                                                            ui.style(),
+                                                            FontSelection::Default,
+                                                            Align::LEFT,
+                                                        ))
+                                                        .selectable(false),
+                                                    );
+                                                }
                                             }
                                         }
                                     }
