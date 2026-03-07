@@ -38,7 +38,7 @@ pub(crate) fn spawn_stairs(
     let color = Color::srgb(0.4, 0.4, 0.4);
     commands.entity(world).with_children(|parent| {
         let mut up_stairs = parent.spawn((
-            Name::new("Up Stairs"),
+            Name::new("Stairs"),
             up_pos_map,
             Transform::from_translation(up_pos_map.to_vec3(TILE_Z)),
             Stairs {
@@ -66,7 +66,7 @@ pub(crate) fn spawn_stairs(
         });
 
         let mut down_stairs = parent.spawn((
-            Name::new("Down Stairs"),
+            Name::new("Stairs"),
             down_pos_map,
             Transform::from_translation(down_pos_map.to_vec3(TILE_Z)),
             Stairs {
