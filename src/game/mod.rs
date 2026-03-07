@@ -9,6 +9,7 @@ use bevy_egui::{
     EguiContexts, EguiPrimaryContextPass,
     egui::{self, Align, FontSelection, Margin, RichText, WidgetText, text::LayoutJob},
 };
+#[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]
 use bevy_firefly::prelude::FireflyPlugin;
 use rand::{
     Rng as _,

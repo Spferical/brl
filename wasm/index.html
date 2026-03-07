@@ -4,12 +4,38 @@
 <body style="margin: 0px;background-color:black;">
     <script type="module">
         import './restart-audio-context.js'
-        import init from './bevyrl.js'
 
-        init().catch((error) => {
-            if(!error.message.startsWith("Using exceptions for control flow, don't mind me. This isn't actually an error!")) {
-                throw error;
-            }
+        const ua = navigator.userAgent;
+        const isWindows = ua.includes("Windows");
+        const isMac = ua.includes("Mac OS") || ua.includes("Macintosh");
+        const isChrome = ua.includes("Chrome") && !ua.includes("Edg") && !ua.includes("OPR");
+        const isEdge = ua.includes("Edg");
+        const isOpera = ua.includes("OPR") || ua.includes("Opera");
+
+        let useWebGPU = false;
+
+        if (isWindows && (isChrome || isEdge || isOpera)) {
+            useWebGPU = true;
+        } else if (isMac && (isChrome || isOpera)) {
+            useWebGPU = true;
+        }
+
+        // Fallback if the browser doesn't support WebGPU at all
+        if (!navigator.gpu) {
+            useWebGPU = false;
+        }
+
+        const scriptName = useWebGPU ? './bevyrl_webgpu.js' : './bevyrl_webgl2.js';
+        
+        console.log("Loading WASM module:", scriptName);
+
+        import(scriptName).then(module => {
+            const init = module.default;
+            init().catch((error) => {
+                if(!error.message.startsWith("Using exceptions for control flow, don't mind me. This isn't actually an error!")) {
+                    throw error;
+                }
+            });
         });
     </script>
 </body>

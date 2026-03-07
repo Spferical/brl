@@ -44,11 +44,13 @@ dev = [
 ]
 dev_native = [
     "dev",
+    "webgpu",
     # Enable asset hot reloading for native dev builds.
     "bevy/file_watcher",
     # Enable embedded asset hot reloading for native dev builds.
     "bevy/embedded_watcher",
 ]
+webgpu = ["bevy/webgpu"]
 
 
 [package.metadata.bevy_cli.release]
