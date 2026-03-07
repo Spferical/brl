@@ -709,6 +709,7 @@ pub enum InteractionType {
     Workout,
     Irradiate,
     MedicalPod,
+    Arcade,
 }
 
 #[derive(Component)]
@@ -918,7 +919,7 @@ pub(crate) enum Resist {
 }
 
 // NPC-specific fields.
-#[derive(Component, Clone, Debug, Reflect)]
+#[derive(Component, Clone, Debug, Reflect, Default)]
 pub(crate) struct Mob {
     pub melee_damage: i32,
     pub ranged: bool,
@@ -1186,6 +1187,11 @@ fn handle_player_move(
                     InteractionType::Workout => {
                         player_stats.strength += 1;
                         player_stats.hunger += 5;
+                    }
+                    InteractionType::Arcade => {
+                        player_stats.money -= 1;
+                        player_stats.boredom -= 5;
+                        player_stats.brainrot += 1;
                     }
                     InteractionType::Irradiate => {
                         player_stats.brainrot += 5;

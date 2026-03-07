@@ -28,6 +28,7 @@ enum TileKind {
     Reactor,
     MedicalPod,
     Star,
+    ArcadeMachine,
 }
 
 #[derive(Clone, Copy, Debug, Reflect, PartialEq, Eq, Hash)]
@@ -42,6 +43,7 @@ pub(crate) enum MobKind {
     KlarnaKop,
     BrainrotEnemy,
     Fortnite(i32),
+    Animatronic,
 }
 
 const GENERIC_DIST: &[(MobKind, usize)] = &[
@@ -71,10 +73,22 @@ const AMOGUS_DIST: &[(MobKind, usize)] = &[
     (MobKind::AmogusImpostor, 2),
     (MobKind::Normie, 1),
 ];
+const FREDDY_DIST: &[(MobKind, usize)] = &[(MobKind::Animatronic, 1)];
 
 impl MobKind {
     pub(crate) fn get_cooked_meal(&self) -> (&'static str, CookedMeal) {
         match self {
+            MobKind::Animatronic => (
+                "Stale Pizza",
+                CookedMeal {
+                    hunger: 10,
+                    hp: 2,
+                    strength: 0,
+                    rizz: 0,
+                    brainrot: 0,
+                    boredom: 5,
+                },
+            ),
             MobKind::GymBro => (
                 "Beefcake",
                 CookedMeal {
@@ -179,6 +193,33 @@ impl MobKind {
 
     pub(crate) fn get_bundle(&self, assets: &WorldAssets) -> MobBundle {
         match self {
+            MobKind::Animatronic => MobBundle {
+                name: Name::new("Animatronic"),
+                creature: Creature {
+                    hp: 25,
+                    max_hp: 25,
+                    faction: -1,
+                    killed_by_player: false,
+                },
+                mob: Mob {
+                    melee_damage: 1,
+                    attrs: MobAttrs {
+                        psychic_resist: Resist::Weak,
+                        boredom_resist: Resist::Weak,
+                        aura_resist: Resist::Strong,
+                        knows_player_location: true,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('A', Color::srgb(0.5, 0.5, 0.5)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.5, 0.5, 0.5)),
+                    nutrition: 5,
+                    name: "Animatronic".to_string(),
+                    kind: *self,
+                },
+            },
             MobKind::Capybara => MobBundle {
                 name: Name::new("Capybara"),
                 creature: Creature {
@@ -189,14 +230,12 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 1,
-                    target: None,
-                    destination: None,
-                    ranged: false,
                     attrs: MobAttrs {
                         psychic_resist: Resist::Weak,
                         boredom_resist: Resist::Strong,
                         ..Default::default()
                     },
+                    ..default()
                 },
                 sprite: assets.get_ascii_sprite('c', Color::srgb(0.5, 0.3, 0.3)),
                 corpse: DropsCorpse {
@@ -217,15 +256,13 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 1,
-                    target: None,
-                    destination: None,
-                    ranged: false,
                     attrs: MobAttrs {
                         based: true,
                         aura_resist: Resist::Weak,
                         psychic_resist: Resist::Weak,
                         ..Default::default()
                     },
+                    ..default()
                 },
                 sprite: assets.get_ascii_sprite('f', Color::srgb(0.2, 0.8, 0.2)),
                 corpse: DropsCorpse {
@@ -245,13 +282,11 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 1,
-                    target: None,
-                    destination: None,
-                    ranged: false,
                     attrs: MobAttrs {
                         physical_resist: Resist::Strong,
                         ..Default::default()
                     },
+                    ..default()
                 },
                 sprite: assets.get_ascii_sprite('g', Color::srgb(0.8, 0.3, 0.3)),
                 corpse: DropsCorpse {
@@ -271,14 +306,12 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 1,
-                    target: None,
-                    destination: None,
-                    ranged: false,
                     attrs: MobAttrs {
                         mog_risk: true,
                         aura_resist: Resist::Weak,
                         ..Default::default()
                     },
+                    ..default()
                 },
                 sprite: assets.get_ascii_sprite('i', Color::srgb(0.2, 0.5, 0.8)),
                 corpse: DropsCorpse {
@@ -298,13 +331,11 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 1,
-                    target: None,
-                    destination: None,
-                    ranged: false,
                     attrs: MobAttrs {
                         basic: true,
                         ..Default::default()
                     },
+                    ..default()
                 },
                 sprite: assets.get_ascii_sprite('n', Color::srgb(0.5, 0.5, 0.5)),
                 corpse: DropsCorpse {
@@ -324,13 +355,11 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 1,
-                    target: None,
-                    destination: None,
-                    ranged: false,
                     attrs: MobAttrs {
                         sus: true,
                         ..Default::default()
                     },
+                    ..default()
                 },
                 sprite: assets.get_ascii_sprite('a', Color::srgb(1.0, 0.1, 0.1)),
                 corpse: DropsCorpse {
@@ -350,13 +379,11 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 4,
-                    target: None,
-                    destination: None,
-                    ranged: false,
                     attrs: MobAttrs {
                         sus: true,
                         ..Default::default()
                     },
+                    ..default()
                 },
                 sprite: assets.get_ascii_sprite('a', Color::srgb(1.0, 0.1, 0.1)),
                 corpse: DropsCorpse {
@@ -376,14 +403,12 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 1,
-                    target: None,
-                    destination: None,
-                    ranged: false,
                     attrs: MobAttrs {
                         aura_resist: Resist::Weak,
                         knows_player_location: true,
                         ..Default::default()
                     },
+                    ..default()
                 },
                 sprite: assets.get_ascii_sprite('k', Color::srgb(0.2, 0.2, 0.8)),
                 corpse: DropsCorpse {
@@ -403,12 +428,10 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 2,
-                    target: None,
-                    destination: None,
-                    ranged: false,
                     attrs: MobAttrs {
                         ..Default::default()
                     },
+                    ..default()
                 },
                 sprite: assets.get_ascii_sprite(' ', Color::NONE),
                 corpse: DropsCorpse {
@@ -428,12 +451,11 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 2,
-                    target: None,
-                    destination: None,
                     ranged: true,
                     attrs: MobAttrs {
                         ..Default::default()
                     },
+                    ..default()
                 },
                 sprite: assets.get_ascii_sprite('@', Color::srgb(0.8, 0.8, 1.0)),
                 corpse: DropsCorpse {
@@ -455,6 +477,7 @@ pub enum LevelTitle {
     Office,
     Island,
     AmogusSpaceship,
+    Freddy,
 }
 
 impl std::fmt::Display for LevelTitle {
@@ -466,6 +489,7 @@ impl std::fmt::Display for LevelTitle {
             LevelTitle::Office => "Some Unpopulated Backrooms",
             LevelTitle::Island => "Mysterious Island",
             LevelTitle::AmogusSpaceship => "The Skeld",
+            LevelTitle::Freddy => "Friendo's Pizza & Prizes",
         })
     }
 }
@@ -613,6 +637,7 @@ fn draft_level_mapgen_rs(
                 Some(TileKind::Floor) => '.',
                 Some(TileKind::Wall) => '#',
                 Some(TileKind::WorkoutMachine) => '&',
+                Some(TileKind::ArcadeMachine) => '$',
                 Some(TileKind::Water) => '~',
                 Some(TileKind::Reactor) => '*',
                 Some(TileKind::MedicalPod) => '+',
@@ -992,10 +1017,15 @@ fn create_prefab_room(
             let tk = match c {
                 '#' => TileKind::Wall,
                 '.' => TileKind::Floor,
+                '$' => TileKind::ArcadeMachine,
                 '&' => TileKind::WorkoutMachine,
                 '*' => TileKind::Reactor,
                 '+' => TileKind::MedicalPod,
-                _ => TileKind::Wall,
+                ' ' => TileKind::Wall,
+                _ => {
+                    warn!("create_prefab_room: unexpected '{c}'");
+                    TileKind::Wall
+                }
             };
             tiles.insert(pos, tk);
             max_x = max_x.max(x as i32);
@@ -1181,6 +1211,59 @@ fn gen_island(rng: &mut impl Rng) -> LevelDraft {
     draft
 }
 
+fn gen_freddy(_rng: &mut impl Rng) -> LevelDraft {
+    let mut tiles = HashMap::new();
+
+    let prefab = "
+           #################
+           #...............#
+           #..........#....#
+           #..........#....#######
+           #####..#####....#.....#
+           #..........#....#.....#
+############..........###.####.###
+#...........................#..#
+#....#......................#..#
+#....#..T..T..T.............#..#
+#....#..T..T..T.............#..#
+#....#..T..T..T................#
+#....#......................#..#
+#....#..T..T..T.............#..#
+#....#..T..T..T.............#..#####
+######..T..T..T.............#......#
+#....#......................#..#...#
+#....#......................#..#...#
+#................$.$.$.$.$..#..#####
+#....#......................#......#
+#....#...........$.$.$.$.$..#..#...#
+#....#......................#..#...#
+#....######.###########.#####.######
+#....#....#.###########.#..........#
+######....#.###########.#..........#
+     #....#.###########.#..........#
+     #......###########.#..........#
+     #....#.###########.#..........#
+     #....#.###########.############
+     #....#.#.........#.#
+     ######.............#
+          #.............#
+          #.#.........#.#
+          #.#.........#.#
+          ###############";
+
+    let _room = create_prefab_room(&mut tiles, Pos::new(0, 0), prefab);
+
+    LevelDraft {
+        title: LevelTitle::Freddy,
+        entrances: vec![],
+        exits: vec![],
+        tiles,
+        mobs: HashMap::new(),
+        destinations: vec![],
+        override_rect: None,
+    }
+}
+
 pub(crate) fn spawn_level(
     name: String,
     rng: &mut impl rand::Rng,
@@ -1239,6 +1322,18 @@ pub(crate) fn spawn_level(
             TileKind::Wall => {
                 let sprite = assets.get_ascii_sprite('#', Color::srgb(0.6, 0.6, 0.6));
                 tile.insert((sprite, map::BlocksMovement, Occluder));
+            }
+            TileKind::ArcadeMachine => {
+                let sprite = assets.get_ascii_sprite('$', Color::srgb(0.5, 0.5, 0.2));
+                tile.insert((
+                    sprite,
+                    Name::new("Arcade Machine".to_string()),
+                    Interactable {
+                        action: "Use".to_string(),
+                        description: None,
+                        kind: InteractionType::Arcade,
+                    },
+                ));
             }
             TileKind::WorkoutMachine => {
                 let sprite = assets.get_ascii_sprite('&', Color::srgb(0.2, 0.2, 0.8));
@@ -1415,9 +1510,9 @@ pub(crate) fn gen_map(
             gen_island(rng)
                 .with_walls()
                 .sprinkle_mobs(rng, FORTNITE_DIST, 30),
-            gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+            gen_freddy(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, GENERIC_DIST, 30),
+                .sprinkle_mobs(rng, FREDDY_DIST, 10),
         ],
         vec![
             gen_amogus_spaceship(rng)

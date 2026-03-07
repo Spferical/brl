@@ -1,11 +1,7 @@
 use bevy::prelude::*;
 use bevy_egui::egui::Ui;
 
-use crate::game::{
-    FactionMap, Player,
-    map::{MapPos, WalkBlockedMap},
-    mapgen::MapInfo,
-};
+use crate::game::{FactionMap, Player, Stairs, map::MapPos, mapgen::MapInfo};
 
 #[derive(Resource, Default)]
 pub struct DebugSettings {
@@ -35,15 +31,15 @@ pub(crate) fn teleport_player(
     mut debug: ResMut<DebugSettings>,
     map_info: Res<MapInfo>,
     mut player: Single<&mut MapPos, With<Player>>,
-    walk_blocked_map: Res<WalkBlockedMap>,
+    stairs: Query<&MapPos, (Without<Player>, With<Stairs>)>,
 ) {
     if let Some(i) = debug.teleport_to
         && let Some(level) = map_info.levels.get(i)
     {
         debug.teleport_to = None;
-        for p in level.rect {
-            if !walk_blocked_map.0.contains(&IVec2::from(p)) {
-                **player = MapPos(IVec2::from(p));
+        for s in stairs {
+            if level.rect.contains(rogue_algebra::Pos::from(s.0)) {
+                **player = *s;
                 break;
             }
         }
