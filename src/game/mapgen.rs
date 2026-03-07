@@ -53,6 +53,9 @@ impl TileKind {
 #[derive(Clone, Copy, Debug, Reflect, PartialEq, Eq, Hash)]
 pub(crate) enum MobKind {
     GiantFrog,
+    SadFrog,
+    SmugFrog,
+    MadFrog,
     GymBro,
     Influencer,
     Normie,
@@ -72,14 +75,22 @@ pub(crate) enum MobKind {
     Enderman,
 }
 
-const GENERIC_DIST: &[(MobKind, usize)] = &[
+const LVL1_DIST: &[(MobKind, usize)] = &[
     (MobKind::GiantFrog, 1),
     (MobKind::GymBro, 1),
     (MobKind::Influencer, 1),
     (MobKind::Normie, 1),
-    (MobKind::AmogusImpostor, 1),
     (MobKind::Capybara, 1),
     (MobKind::Streamer, 1),
+];
+const BACKROOM_DIST: &[(MobKind, usize)] = &[
+    (MobKind::SadFrog, 3),
+    (MobKind::GymBro, 3),
+    (MobKind::Streamer, 3),
+    (MobKind::AmogusImpostor, 3),
+    (MobKind::Influencer, 1),
+    (MobKind::Normie, 1),
+    (MobKind::Capybara, 1),
 ];
 const GYM_DIST: &[(MobKind, usize)] = &[
     (MobKind::GymBro, 10),
@@ -104,6 +115,15 @@ const MINECRAFT_DIST: &[(MobKind, usize)] = &[
     (MobKind::Enderman, 10),
 ];
 const FREDDY_DIST: &[(MobKind, usize)] = &[(MobKind::Animatronic, 1)];
+const CAVES_DIST: &[(MobKind, usize)] = &[
+    (MobKind::Zombie, 5),
+    (MobKind::Skeleton, 5),
+    (MobKind::Spider, 5),
+    (MobKind::SmugFrog, 5),
+    (MobKind::MadFrog, 5),
+    (MobKind::Streamer, 5),
+    (MobKind::Animatronic, 2),
+];
 
 impl MobKind {
     pub(crate) fn get_cooked_meal(&self) -> (&'static str, CookedMeal) {
@@ -174,7 +194,7 @@ impl MobKind {
                     boredom: 0,
                 },
             ),
-            MobKind::GiantFrog => (
+            MobKind::GiantFrog | MobKind::SadFrog | MobKind::SmugFrog | MobKind::MadFrog => (
                 "Frog Legs",
                 CookedMeal {
                     hunger: 30,
@@ -456,8 +476,8 @@ impl MobKind {
             MobKind::GiantFrog => MobBundle {
                 name: Name::new("Giant Frog"),
                 creature: Creature {
-                    hp: 2,
-                    max_hp: 2,
+                    hp: 4,
+                    max_hp: 4,
                     faction: ENEMY_FACTION,
                     killed_by_player: false,
                     machine: false,
@@ -478,6 +498,92 @@ impl MobKind {
                     sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
                     nutrition: 5,
                     name: "Giant Frog".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::SadFrog => MobBundle {
+                name: Name::new("Sad Frog"),
+                creature: Creature {
+                    hp: 8,
+                    max_hp: 8,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 20,
+                    attrs: MobAttrs {
+                        based: true,
+                        aura_resist: Resist::Weak,
+                        psychic_resist: Resist::Weak,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('f', Color::srgb(0.3, 0.9, 0.3)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 5,
+                    name: "Sad Frog".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::SmugFrog => MobBundle {
+                name: Name::new("Smug Frog"),
+                creature: Creature {
+                    hp: 12,
+                    max_hp: 12,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 30,
+                    attrs: MobAttrs {
+                        based: true,
+                        aura_resist: Resist::Weak,
+                        psychic_resist: Resist::Weak,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('f', Color::srgb(0.4, 1.0, 0.4)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 5,
+                    name: "Smug Frog".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::MadFrog => MobBundle {
+                name: Name::new("Mad Frog"),
+                creature: Creature {
+                    hp: 8,
+                    max_hp: 8,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 30,
+                    ranged: true,
+                    keepaway: true,
+                    attrs: MobAttrs {
+                        based: true,
+                        aura_resist: Resist::Weak,
+                        psychic_resist: Resist::Weak,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('f', Color::srgb(0.4, 1.0, 0.4)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 5,
+                    name: "Mad Frog".to_string(),
                     kind: *self,
                 },
             },
@@ -1933,14 +2039,14 @@ pub(crate) fn gen_map(
     // Generate drafts for each level.
     let level_1_draft = gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
         .with_walls()
-        .sprinkle_mobs(rng, GENERIC_DIST, 10);
+        .sprinkle_mobs(rng, LVL1_DIST, 10);
     let player_pos = MapPos(IVec2::from(level_1_draft.entrances[0]));
     let mut level_drafts_per_depth = vec![
         vec![level_1_draft],
         vec![
             gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
                 .with_walls()
-                .sprinkle_mobs(rng, GENERIC_DIST, 20),
+                .sprinkle_mobs(rng, BACKROOM_DIST, 20),
             gen_dungeon_fitness(rng)
                 .with_walls()
                 .sprinkle_mobs(rng, GYM_DIST, 20),
@@ -1963,31 +2069,20 @@ pub(crate) fn gen_map(
                 .sprinkle_mobs(rng, AMOGUS_DIST, 20),
             gen_minecraft(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, MINECRAFT_DIST, 30),
+                .sprinkle_mobs(rng, MINECRAFT_DIST, 25),
         ],
         vec![
             draft_level_mapgen_drunk(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, GENERIC_DIST, 30),
+                .sprinkle_mobs(rng, CAVES_DIST, 30),
             draft_level_mapgen_simple(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, GENERIC_DIST, 30),
+                .sprinkle_mobs(rng, CAVES_DIST, 30),
         ],
         vec![
             draft_level_mapgen_simple(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, GENERIC_DIST, 40),
-            draft_level_mapgen_simple(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, GENERIC_DIST, 40),
-        ],
-        vec![
-            draft_level_mapgen_simple(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, GENERIC_DIST, 50),
-            draft_level_mapgen_simple(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, GENERIC_DIST, 30),
+                .sprinkle_mobs(rng, CAVES_DIST, 40),
         ],
     ];
 
