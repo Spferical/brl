@@ -33,6 +33,7 @@ impl std::fmt::Display for Attr {
 pub(crate) enum Effect {
     AttrChange(Attr, i32),
     GainAbility(Ability),
+    FriendOfMachines,
     Subscription(Subscription),
 }
 
@@ -41,6 +42,7 @@ impl std::fmt::Display for Effect {
         match self {
             Effect::AttrChange(attr, amt) => write!(f, "{amt:+} {attr}"),
             Effect::GainAbility(ability) => write!(f, "Learn {ability}: {}", ability.describe()),
+            Effect::FriendOfMachines => write!(f, "Become friendly to machines"),
             Effect::Subscription(sub) => match sub {
                 Subscription::DungeonDashPlatinum => write!(
                     f,
@@ -120,16 +122,18 @@ pub(crate) fn handle_upgrades(
                 },
                 Effect::GainAbility(ability) => player.abilities.push(*ability),
                 Effect::Subscription(sub) => player.subscriptions.push(*sub),
+                Effect::FriendOfMachines => player_creature.friend_of_machines = true,
             }
         }
     }
 
-    if player.upgrade_options.is_empty() && player.pending_upgrades > 0 {
+    if player.upgrade_options.len() < 3 && player.pending_upgrades > 0 {
+        let num_needed = 3 - player.upgrade_options.len();
         let valid_options = (0..upgrades.len())
             .filter(|i| !player.upgrades.contains(i))
             .collect::<Vec<_>>();
         if let Ok(choices) =
-            valid_options.choose_multiple_weighted(rng, 3, |u| UPGRADES[*u].frequency)
+            valid_options.choose_multiple_weighted(rng, num_needed, |u| UPGRADES[*u].frequency)
         {
             player.upgrade_options.extend(choices);
         }
@@ -222,6 +226,14 @@ pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
             name: "Library Card",
             effects: vec![Effect::GainAbility(Ability::ReadBook)],
             frequency: 5.0,
+        },
+        Upgrade {
+            name: "Animatronic Bear Mask",
+            effects: vec![
+                Effect::AttrChange(Attr::Rizz, -10),
+                Effect::FriendOfMachines,
+            ],
+            frequency: 0.0,
         },
     ]
 });

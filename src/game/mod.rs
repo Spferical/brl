@@ -57,6 +57,10 @@ const PLAYER_Z: f32 = 10.0;
 const CORPSE_Z: f32 = 5.0;
 const TILE_Z: f32 = 0.0;
 
+const PLAYER_FACTION: i32 = 0;
+const FRIENDLY_FACTION: i32 = 2;
+const ENEMY_FACTION: i32 = -1;
+
 pub(super) fn plugin(app: &mut App) {
     app.add_plugins(FireflyPlugin);
     app.insert_resource(ClearColor(Color::BLACK));
@@ -158,14 +162,18 @@ pub(super) fn plugin(app: &mut App) {
                 // kill mobs from any player damage
                 (apply_damage, prune_dead).chain(),
                 // environment
-                map::update_pos_to_creature,
-                process_spawners,
-                process_spawn_zones,
-                spawn_klarna_kop,
-                spawn_brainrot_enemies,
-                transform_brainrot_enemies,
-                transform_brainrot_corpses,
-                map::update_pos_to_creature,
+                (
+                    map::update_pos_to_creature,
+                    apply_friend_of_machines,
+                    process_spawners,
+                    process_spawn_zones,
+                    spawn_klarna_kop,
+                    spawn_brainrot_enemies,
+                    transform_brainrot_enemies,
+                    transform_brainrot_corpses,
+                    map::update_pos_to_creature,
+                )
+                    .chain(),
                 // bullets
                 (
                     check_bullet_collision,
@@ -176,10 +184,13 @@ pub(super) fn plugin(app: &mut App) {
                 )
                     .chain(),
                 // mobs get a turn
-                build_faction_map,
-                process_mob_turn,
-                map::update_pos_to_creature,
-                check_bullet_collision,
+                (
+                    build_faction_map,
+                    process_mob_turn,
+                    map::update_pos_to_creature,
+                    check_bullet_collision,
+                )
+                    .chain(),
                 // damage
                 apply_damage,
                 prune_dead,
@@ -245,8 +256,8 @@ fn anger_crew(
     let victim_pos;
 
     // Check if the attacked entity is a crew member or already angered
-    if let Ok((_entity, pos, creature, name, _mob)) = creatures.get(attacked_entity) {
-        if creature.faction == 2
+    if let Ok((_entity, pos, creature, name, mob)) = creatures.get(attacked_entity) {
+        if creature.faction == FRIENDLY_FACTION
             || name
                 .as_ref()
                 .map(|n| n.as_str() == "Angered Crew Amogus")
@@ -255,10 +266,12 @@ fn anger_crew(
             victim_pos = pos.0;
             // The attacked entity is crew or already angered crew.
             // Find all other crew members who can see this
-            for (other_entity, other_pos, other_creature, _other_name, _other_mob) in
+            for (other_entity, other_pos, other_creature, _other_name, other_mob) in
                 creatures.iter()
             {
-                if other_creature.faction == 2 {
+                if other_creature.faction == FRIENDLY_FACTION
+                    && other_mob.map(|m| m.attrs.sus).unwrap_or(false)
+                {
                     let fov = rogue_algebra::fov::calculate_fov(other_pos.0.into(), 10, |p| {
                         sight_blocked_map.contains(&IVec2::from(p))
                     });
@@ -268,7 +281,7 @@ fn anger_crew(
                 }
             }
             // Also anger the victim if they were faction 2
-            if creature.faction == 2 {
+            if creature.faction == FRIENDLY_FACTION && mob.map(|m| m.attrs.sus).unwrap_or(false) {
                 to_anger.push(attacked_entity);
             }
         } else {
@@ -710,6 +723,7 @@ pub enum InteractionType {
     Irradiate,
     MedicalPod,
     Arcade,
+    Upgrade(Option<usize>),
 }
 
 #[derive(Component)]
@@ -887,21 +901,23 @@ pub(crate) struct Creature {
     pub max_hp: i32,
     pub faction: i32,
     pub killed_by_player: bool,
+    pub machine: bool,
+    pub friend_of_machines: bool,
+}
+
+fn is_enemy(faction: i32, other: i32) -> bool {
+    if faction == FRIENDLY_FACTION {
+        false
+    } else if faction == ENEMY_FACTION {
+        other == 0
+    } else {
+        other != faction
+    }
 }
 
 impl Creature {
     fn is_dead(&self) -> bool {
         self.hp <= 0
-    }
-
-    fn is_enemy(&self, other_faction: i32) -> bool {
-        if self.faction == 2 {
-            false
-        } else if self.faction == -1 {
-            other_faction == 0
-        } else {
-            other_faction != self.faction
-        }
     }
 }
 
@@ -1229,6 +1245,23 @@ fn handle_player_move(
                             world_pos: None,
                             text: "HEALED".to_string(),
                             color: Color::srgb(0.0, 0.8, 0.8),
+                        });
+                    }
+                    InteractionType::Upgrade(idx) => {
+                        player_stats.pending_upgrades += 1;
+                        if let Some(idx) = idx {
+                            player_stats.upgrade_options.push(idx);
+                        }
+                        commands.entity(*entity).remove::<Interactable>();
+                        commands
+                            .entity(*entity)
+                            .insert(assets.get_ascii_sprite('x', Color::srgb(0.2, 0.4, 0.4)));
+                        commands.entity(*entity).insert(Name::new("Rubble"));
+                        floating_text.write(FloatingTextMessage {
+                            entity: Some(player_entity),
+                            world_pos: None,
+                            text: "UPGRADE".to_string(),
+                            color: Color::srgb(0.2, 0.2, 0.8),
                         });
                     }
                 }
@@ -1819,15 +1852,7 @@ fn build_faction_map(
         }
         let enemy_positions = positions_per_faction
             .iter()
-            .filter(|(f, _positions)| {
-                if *faction == 2 {
-                    false
-                } else if *faction == -1 {
-                    **f == 0
-                } else {
-                    **f != *faction
-                }
-            })
+            .filter(|(f, _positions)| is_enemy(*faction, **f))
             .flat_map(|(_f, positions)| positions)
             .copied()
             .map(MapPos)
@@ -1851,6 +1876,20 @@ enum Action {
     AttackAndTeleport(Entity, MapPos),
 }
 
+fn apply_friend_of_machines(
+    player: Single<&Creature, With<Player>>,
+    creatures: Query<&mut Creature, Without<Player>>,
+) {
+    let player = player.into_inner();
+    if player.friend_of_machines {
+        for mut creature in creatures {
+            if creature.machine {
+                creature.faction = FRIENDLY_FACTION;
+            }
+        }
+    }
+}
+
 fn process_mob_turn(
     world: Single<Entity, With<GameWorld>>,
     assets: Res<WorldAssets>,
@@ -1869,7 +1908,7 @@ fn process_mob_turn(
 ) {
     let world_entity = world.into_inner();
     let rng = &mut rand::rng();
-    let (player_entity, player_pos, _) = *player_q;
+    let (player_entity, player_pos, player_creature) = *player_q;
     // Determine mob intentions.
     let mut mob_moves = HashMap::new();
     let mut claimed_locations = HashSet::new();
@@ -1878,7 +1917,7 @@ fn process_mob_turn(
             continue;
         }
 
-        if mob.attrs.knows_player_location {
+        if mob.attrs.knows_player_location && is_enemy(creature.faction, player_creature.faction) {
             mob.target = Some(player_pos.0);
         } else if let Some(target) = get_fov_target(
             *pos,
@@ -1895,7 +1934,7 @@ fn process_mob_turn(
         }
 
         if mob.target.is_none() {
-            if creature.faction == 2
+            if creature.faction == FRIENDLY_FACTION
                 && let Some(action) = get_crew_move(
                     *pos,
                     &mut mob,
@@ -2134,7 +2173,7 @@ fn get_fov_target(
         let visible_ivec = IVec2::from(visible_pos);
         if let Some(other_entity) = pos_to_creature.0.get(&visible_ivec)
             && let Ok(other_creature) = all_creatures.get(*other_entity)
-            && creature.is_enemy(other_creature.faction)
+            && is_enemy(creature.faction, other_creature.faction)
         {
             return Some(visible_ivec);
         }

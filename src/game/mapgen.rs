@@ -1,12 +1,14 @@
 use crate::game::{
-    CookedMeal, Creature, DropsCorpse, Interactable, InteractionType, MinSpawnZone, Mob, MobAttrs,
-    MobBundle, PLAYER_Z, Player, Resist, TILE_Z,
+    CookedMeal, Creature, DropsCorpse, ENEMY_FACTION, FRIENDLY_FACTION, Interactable,
+    InteractionType, MinSpawnZone, Mob, MobAttrs, MobBundle, PLAYER_FACTION, PLAYER_Z, Player,
+    Resist, TILE_Z,
     assets::WorldAssets,
     camera::CameraFollow,
     lighting::Occluder,
     map::{self, MapPos, Tile},
     signal,
     spawn::{spawn_mob, spawn_stairs},
+    upgrades::UPGRADES,
 };
 use bevy::{
     platform::collections::{HashMap, HashSet},
@@ -30,6 +32,7 @@ enum TileKind {
     Star,
     ArcadeMachine,
     Table,
+    Upgrade(Option<&'static str>),
 }
 
 #[derive(Clone, Copy, Debug, Reflect, PartialEq, Eq, Hash)]
@@ -199,8 +202,10 @@ impl MobKind {
                 creature: Creature {
                     hp: 25,
                     max_hp: 25,
-                    faction: -1,
+                    faction: ENEMY_FACTION,
                     killed_by_player: false,
+                    machine: true,
+                    friend_of_machines: false,
                 },
                 mob: Mob {
                     melee_damage: 1,
@@ -225,8 +230,10 @@ impl MobKind {
                 creature: Creature {
                     hp: 2,
                     max_hp: 2,
-                    faction: -1,
+                    faction: ENEMY_FACTION,
                     killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
                 },
                 mob: Mob {
                     melee_damage: 1,
@@ -251,8 +258,10 @@ impl MobKind {
                 creature: Creature {
                     hp: 2,
                     max_hp: 2,
-                    faction: -1,
+                    faction: ENEMY_FACTION,
                     killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
                 },
                 mob: Mob {
                     melee_damage: 1,
@@ -277,8 +286,10 @@ impl MobKind {
                 creature: Creature {
                     hp: 4,
                     max_hp: 4,
-                    faction: -1,
+                    faction: ENEMY_FACTION,
                     killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
                 },
                 mob: Mob {
                     melee_damage: 1,
@@ -301,8 +312,10 @@ impl MobKind {
                 creature: Creature {
                     hp: 2,
                     max_hp: 2,
-                    faction: -1,
+                    faction: ENEMY_FACTION,
                     killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
                 },
                 mob: Mob {
                     melee_damage: 1,
@@ -326,8 +339,10 @@ impl MobKind {
                 creature: Creature {
                     hp: 2,
                     max_hp: 2,
-                    faction: -1,
+                    faction: ENEMY_FACTION,
                     killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
                 },
                 mob: Mob {
                     melee_damage: 1,
@@ -350,8 +365,10 @@ impl MobKind {
                 creature: Creature {
                     hp: 2,
                     max_hp: 2,
-                    faction: 2, // Crew faction
+                    faction: FRIENDLY_FACTION, // Crew faction
                     killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
                 },
                 mob: Mob {
                     melee_damage: 1,
@@ -374,8 +391,10 @@ impl MobKind {
                 creature: Creature {
                     hp: 2,
                     max_hp: 2,
-                    faction: -1,
+                    faction: ENEMY_FACTION,
                     killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
                 },
                 mob: Mob {
                     melee_damage: 4,
@@ -409,6 +428,8 @@ impl MobKind {
                         max_hp: hp,
                         faction: -1,
                         killed_by_player: false,
+                        machine: false,
+                        friend_of_machines: false,
                     },
                     mob: Mob {
                         melee_damage: damage,
@@ -435,8 +456,10 @@ impl MobKind {
                 creature: Creature {
                     hp: 5,
                     max_hp: 5,
-                    faction: -1,
+                    faction: ENEMY_FACTION,
                     killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
                 },
                 mob: Mob {
                     melee_damage: 2,
@@ -460,6 +483,8 @@ impl MobKind {
                     max_hp: 5,
                     faction: *faction,
                     killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
                 },
                 mob: Mob {
                     melee_damage: 2,
@@ -517,6 +542,19 @@ pub struct LevelDraft {
 }
 
 impl LevelDraft {
+    fn add_upgrade(&mut self, rng: &mut impl Rng, name: Option<&'static str>) {
+        self.tiles
+            .insert(self.get_random_floor(rng), TileKind::Upgrade(name));
+    }
+    fn get_random_floor(&self, rng: &mut impl Rng) -> Pos {
+        let all_floors = self
+            .tiles
+            .iter()
+            .filter(|(_p, t)| **t == TileKind::Floor)
+            .map(|(p, _t)| *p)
+            .collect::<Vec<_>>();
+        *all_floors.choose(rng).expect("get_random_floor: no floors")
+    }
     fn add_random_stairs(&mut self, min_entrances: usize, min_exits: usize, rng: &mut impl Rng) {
         let mut all_floors = self
             .tiles
@@ -1386,6 +1424,21 @@ pub(crate) fn spawn_level(
                 let sprite = assets.get_ascii_sprite('.', color);
                 tile.insert((Name::new("Star"), sprite));
             }
+            TileKind::Upgrade(name) => {
+                let color = Color::srgb(0.2, 0.2, 1.0);
+                let sprite = assets.get_ascii_sprite('*', color);
+                tile.insert((
+                    Name::new("Upgrade"),
+                    sprite,
+                    Interactable {
+                        action: "Upgrade".to_string(),
+                        description: None,
+                        kind: InteractionType::Upgrade(
+                            name.map(|name| UPGRADES.iter().position(|x| x.name == name).unwrap()),
+                        ),
+                    },
+                ));
+            }
         }
         tile.with_children(|parent| {
             parent.spawn((
@@ -1512,9 +1565,13 @@ pub(crate) fn gen_map(
             gen_island(rng)
                 .with_walls()
                 .sprinkle_mobs(rng, FORTNITE_DIST, 30),
-            gen_freddy(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, FREDDY_DIST, 4),
+            {
+                let mut freddy = gen_freddy(rng)
+                    .with_walls()
+                    .sprinkle_mobs(rng, FREDDY_DIST, 4);
+                freddy.add_upgrade(rng, Some("Animatronic Bear Mask"));
+                freddy
+            },
         ],
         vec![
             gen_amogus_spaceship(rng)
@@ -1631,8 +1688,10 @@ pub(crate) fn gen_map(
         Creature {
             hp: 10,
             max_hp: 10,
-            faction: 0,
+            faction: PLAYER_FACTION,
             killed_by_player: false,
+            friend_of_machines: false,
+            machine: false,
         },
         Name::new("Player"),
         CameraFollow,
