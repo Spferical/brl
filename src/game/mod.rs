@@ -2061,6 +2061,7 @@ fn prune_dead(
             {
                 let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
                 let mut entity_cmds = commands.spawn((
+                    Name::new("Corpse"),
                     Corpse {
                         nutrition: *nutrition,
                         name: name.clone(),
