@@ -25,6 +25,9 @@
             useWebGPU = false;
         }
 
+        // Sadly, Firefly does not seem to work on WebGPU right now :/
+        useWebGPU = false;
+
         const scriptName = useWebGPU ? './bevyrl_webgpu.js' : './bevyrl_webgl2.js';
         
         console.log("Loading WASM module:", scriptName);
