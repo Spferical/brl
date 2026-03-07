@@ -291,13 +291,13 @@ fn update_game_over_chat(
 
         let mut text = pool.choose(&mut rng).unwrap().to_string();
 
-        if let Some(killer) = &game_over_info.killer_name {
-            if rng.random_bool(0.4) {
-                text = KILLER_MESSAGES
-                    .choose(&mut rng)
-                    .unwrap()
-                    .replace("{killer}", killer);
-            }
+        if let Some(killer) = &game_over_info.killer_name
+            && rng.random_bool(0.4)
+        {
+            text = KILLER_MESSAGES
+                .choose(&mut rng)
+                .unwrap()
+                .replace("{killer}", killer);
         }
 
         chat.messages.push(ChatMessage {

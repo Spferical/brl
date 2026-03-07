@@ -805,23 +805,23 @@ pub(crate) fn handle_eat(
         if let Ok((food, cooked, is_ambrosia, name)) = food_query.get(event.0) {
             let mut name_str = name.map(|n| n.as_str()).unwrap_or("Something unknown");
 
-            if let Some(ref mut dd) = dd_selection {
-                if Some(event.0) == dd.dropped_food_entity {
-                    let amount = dd.active_job_amount.unwrap_or(10);
-                    player.money -= amount * 2;
-                    floating_text.write(crate::game::animation::FloatingTextMessage {
-                        entity: Some(player_entity),
-                        world_pos: None,
-                        text: "You bit it, you bought it!".to_string(),
-                        color: Color::srgb(1.0, 0.0, 0.0),
-                        ..default()
-                    });
-                    dd.active_job_turns = None;
-                    dd.active_job_amount = None;
-                    dd.job_target = None;
-                    dd.failed_job_turns = Some(10);
-                    dd.dropped_food_entity = None;
-                }
+            if let Some(ref mut dd) = dd_selection
+                && Some(event.0) == dd.dropped_food_entity
+            {
+                let amount = dd.active_job_amount.unwrap_or(10);
+                player.money -= amount * 2;
+                floating_text.write(crate::game::animation::FloatingTextMessage {
+                    entity: Some(player_entity),
+                    world_pos: None,
+                    text: "You bit it, you bought it!".to_string(),
+                    color: Color::srgb(1.0, 0.0, 0.0),
+                    ..default()
+                });
+                dd.active_job_turns = None;
+                dd.active_job_amount = None;
+                dd.job_target = None;
+                dd.failed_job_turns = Some(10);
+                dd.dropped_food_entity = None;
             }
 
             if is_ambrosia {
@@ -1857,31 +1857,27 @@ fn apply_damage(
         ty,
     } in damage.0.drain(..)
     {
-        if let Some(attacker) = attacker {
-            if attacker == player_entity {
-                if let Some(ref mut dd) = dd_selection {
-                    if Some(entity) == dd.customer_entity {
-                        if dd.active_job_turns.is_some() {
-                            dd.active_job_turns = None;
-                            dd.active_job_amount = None;
-                            dd.job_target = None;
-                            dd.failed_job_turns = Some(10);
+        if let Some(attacker) = attacker
+            && attacker == player_entity
+            && let Some(ref mut dd) = dd_selection
+            && Some(entity) == dd.customer_entity
+            && dd.active_job_turns.is_some()
+        {
+            dd.active_job_turns = None;
+            dd.active_job_amount = None;
+            dd.job_target = None;
+            dd.failed_job_turns = Some(10);
 
-                            if let Ok((_, Some(mut player), _, _, _)) = creatures.get_mut(attacker)
-                            {
-                                player.money -= 10;
-                            }
-                            floating_text.write(crate::game::animation::FloatingTextMessage {
-                                entity: Some(attacker),
-                                world_pos: None,
-                                text: "Do not attack the customer! -$10".to_string(),
-                                color: Color::srgb(1.0, 0.0, 0.0),
-                                ..default()
-                            });
-                        }
-                    }
-                }
+            if let Ok((_, Some(mut player), _, _, _)) = creatures.get_mut(attacker) {
+                player.money -= 10;
             }
+            floating_text.write(crate::game::animation::FloatingTextMessage {
+                entity: Some(attacker),
+                world_pos: None,
+                text: "Do not attack the customer! -$10".to_string(),
+                color: Color::srgb(1.0, 0.0, 0.0),
+                ..default()
+            });
         }
 
         if let Ok((mut c, player, mob, transform, _name)) = creatures.get_mut(entity) {
@@ -1896,11 +1892,10 @@ fn apply_damage(
                             let info = game_over_info.as_mut().unwrap();
                             info.cause = crate::screens::game_over::DeathCause::LowHP;
                             info.brainrot = player.brainrot;
-                            if let Some(attacker) = attacker {
-                                if let Ok((_, _, _, _, attacker_name)) = creatures.get(attacker) {
-                                    info.killer_name =
-                                        attacker_name.map(|n| n.as_str().to_string());
-                                }
+                            if let Some(attacker) = attacker
+                                && let Ok((_, _, _, _, attacker_name)) = creatures.get(attacker)
+                            {
+                                info.killer_name = attacker_name.map(|n| n.as_str().to_string());
                             }
                             next_screen.set(Screen::GameOver);
                         }
@@ -1918,11 +1913,10 @@ fn apply_damage(
                             let info = game_over_info.as_mut().unwrap();
                             info.cause = crate::screens::game_over::DeathCause::LowHP;
                             info.brainrot = player.brainrot;
-                            if let Some(attacker) = attacker {
-                                if let Ok((_, _, _, _, attacker_name)) = creatures.get(attacker) {
-                                    info.killer_name =
-                                        attacker_name.map(|n| n.as_str().to_string());
-                                }
+                            if let Some(attacker) = attacker
+                                && let Ok((_, _, _, _, attacker_name)) = creatures.get(attacker)
+                            {
+                                info.killer_name = attacker_name.map(|n| n.as_str().to_string());
                             }
                             next_screen.set(Screen::GameOver);
                         }
@@ -1938,11 +1932,10 @@ fn apply_damage(
                             let info = game_over_info.as_mut().unwrap();
                             info.cause = crate::screens::game_over::DeathCause::Boredom;
                             info.brainrot = player.brainrot;
-                            if let Some(attacker) = attacker {
-                                if let Ok((_, _, _, _, attacker_name)) = creatures.get(attacker) {
-                                    info.killer_name =
-                                        attacker_name.map(|n| n.as_str().to_string());
-                                }
+                            if let Some(attacker) = attacker
+                                && let Ok((_, _, _, _, attacker_name)) = creatures.get(attacker)
+                            {
+                                info.killer_name = attacker_name.map(|n| n.as_str().to_string());
                             }
                             next_screen.set(Screen::GameOver);
                         }
@@ -2158,7 +2151,7 @@ fn process_mob_turn(
 
         if corpse.kind == mapgen::MobKind::Streamer
             && turn_counter.0 > 0
-            && turn_counter.0 % 4 == 0
+            && turn_counter.0.is_multiple_of(4)
             && sees_player
         {
             let spawn_pos = pos.adjacent().into_iter().find(|p| {
@@ -2365,13 +2358,13 @@ fn prune_dead(
 
             if creature.killed_by_player {
                 chat::handle_payout(player, &streaming_state, &mut chat, name);
-                if let Some(corpse) = corpse {
-                    if corpse.kind == mapgen::MobKind::Streamer {
-                        use rand::Rng;
-                        let mut rng = rand::rng();
-                        let bonus = rng.random_range(50..=100);
-                        streaming_state.subscribers += bonus;
-                    }
+                if let Some(corpse) = corpse
+                    && corpse.kind == mapgen::MobKind::Streamer
+                {
+                    use rand::Rng;
+                    let mut rng = rand::rng();
+                    let bonus = rng.random_range(50..=100);
+                    streaming_state.subscribers += bonus;
                 }
             }
 
@@ -3281,10 +3274,10 @@ fn update_level_info_on_change(
             .count() as u32;
         dd_selection.initial_mobs = mob_count;
 
-        if let Some(target) = dd_selection.job_target {
-            if !cur_map.rect.contains(rogue_algebra::Pos::from(target.0)) {
-                dd_selection.job_target = None;
-            }
+        if let Some(target) = dd_selection.job_target
+            && !cur_map.rect.contains(rogue_algebra::Pos::from(target.0))
+        {
+            dd_selection.job_target = None;
         }
 
         // Handle freezing/unfreezing

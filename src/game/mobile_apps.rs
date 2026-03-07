@@ -360,50 +360,50 @@ impl DungeonDash {
     ) {
         if let Some(work_button) =
             ui.data_mut(|d| d.get_temp::<egui::Response>(egui::Id::new("work_button")))
+            && work_button.clicked()
+            && dd_selection.deliveries_this_level < 3
         {
-            if work_button.clicked() && dd_selection.deliveries_this_level < 3 {
-                next_dd_screen.set(DungeonDashScreen::JobOffer);
+            next_dd_screen.set(DungeonDashScreen::JobOffer);
 
-                // Pick an open location on the current level for the delivery location
-                let maxdist = 50; // allow far away targets for jobs
-                let reachable = |p: crate::game::map::MapPos| {
-                    p.adjacent()
-                        .into_iter()
-                        .filter(|adj| !walk_blocked_map.0.contains(&adj.0))
-                        .collect::<Vec<_>>()
-                };
+            // Pick an open location on the current level for the delivery location
+            let maxdist = 50; // allow far away targets for jobs
+            let reachable = |p: crate::game::map::MapPos| {
+                p.adjacent()
+                    .into_iter()
+                    .filter(|adj| !walk_blocked_map.0.contains(&adj.0))
+                    .collect::<Vec<_>>()
+            };
 
-                let current_level = map_info.get_level(*player_pos);
+            let current_level = map_info.get_level(*player_pos);
 
-                let mut possible_spots = vec![];
-                for path in rogue_algebra::path::bfs_paths(&[*player_pos], maxdist, reachable) {
-                    if let Some(pos) = path.last()
-                        && !walk_blocked_map.0.contains(&pos.0)
-                        && pos.0 != player_pos.0
-                    {
-                        // Check if the spot is within the current level's bounds
-                        let in_bounds = if let Some(level) = current_level {
-                            level.rect.contains(rogue_algebra::Pos::from(pos.0))
-                        } else {
-                            true
-                        };
+            let mut possible_spots = vec![];
+            for path in rogue_algebra::path::bfs_paths(&[*player_pos], maxdist, reachable) {
+                if let Some(pos) = path.last()
+                    && !walk_blocked_map.0.contains(&pos.0)
+                    && pos.0 != player_pos.0
+                {
+                    // Check if the spot is within the current level's bounds
+                    let in_bounds = if let Some(level) = current_level {
+                        level.rect.contains(rogue_algebra::Pos::from(pos.0))
+                    } else {
+                        true
+                    };
 
-                        if in_bounds {
-                            possible_spots.push((pos.0, path.len() as i32 - 1));
-                        }
+                    if in_bounds {
+                        possible_spots.push((pos.0, path.len() as i32 - 1));
                     }
                 }
+            }
 
-                if !possible_spots.is_empty() {
-                    use rand::seq::IndexedRandom;
-                    let mut rng = rand::rng();
-                    let (target, dist) = possible_spots.choose(&mut rng).unwrap();
-                    dd_selection.job_target = Some(crate::game::map::MapPos(*target));
-                    dd_selection.job_distance = *dist;
-                } else {
-                    dd_selection.job_target = None;
-                    dd_selection.job_distance = 0;
-                }
+            if !possible_spots.is_empty() {
+                use rand::seq::IndexedRandom;
+                let mut rng = rand::rng();
+                let (target, dist) = possible_spots.choose(&mut rng).unwrap();
+                dd_selection.job_target = Some(crate::game::map::MapPos(*target));
+                dd_selection.job_distance = *dist;
+            } else {
+                dd_selection.job_target = None;
+                dd_selection.job_distance = 0;
             }
         }
 

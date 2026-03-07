@@ -57,10 +57,10 @@ impl DungeonDashState {
 
     pub fn fail_job(&mut self, commands: &mut Commands) {
         self.reset_job();
-        if let Some(food_entity) = self.dropped_food_entity.take() {
-            if let Ok(mut entity) = commands.get_entity(food_entity) {
-                entity.despawn();
-            }
+        if let Some(food_entity) = self.dropped_food_entity.take()
+            && let Ok(mut entity) = commands.get_entity(food_entity)
+        {
+            entity.despawn();
         }
         self.failed_job_turns = Some(10);
     }
@@ -68,11 +68,10 @@ impl DungeonDashState {
     pub fn decrement_timers(&mut self) {
         if let Some(mut turns) = self.active_job_turns
             && self.dropped_food_entity.is_none()
+            && turns > 0
         {
-            if turns > 0 {
-                turns -= 1;
-                self.active_job_turns = Some(turns);
-            }
+            turns -= 1;
+            self.active_job_turns = Some(turns);
         }
 
         if let Some(mut f_turns) = self.failed_job_turns {
@@ -488,107 +487,106 @@ pub fn process_dungeon_dash_jobs(
     }
 
     if let Some(food_entity) = dd_state.dropped_food_entity {
-        if let Some(customer_entity) = dd_state.customer_entity {
-            if let Ok(food_pos) = food_query.get(food_entity) {
-                if let Ok((customer_pos, mut mob, _creature)) = mob_query.get_mut(customer_entity) {
-                    if customer_pos.0 == food_pos.0 {
-                        // Picked up!
-                        commands.entity(food_entity).despawn();
+        if let Some(customer_entity) = dd_state.customer_entity
+            && let Ok(food_pos) = food_query.get(food_entity)
+            && let Ok((customer_pos, mut mob, _creature)) = mob_query.get_mut(customer_entity)
+        {
+            if customer_pos.0 == food_pos.0 {
+                // Picked up!
+                commands.entity(food_entity).despawn();
 
-                        let dist = dd_state.job_distance as f32;
-                        let max_amount = dd_state.active_job_amount.unwrap_or(0) as f32;
-                        let max_turns = (dist * 1.5) as u32;
-                        let turns_left = dd_state
-                            .job_turns_at_completion
-                            .or(dd_state.active_job_turns)
-                            .unwrap_or(0);
-                        let turns_taken = max_turns.saturating_sub(turns_left);
+                let dist = dd_state.job_distance as f32;
+                let max_amount = dd_state.active_job_amount.unwrap_or(0) as f32;
+                let max_turns = (dist * 1.5) as u32;
+                let turns_left = dd_state
+                    .job_turns_at_completion
+                    .or(dd_state.active_job_turns)
+                    .unwrap_or(0);
+                let turns_taken = max_turns.saturating_sub(turns_left);
 
-                        let t1 = dist * 1.1;
-                        let t2 = dist * 1.5;
-                        let min_amount = dist * 1.0;
+                let t1 = dist * 1.1;
+                let t2 = dist * 1.5;
+                let min_amount = dist * 1.0;
 
-                        let payout = if (turns_taken as f32) <= t1 {
-                            max_amount
-                        } else {
-                            let t = ((turns_taken as f32) - t1) / (t2 - t1);
-                            max_amount - t * (max_amount - min_amount)
-                        }
-                        .max(0.0)
-                        .round() as i32;
-
-                        player.money += payout + 1; // Payout + $1 tip
-
-                        floating_text.write(crate::game::animation::FloatingTextMessage {
-                            entity: Some(player_entity),
-                            world_pos: None,
-                            text: format!("+${} Payout", payout),
-                            color: Color::srgb(0.0, 1.0, 0.0),
-                            ..default()
-                        });
-
-                        let mut tip_pos = customer_pos.to_vec3(crate::game::PLAYER_Z);
-                        tip_pos.y += 16.0;
-                        floating_text.write(crate::game::animation::FloatingTextMessage {
-                            entity: None,
-                            world_pos: Some(tip_pos),
-                            text: "+$1 Tip".to_string(),
-                            color: Color::srgb(0.5, 1.0, 0.5),
-                            delay: 1.0,
-                            ..default()
-                        });
-
-                        dd_state.reset_job();
-                        dd_state.deliveries_this_level += 1;
-
-                        // make customer walk away randomly
-                        mob.destination = Some(customer_pos.0 + bevy::math::IVec2::new(10, 10));
-                        return;
-                    } else {
-                        mob.destination = Some(food_pos.0);
-                    }
+                let payout = if (turns_taken as f32) <= t1 {
+                    max_amount
+                } else {
+                    let t = ((turns_taken as f32) - t1) / (t2 - t1);
+                    max_amount - t * (max_amount - min_amount)
                 }
+                .max(0.0)
+                .round() as i32;
+
+                player.money += payout + 1; // Payout + $1 tip
+
+                floating_text.write(crate::game::animation::FloatingTextMessage {
+                    entity: Some(player_entity),
+                    world_pos: None,
+                    text: format!("+${} Payout", payout),
+                    color: Color::srgb(0.0, 1.0, 0.0),
+                    ..default()
+                });
+
+                let mut tip_pos = customer_pos.to_vec3(crate::game::PLAYER_Z);
+                tip_pos.y += 16.0;
+                floating_text.write(crate::game::animation::FloatingTextMessage {
+                    entity: None,
+                    world_pos: Some(tip_pos),
+                    text: "+$1 Tip".to_string(),
+                    color: Color::srgb(0.5, 1.0, 0.5),
+                    delay: 1.0,
+                    ..default()
+                });
+
+                dd_state.reset_job();
+                dd_state.deliveries_this_level += 1;
+
+                // make customer walk away randomly
+                mob.destination = Some(customer_pos.0 + bevy::math::IVec2::new(10, 10));
+                return;
+            } else {
+                mob.destination = Some(food_pos.0);
             }
         }
-    } else if let Some(target) = dd_state.job_target {
-        if target.0 == player_pos.0 {
-            // Drop off the food
-            let mut rng = rand::rng();
-            let food_idx = rng.random_range(0..FOODS.len());
+    } else if let Some(target) = dd_state.job_target
+        && target.0 == player_pos.0
+    {
+        // Drop off the food
+        let mut rng = rand::rng();
+        let food_idx = rng.random_range(0..FOODS.len());
 
-            let mut drop_pos = *player_pos;
-            for adj in player_pos.adjacent() {
-                if !walk_blocked_map.0.contains(&adj.0) {
-                    drop_pos = adj;
-                    break;
-                }
+        let mut drop_pos = *player_pos;
+        for adj in player_pos.adjacent() {
+            if !walk_blocked_map.0.contains(&adj.0) {
+                drop_pos = adj;
+                break;
             }
-
-            let drop_id = spawn_food(&mut commands, &assets, food_idx, drop_pos);
-            commands.entity(*world).add_child(drop_id);
-            dd_state.dropped_food_entity = Some(drop_id);
-            dd_state.job_turns_at_completion = dd_state.active_job_turns;
-            dd_state.job_target = None;
         }
+
+        let drop_id = spawn_food(&mut commands, &assets, food_idx, drop_pos);
+        commands.entity(*world).add_child(drop_id);
+        dd_state.dropped_food_entity = Some(drop_id);
+        dd_state.job_turns_at_completion = dd_state.active_job_turns;
+        dd_state.job_target = None;
     }
 
     // Handle job countdown and other timers
     let turns_before = dd_state.active_job_turns;
     dd_state.decrement_timers();
 
-    if let Some(0) = dd_state.active_job_turns {
-        if turns_before != Some(0) {
-            player.money -= 10;
-            floating_text.write(crate::game::animation::FloatingTextMessage {
-                entity: Some(player_entity),
-                world_pos: None,
-                text: "-$10 Failed Delivery".to_string(),
-                color: Color::srgb(1.0, 0.0, 0.0),
-                ..default()
-            });
+    if let Some(0) = dd_state.active_job_turns
+        && turns_before != Some(0)
+    {
+        player.money -= 10;
+        floating_text.write(crate::game::animation::FloatingTextMessage {
+            entity: Some(player_entity),
+            world_pos: None,
+            text: "-$10 Failed Delivery".to_string(),
+            color: Color::srgb(1.0, 0.0, 0.0),
+            ..default()
+        });
 
-            dd_state.fail_job(&mut commands);
-        }
+        dd_state.fail_job(&mut commands);
     }
 }
 
