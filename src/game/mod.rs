@@ -991,6 +991,12 @@ fn is_player_alive(player: Single<&Creature, With<Player>>, settings: Res<DebugS
 }
 
 #[derive(Clone, Debug, Reflect, Default)]
+pub(crate) struct Summon {
+    kind: MobKind,
+    delay: u64,
+}
+
+#[derive(Clone, Debug, Reflect, Default)]
 pub(crate) struct MobAttrs {
     pub based: bool,
     pub basic: bool,
@@ -998,6 +1004,8 @@ pub(crate) struct MobAttrs {
     pub sus: bool,
     pub friendly: bool,
     pub knows_player_location: bool,
+    pub raids_player: bool,
+    pub summon: Option<Summon>,
     pub aura_resist: Resist,
     pub physical_resist: Resist,
     pub psychic_resist: Resist,
@@ -2147,10 +2155,7 @@ fn process_mob_turn(
     assets: Res<WorldAssets>,
     pos_to_creature: Res<PosToCreature>,
     faction_map: Res<FactionMap>,
-    mut mobs: Query<
-        (Entity, &mut MapPos, &Creature, &mut Mob, &DropsCorpse),
-        (Without<Player>, Without<Frozen>),
-    >,
+    mut mobs: Query<(Entity, &mut MapPos, &Creature, &mut Mob), (Without<Player>, Without<Frozen>)>,
     mut commands: Commands,
     mut damage: ResMut<PendingDamage>,
     player_q: Single<(Entity, &MapPos, &Creature, &mut Player), With<Player>>,
@@ -2170,7 +2175,7 @@ fn process_mob_turn(
     // Determine mob intentions.
     let mut mob_moves = HashMap::new();
     let mut claimed_locations = HashSet::new();
-    for (entity, pos, creature, mut mob, corpse) in mobs.iter_mut() {
+    for (entity, pos, creature, mut mob) in mobs.iter_mut() {
         if creature.is_dead() {
             continue;
         }
@@ -2193,13 +2198,13 @@ fn process_mob_turn(
 
         let sees_player = mob.target == Some(player_pos.0);
 
-        if corpse.kind == mapgen::MobKind::Streamer && sees_player {
+        if mob.attrs.raids_player && sees_player {
             player.is_raided = true;
         }
 
-        if corpse.kind == mapgen::MobKind::Streamer
+        if let Some(Summon { kind, delay }) = mob.attrs.summon
             && turn_counter.0 > 0
-            && turn_counter.0.is_multiple_of(4)
+            && turn_counter.0.is_multiple_of(delay)
             && sees_player
         {
             let spawn_pos = pos.adjacent().into_iter().find(|p| {
@@ -2208,17 +2213,12 @@ fn process_mob_turn(
                     && !claimed_locations.contains(&p.0)
             });
             if let Some(spawn_pos) = spawn_pos {
-                spawn::spawn_mob(
-                    &mut commands,
-                    world_entity,
-                    spawn_pos,
-                    mapgen::MobKind::Stan,
-                    &assets,
-                );
+                spawn::spawn_mob(&mut commands, world_entity, spawn_pos, kind, &assets);
+                let name = kind.get_bundle(&assets).name;
                 floating_text.write(FloatingTextMessage {
                     entity: Some(entity),
                     world_pos: None,
-                    text: "Summoned Stan!".to_string(),
+                    text: format!("Summoned {name}!"),
                     color: Color::srgb(0.7, 0.4, 0.9),
                     ..default()
                 });
@@ -2298,7 +2298,7 @@ fn process_mob_turn(
 
     // Apply moves.
     for (entity, action) in mob_moves.into_iter() {
-        let (entity, mut pos, _creature, mob, _corpse) = mobs.get_mut(entity).unwrap();
+        let (entity, mut pos, _creature, mob) = mobs.get_mut(entity).unwrap();
         let old_pos = *pos;
         match action {
             Action::Move(new_pos) => {

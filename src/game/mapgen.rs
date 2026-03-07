@@ -1,7 +1,7 @@
 use crate::game::{
     CookedMeal, Creature, DropsCorpse, ENEMY_FACTION, FRIENDLY_FACTION, Interactable,
     InteractionType, MinSpawnZone, Mob, MobAttrs, MobBundle, PLAYER_FACTION, PLAYER_Z, Player,
-    Resist, TILE_Z,
+    Resist, Summon, TILE_Z,
     assets::WorldAssets,
     camera::CameraFollow,
     lighting::Occluder,
@@ -50,8 +50,9 @@ impl TileKind {
     }
 }
 
-#[derive(Clone, Copy, Debug, Reflect, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Reflect, PartialEq, Eq, Hash, Default)]
 pub(crate) enum MobKind {
+    #[default]
     GiantFrog,
     SadFrog,
     SmugFrog,
@@ -853,6 +854,11 @@ impl MobKind {
                     keepaway: true,
                     attrs: MobAttrs {
                         based: true,
+                        raids_player: true,
+                        summon: Some(Summon {
+                            kind: MobKind::Stan,
+                            delay: 4,
+                        }),
                         physical_resist: Resist::Weak,
                         aura_resist: Resist::Strong,
                         psychic_resist: Resist::Strong,
