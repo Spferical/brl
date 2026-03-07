@@ -811,7 +811,7 @@ impl std::fmt::Display for LevelTitle {
             LevelTitle::Dungeon => "The Dungeon",
             LevelTitle::Office => "Some Unpopulated Backrooms",
             LevelTitle::Island => "Mysterious Island",
-            LevelTitle::AmogusSpaceship => "The Skeld",
+            LevelTitle::AmogusSpaceship => "Sussy Ship",
             LevelTitle::Freddy => "Friendo's Pizza & Prizes",
             LevelTitle::Minecraft => "A Blocky Wilderness",
         })

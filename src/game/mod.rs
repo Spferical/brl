@@ -727,15 +727,21 @@ impl Ability {
         }
     }
 
-    pub(crate) fn damage_range(&self, player: &Player) -> Option<RangeInclusive<i32>> {
+    pub(crate) fn damage_info(&self, player: &Player) -> Option<(DamageType, RangeInclusive<i32>)> {
         let Player { rizz, boredom, .. } = player;
         match self {
             Ability::Sprint => None,
-            Ability::ShoulderCheck => Some(player.melee_damage()..=player.melee_damage()),
-            Ability::Mog => Some(2 + (rizz * 6) / 100..=2 + (rizz * 12) / 100),
+            Ability::ShoulderCheck => Some((
+                DamageType::Physical,
+                player.melee_damage()..=player.melee_damage(),
+            )),
+            Ability::Mog => Some((
+                DamageType::Aura,
+                2 + (rizz * 6) / 100..=2 + (rizz * 12) / 100,
+            )),
             Ability::Cook => None,
             Ability::ReadBook => None,
-            Ability::Yap => Some(1 + boredom / 50..=1 + boredom / 25),
+            Ability::Yap => Some((DamageType::Boredom, 1 + boredom / 50..=1 + boredom / 25)),
         }
     }
 }
@@ -1365,11 +1371,13 @@ fn handle_player_move(
                 let old_pos = *pos;
                 let new_pos = map_pos.0;
                 if let Some(mob_entity) = pos_to_creature.0.get(&new_pos) {
+                    let (ty, range) = Ability::ShoulderCheck.damage_info(&player_stats).unwrap();
+                    let amount = rand::rng().random_range(range);
                     damage.0.push(DamageInstance {
                         entity: *mob_entity,
                         attacker: Some(player_entity),
-                        amount: 2,
-                        ty: DamageType::Physical,
+                        amount,
+                        ty,
                     });
                     anger_crew(
                         *mob_entity,
@@ -1416,13 +1424,13 @@ fn handle_player_move(
                 let new_pos = map_pos;
                 let old_pos = pos;
                 if let Some(mob_entity) = pos_to_creature.0.get(&new_pos.0) {
-                    let amount =
-                        rand::rng().random_range(Ability::Mog.damage_range(&player_stats).unwrap());
+                    let (ty, range) = Ability::Mog.damage_info(&player_stats).unwrap();
+                    let amount = rand::rng().random_range(range);
                     damage.0.push(DamageInstance {
                         entity: *mob_entity,
                         attacker: Some(player_entity),
                         amount,
-                        ty: DamageType::Aura,
+                        ty,
                     });
                     anger_crew(
                         *mob_entity,
@@ -1445,13 +1453,13 @@ fn handle_player_move(
             Ability::Yap => {
                 let new_pos = map_pos;
                 if let Some(mob_entity) = pos_to_creature.0.get(&new_pos.0) {
-                    let amount =
-                        rand::rng().random_range(Ability::Yap.damage_range(&player_stats).unwrap());
+                    let (ty, range) = Ability::Yap.damage_info(&player_stats).unwrap();
+                    let amount = rand::rng().random_range(range);
                     damage.0.push(DamageInstance {
                         entity: *mob_entity,
                         attacker: Some(player_entity),
                         amount,
-                        ty: DamageType::Boredom,
+                        ty,
                     });
                     player_stats.boredom += 3;
                     anger_crew(
@@ -1758,6 +1766,32 @@ pub(crate) enum DamageType {
     Hunger,
     #[allow(unused)]
     Strength,
+}
+
+impl DamageType {
+    fn color(&self) -> Color {
+        match self {
+            DamageType::Physical => Color::srgb(1.0, 0.2, 0.2),
+            DamageType::Psychic => Color::srgb(0.8, 0.2, 1.0),
+            DamageType::Aura => Color::srgb(0.2, 0.8, 1.0),
+            DamageType::Boredom => Color::srgb(0.6, 0.6, 0.6),
+            DamageType::Hunger => todo!(),
+            DamageType::Strength => todo!(),
+        }
+    }
+}
+
+impl std::fmt::Display for DamageType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            DamageType::Physical => "physical",
+            DamageType::Psychic => "psychic",
+            DamageType::Aura => "aura",
+            DamageType::Boredom => "boredom",
+            DamageType::Hunger => "hunger",
+            DamageType::Strength => "strength",
+        })
+    }
 }
 
 pub struct DamageInstance {
@@ -2899,16 +2933,26 @@ fn sidebar(
                             } else {
                                 label
                             };
-                            let button = egui::Button::new(apply_brainrot_ui(
-                                label,
-                                player.brainrot,
-                                ui.style(),
-                                FontSelection::Default,
-                                Align::LEFT,
-                            ));
-                            if ui.add_enabled(*cooldown == 0, button).clicked() {
-                                msg_ability_clicked.write(AbilityClicked(*ability));
-                            }
+                            ui.horizontal(|ui| {
+                                let button = egui::Button::new(apply_brainrot_ui(
+                                    label,
+                                    player.brainrot,
+                                    ui.style(),
+                                    FontSelection::Default,
+                                    Align::LEFT,
+                                ));
+                                if ui.add_enabled(*cooldown == 0, button).clicked() {
+                                    msg_ability_clicked.write(AbilityClicked(*ability));
+                                }
+                                if let Some((ty, range)) = ability.damage_info(&player) {
+                                    ui.label(format!(
+                                        "deals {}-{} {} damage",
+                                        range.start(),
+                                        range.end(),
+                                        ty
+                                    ));
+                                }
+                            });
                         }
                     }
                     InputMode::Examine(_) => {

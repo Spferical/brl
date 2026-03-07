@@ -151,77 +151,48 @@ pub fn spawn_damage_animations(
     _q_transforms: Query<&Transform>,
 ) {
     for msg in messages.read() {
-        let (text, color) = match msg.ty {
+        let color = msg.ty.color();
+        let text = match msg.ty {
             DamageType::Physical => {
                 if msg.is_player {
-                    (format!("-{} HP", msg.amount), Color::srgb(1.0, 0.2, 0.2))
+                    format!("-{} HP", msg.amount)
                 } else {
-                    (
-                        format!("-{} physical damage", msg.amount),
-                        Color::srgb(1.0, 0.2, 0.2),
-                    )
+                    format!("-{} physical damage", msg.amount)
                 }
             }
             DamageType::Psychic => {
                 if msg.is_player {
-                    (
-                        format!("+{} Brainrot", msg.amount),
-                        Color::srgb(0.8, 0.2, 1.0),
-                    )
+                    format!("+{} Brainrot", msg.amount)
                 } else {
-                    (
-                        format!("-{} psychic damage", msg.amount),
-                        Color::srgb(0.8, 0.2, 1.0),
-                    )
+                    format!("-{} psychic damage", msg.amount)
                 }
             }
             DamageType::Aura => {
                 if msg.is_player {
-                    (format!("-{} Rizz", msg.amount), Color::srgb(0.2, 0.8, 1.0))
+                    format!("-{} Rizz", msg.amount)
                 } else {
-                    (
-                        format!("-{} aura damage", msg.amount),
-                        Color::srgb(0.2, 0.8, 1.0),
-                    )
+                    format!("-{} aura damage", msg.amount)
                 }
             }
             DamageType::Boredom => {
                 if msg.is_player {
-                    (
-                        format!("+{} Boredom", msg.amount),
-                        Color::srgb(0.6, 0.6, 0.6),
-                    )
+                    format!("+{} Boredom", msg.amount)
                 } else {
-                    (
-                        format!("-{} boredom damage", msg.amount),
-                        Color::srgb(0.6, 0.6, 0.6),
-                    )
+                    format!("-{} boredom damage", msg.amount)
                 }
             }
             DamageType::Hunger => {
                 if msg.is_player {
-                    (
-                        format!("+{} Hunger", msg.amount),
-                        Color::srgb(1.0, 0.5, 0.0),
-                    )
+                    format!("+{} Hunger", msg.amount)
                 } else {
-                    (
-                        format!("-{} hunger damage", msg.amount),
-                        Color::srgb(1.0, 0.5, 0.0),
-                    )
+                    format!("-{} hunger damage", msg.amount)
                 }
             }
             DamageType::Strength => {
                 if msg.is_player {
-                    (
-                        format!("-{} Strength", msg.amount),
-                        Color::srgb(0.2, 1.0, 0.2),
-                    )
+                    format!("-{} Strength", msg.amount)
                 } else {
-                    (
-                        format!("-{} strength damage", msg.amount),
-                        Color::srgb(0.2, 1.0, 0.2),
-                    )
+                    format!("-{} strength damage", msg.amount)
                 }
             }
         };
