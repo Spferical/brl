@@ -1220,11 +1220,9 @@ impl MobileApp for Cockatrice {
             .vertical_scroll_offset(scroll_offset)
             .show(ui, |ui| {
                 ui.vertical_centered(|ui| {
-                    ui.add_space(16.0 * scale); // Top padding to match the previous look
-                    // Draw 2 copies so that when offset reaches total_height, the screen is still filled
+                    ui.add_space(16.0 * scale);
                     for _ in 0..2 {
                         for tweet in &cockatrice_state.tweets {
-                            // We allocate a rect exactly the size of the *visible* tweet card
                             let (rect, _) = ui.allocate_exact_size(
                                 egui::vec2(container_width, tweet_height),
                                 egui::Sense::hover(),

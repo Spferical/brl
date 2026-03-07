@@ -37,7 +37,7 @@ use crate::{
 mod animation;
 mod assets;
 mod camera;
-mod chat;
+pub(crate) mod chat;
 pub(crate) mod debug;
 mod delivery;
 mod examine;
@@ -1800,13 +1800,22 @@ fn check_bullet_collision(
 fn apply_damage(
     mut damage: ResMut<PendingDamage>,
     mut animation: MessageWriter<DamageAnimationMessage>,
-    mut creature: Query<(&mut Creature, Option<&mut Player>, Option<&Mob>, &Transform)>,
-    player_q: Query<Entity, With<Player>>,
+    mut creatures: Query<(
+        &mut Creature,
+        Option<&mut Player>,
+        Option<&Mob>,
+        &Transform,
+        Option<&Name>,
+    )>,
+    player_q: Single<Entity, With<Player>>,
     dd_selection: Option<ResMut<DungeonDashState>>,
     mut floating_text: MessageWriter<crate::game::animation::FloatingTextMessage>,
+    mut game_over_info: Option<ResMut<crate::screens::game_over::GameOverInfo>>,
+    mut next_screen: ResMut<NextState<Screen>>,
+    screen: Res<State<Screen>>,
 ) {
     let mut dd_selection = dd_selection;
-    let player_entity = player_q.single().ok();
+    let player_entity = *player_q;
     for DamageInstance {
         entity,
         attacker,
@@ -1815,7 +1824,7 @@ fn apply_damage(
     } in damage.0.drain(..)
     {
         if let Some(attacker) = attacker {
-            if Some(attacker) == player_entity {
+            if attacker == player_entity {
                 if let Some(ref mut dd) = dd_selection {
                     if Some(entity) == dd.customer_entity {
                         if dd.active_job_turns.is_some() {
@@ -1824,7 +1833,8 @@ fn apply_damage(
                             dd.job_target = None;
                             dd.failed_job_turns = Some(10);
 
-                            if let Ok((_, Some(mut player), _, _)) = creature.get_mut(attacker) {
+                            if let Ok((_, Some(mut player), _, _, _)) = creatures.get_mut(attacker)
+                            {
                                 player.money -= 10;
                             }
                             floating_text.write(crate::game::animation::FloatingTextMessage {
@@ -1840,36 +1850,86 @@ fn apply_damage(
             }
         }
 
-        if let Ok((mut creature, player, mob, transform)) = creature.get_mut(entity) {
+        if let Ok((mut c, player, mob, transform, _name)) = creatures.get_mut(entity) {
             let world_pos = transform.translation;
             let is_player = player.is_some();
             let mut final_amount = amount;
             match player {
                 Some(mut player) => match ty {
-                    DamageType::Physical => creature.hp -= amount,
+                    DamageType::Physical => {
+                        c.hp -= amount;
+                        if c.hp <= 0 && *screen.get() == Screen::Gameplay {
+                            let info = game_over_info.as_mut().unwrap();
+                            info.cause = crate::screens::game_over::DeathCause::LowHP;
+                            info.brainrot = player.brainrot;
+                            if let Some(attacker) = attacker {
+                                if let Ok((_, _, _, _, attacker_name)) = creatures.get(attacker) {
+                                    info.killer_name =
+                                        attacker_name.map(|n| n.as_str().to_string());
+                                }
+                            }
+                            next_screen.set(Screen::GameOver);
+                        }
+                    }
                     DamageType::Psychic => {
                         player.brainrot += amount;
                     }
                     DamageType::Aura => {
                         player.rizz -= amount;
                         if player.rizz < 0 {
-                            creature.hp += player.rizz;
+                            c.hp += player.rizz;
                             player.rizz = 0;
+                        }
+                        if c.hp <= 0 && *screen.get() == Screen::Gameplay {
+                            let info = game_over_info.as_mut().unwrap();
+                            info.cause = crate::screens::game_over::DeathCause::LowHP;
+                            info.brainrot = player.brainrot;
+                            if let Some(attacker) = attacker {
+                                if let Ok((_, _, _, _, attacker_name)) = creatures.get(attacker) {
+                                    info.killer_name =
+                                        attacker_name.map(|n| n.as_str().to_string());
+                                }
+                            }
+                            next_screen.set(Screen::GameOver);
                         }
                     }
                     DamageType::Boredom => {
                         player.boredom += amount;
                         player.brainrot = (player.brainrot - amount).max(0);
                         if player.boredom > 100 {
-                            creature.hp -= player.boredom - 100;
+                            c.hp -= player.boredom - 100;
                             player.boredom = 100;
+                        }
+                        if c.hp <= 0 && *screen.get() == Screen::Gameplay {
+                            let info = game_over_info.as_mut().unwrap();
+                            info.cause = crate::screens::game_over::DeathCause::Boredom;
+                            info.brainrot = player.brainrot;
+                            if let Some(attacker) = attacker {
+                                if let Ok((_, _, _, _, attacker_name)) = creatures.get(attacker) {
+                                    info.killer_name =
+                                        attacker_name.map(|n| n.as_str().to_string());
+                                }
+                            }
+                            next_screen.set(Screen::GameOver);
                         }
                     }
                     DamageType::Hunger => {
-                        player.apply_hunger_damage(&mut creature, amount);
+                        player.apply_hunger_damage(&mut c, amount);
+                        if c.hp <= 0 && *screen.get() == Screen::Gameplay {
+                            let info = game_over_info.as_mut().unwrap();
+                            info.cause = crate::screens::game_over::DeathCause::Other;
+                            info.brainrot = player.brainrot;
+                            next_screen.set(Screen::GameOver);
+                        }
                     }
                     DamageType::Strength => {
-                        player.apply_strength_damage(&mut creature, amount);
+                        player.apply_strength_damage(&mut c, amount);
+                        if c.hp <= 0 && *screen.get() == Screen::Gameplay {
+                            let info = game_over_info.as_mut().unwrap();
+                            info.cause = crate::screens::game_over::DeathCause::Other;
+                            info.brainrot = player.brainrot;
+                            next_screen.set(Screen::GameOver);
+                        }
                     }
                 },
                 None => {
@@ -1881,11 +1941,11 @@ fn apply_damage(
                         Resist::Normal => amount,
                         Resist::Strong => amount / 2,
                     };
-                    creature.hp -= final_amount;
+                    c.hp -= final_amount;
                     if let Some(attacker) = attacker
-                        && Some(attacker) == player_entity
+                        && attacker == player_entity
                     {
-                        creature.killed_by_player = true;
+                        c.killed_by_player = true;
                     }
                 }
             }
@@ -3299,6 +3359,7 @@ pub struct GameResetParams<'w> {
     pub nearby_mobs: ResMut<'w, NearbyMobs>,
     pub last_title_drop_level: ResMut<'w, LastTitleDropLevel>,
     pub player_memory_map: ResMut<'w, PlayerMemoryMap>,
+    pub game_over_info: ResMut<'w, crate::screens::game_over::GameOverInfo>,
 }
 
 pub fn enter(
@@ -3317,6 +3378,7 @@ pub fn enter(
     let world = commands.spawn(world).id();
 
     // Reset game state BEFORE generation
+    *params.game_over_info = crate::screens::game_over::GameOverInfo::default();
     *params.phone = phone::PhoneState::default();
     *params.map_info = mapgen::MapInfo::default();
     *params.streaming_state = chat::StreamingState::default();

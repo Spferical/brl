@@ -12,7 +12,7 @@ use std::collections::VecDeque;
 const MAX_CHAT_MESSAGES: usize = 15;
 const MESSAGE_LIFETIME: f32 = 8.0;
 
-const USERNAMES: &[&str] = &[
+pub(crate) const USERNAMES: &[&str] = &[
     "WizardOfYendor",
     "Rodney",
     "PogChamp",
