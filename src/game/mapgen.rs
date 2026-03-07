@@ -66,6 +66,10 @@ pub(crate) enum MobKind {
     Animatronic,
     Streamer,
     Stan,
+    Zombie,
+    Skeleton,
+    Spider,
+    Enderman,
 }
 
 const GENERIC_DIST: &[(MobKind, usize)] = &[
@@ -77,24 +81,27 @@ const GENERIC_DIST: &[(MobKind, usize)] = &[
     (MobKind::Capybara, 1),
     (MobKind::Streamer, 1),
 ];
-
 const GYM_DIST: &[(MobKind, usize)] = &[
     (MobKind::GymBro, 10),
     (MobKind::Normie, 1),
     (MobKind::Influencer, 1),
     (MobKind::GiantFrog, 1),
 ];
-
 const FORTNITE_DIST: &[(MobKind, usize)] = &[
     (MobKind::Fortnite(1), 1),
     (MobKind::Fortnite(2), 1),
     (MobKind::Fortnite(3), 1),
 ];
-
 const AMOGUS_DIST: &[(MobKind, usize)] = &[
     (MobKind::AmogusCrew, 14),
     (MobKind::AmogusImpostor, 2),
     (MobKind::Normie, 1),
+];
+const MINECRAFT_DIST: &[(MobKind, usize)] = &[
+    (MobKind::Zombie, 10),
+    (MobKind::Skeleton, 10),
+    (MobKind::Spider, 10),
+    (MobKind::Enderman, 10),
 ];
 const FREDDY_DIST: &[(MobKind, usize)] = &[(MobKind::Animatronic, 1)];
 
@@ -110,6 +117,50 @@ impl MobKind {
                     rizz: 0,
                     brainrot: 0,
                     boredom: 5,
+                },
+            ),
+            MobKind::Zombie => (
+                "Rotten Flesh",
+                CookedMeal {
+                    hunger: 10,
+                    hp: 0,
+                    strength: -1,
+                    rizz: 0,
+                    brainrot: 0,
+                    boredom: 0,
+                },
+            ),
+            MobKind::Skeleton => (
+                "Bonemeal",
+                CookedMeal {
+                    hunger: 5,
+                    hp: -1,
+                    strength: 0,
+                    rizz: 0,
+                    brainrot: 0,
+                    boredom: 5,
+                },
+            ),
+            MobKind::Spider => (
+                "Cooked Spider",
+                CookedMeal {
+                    hunger: 10,
+                    hp: 0,
+                    strength: 0,
+                    rizz: 0,
+                    brainrot: 1,
+                    boredom: 0,
+                },
+            ),
+            MobKind::Enderman => (
+                "Boiled Ender Pearl",
+                CookedMeal {
+                    hunger: 10,
+                    hp: 0,
+                    strength: 0,
+                    rizz: 1,
+                    brainrot: 0,
+                    boredom: 0,
                 },
             ),
             MobKind::GymBro => (
@@ -263,6 +314,113 @@ impl MobKind {
                     sprite: assets.get_ascii_sprite('%', Color::srgb(0.5, 0.5, 0.5)),
                     nutrition: 5,
                     name: "Animatronic".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::Zombie => MobBundle {
+                name: Name::new("Zombie"),
+                creature: Creature {
+                    hp: 5,
+                    max_hp: 5,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 1,
+                    attrs: MobAttrs {
+                        boredom_resist: Resist::Strong,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('Z', Color::srgb(0.0, 0.48, 0.07)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.0, 0.48, 0.07)),
+                    nutrition: 5,
+                    name: "Zombie".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::Skeleton => MobBundle {
+                name: Name::new("Skeleton"),
+                creature: Creature {
+                    hp: 5,
+                    max_hp: 5,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 1,
+                    ranged: true,
+                    attrs: MobAttrs {
+                        psychic_resist: Resist::Strong,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('S', Color::srgb(0.9, 0.9, 0.9)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.9, 0.9, 0.9)),
+                    nutrition: 5,
+                    name: "Skeleton".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::Spider => MobBundle {
+                name: Name::new("Spider"),
+                creature: Creature {
+                    hp: 4,
+                    max_hp: 4,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 2,
+                    attrs: MobAttrs {
+                        psychic_resist: Resist::Strong,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('S', Color::srgb(0.85, 0.0, 0.57)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 5,
+                    name: "Spider".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::Enderman => MobBundle {
+                name: Name::new("Enderman"),
+                creature: Creature {
+                    hp: 4,
+                    max_hp: 4,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 2,
+                    attrs: MobAttrs {
+                        sus: true,
+                        aura_resist: Resist::Weak,
+                        boredom_resist: Resist::Strong,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('E', Color::srgb(0.38, 0.0, 1.0)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 5,
+                    name: "Enderman".to_string(),
                     kind: *self,
                 },
             },
@@ -1793,7 +1951,7 @@ pub(crate) fn gen_map(
                 .sprinkle_mobs(rng, AMOGUS_DIST, 20),
             gen_minecraft(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, GENERIC_DIST, 30),
+                .sprinkle_mobs(rng, MINECRAFT_DIST, 30),
         ],
         vec![
             draft_level_mapgen_drunk(rng)
