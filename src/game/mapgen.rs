@@ -428,7 +428,7 @@ impl MobKind {
             MobKind::KlarnaKop(level) => {
                 let level = (*level).max(1);
                 let hp = 3 + (level - 1) * 5;
-                let damage = 1 + (level - 1) * 1;
+                let damage = 1 + (level - 1);
                 let name = if level > 1 {
                     format!("Klarna Kop (Lvl {level})")
                 } else {
