@@ -7,7 +7,7 @@ use bevy::{
 };
 use bevy_egui::{
     EguiContexts, EguiPrimaryContextPass,
-    egui::{self, Align, FontSelection, Margin, RichText, WidgetText, text::LayoutJob},
+    egui::{self, Align, Color32, FontSelection, Margin, RichText, WidgetText, text::LayoutJob},
 };
 #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]
 use bevy_firefly::prelude::FireflyPlugin;
@@ -1775,8 +1775,8 @@ impl DamageType {
             DamageType::Psychic => Color::srgb(0.8, 0.2, 1.0),
             DamageType::Aura => Color::srgb(0.2, 0.8, 1.0),
             DamageType::Boredom => Color::srgb(0.6, 0.6, 0.6),
-            DamageType::Hunger => todo!(),
-            DamageType::Strength => todo!(),
+            DamageType::Hunger => Color::srgb(1.0, 0.5, 0.0),
+            DamageType::Strength => Color::srgb(0.2, 1.0, 0.2),
         }
     }
 }
@@ -2944,13 +2944,18 @@ fn sidebar(
                                 if ui.add_enabled(*cooldown == 0, button).clicked() {
                                     msg_ability_clicked.write(AbilityClicked(*ability));
                                 }
-                                if let Some((ty, range)) = ability.damage_info(&player) {
-                                    ui.label(format!(
-                                        "deals {}-{} {} damage",
-                                        range.start(),
-                                        range.end(),
-                                        ty
-                                    ));
+                                if let Some((ty, range)) = ability.damage_info(player) {
+                                    let [r, g, b, a] = ty.color().to_srgba().to_u8_array();
+                                    let color = Color32::from_rgba_unmultiplied(r, g, b, a);
+                                    ui.label(
+                                        RichText::new(format!(
+                                            "{}-{} {} damage",
+                                            range.start(),
+                                            range.end(),
+                                            ty,
+                                        ))
+                                        .color(color),
+                                    );
                                 }
                             });
                         }
