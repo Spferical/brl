@@ -62,7 +62,10 @@ const FRIENDLY_FACTION: i32 = 2;
 const ENEMY_FACTION: i32 = -1;
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_plugins(FireflyPlugin);
+    #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]
+    {
+        app.add_plugins(FireflyPlugin);
+    }
     app.insert_resource(ClearColor(Color::BLACK));
     app.load_resource::<assets::WorldAssets>();
     app.init_resource::<map::WalkBlockedMap>();
@@ -3141,7 +3144,10 @@ pub fn enter(
         .set(mobile_apps::DungeonDashScreen::Menu);
 
     examine::init_examine_highlight(world, &mut commands, &assets);
-    lighting::enable_lighting(&mut commands, *q_camera);
+    #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]
+    {
+        lighting::enable_lighting(&mut commands, *q_camera);
+    }
     mapgen::gen_map(world, &mut commands, assets, &mut params.map_info);
 
     commands.run_schedule(Turn);
@@ -3155,7 +3161,11 @@ pub fn exit(
     for world in game_world.iter() {
         commands.entity(world).despawn();
     }
-    lighting::disable_lighting(&mut commands, *q_camera);
+    #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]
+    {
+        info!("got here!");
+        lighting::disable_lighting(&mut commands, *q_camera);
+    }
 }
 
 fn draw_hunger_warning(mut contexts: EguiContexts, player: Single<(&Player, &Creature)>) {
