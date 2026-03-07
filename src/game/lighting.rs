@@ -14,7 +14,10 @@ pub struct LightingSettings {
 impl Default for LightingSettings {
     fn default() -> Self {
         Self {
+            #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]
             fancy_lighting: true,
+            #[cfg(all(target_arch = "wasm32", not(feature = "webgpu")))]
+            fancy_lighting: false,
         }
     }
 }
