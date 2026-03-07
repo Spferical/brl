@@ -442,7 +442,7 @@ fn apply_brainrot_to_world_text(
             &Text2d,
             &assets::BaseColor,
         ),
-        (Without<MoveAnimation>, Without<Frozen>),
+        (Without<MoveAnimation>, Without<Frozen>, Without<Bullet>),
     >,
     player: Query<&Player>,
 ) {
@@ -1269,6 +1269,7 @@ fn handle_player_move(
                     timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
 
                     ease: EaseFunction::SineInOut,
+                    base_rotation: None,
                     rotation: None,
                     sway,
                 });
@@ -1356,6 +1357,7 @@ fn handle_player_move(
                     timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
 
                     ease: EaseFunction::SineInOut,
+                    base_rotation: None,
                     rotation: None,
                     sway,
                 });
@@ -1378,6 +1380,7 @@ fn handle_player_move(
                     timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
 
                     ease: EaseFunction::SineInOut,
+                    base_rotation: None,
                     rotation: None,
                     sway,
                 });
@@ -1411,6 +1414,7 @@ fn handle_player_move(
                         timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
 
                         ease: EaseFunction::SineInOut,
+                        base_rotation: None,
                         rotation: None,
                         sway,
                     });
@@ -1420,6 +1424,7 @@ fn handle_player_move(
                         timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
 
                         ease: EaseFunction::SineInOut,
+                        base_rotation: None,
                         rotation: None,
                         sway,
                     });
@@ -1431,6 +1436,7 @@ fn handle_player_move(
                         timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
 
                         ease: EaseFunction::SineInOut,
+                        base_rotation: None,
                         rotation: None,
                         sway,
                     });
@@ -2020,12 +2026,26 @@ fn move_bullets(
     for (entity, mut pos, bullet) in bullets.iter_mut() {
         let old_pos = *pos;
         pos.0 += bullet.direction;
+
+        let rotation = match (bullet.direction.x, bullet.direction.y) {
+            (0, 1) => 0.0,
+            (-1, 1) => PI / 4.0,
+            (-1, 0) => PI / 2.0,
+            (-1, -1) => 3.0 * PI / 4.0,
+            (0, -1) => PI,
+            (1, -1) => 1.25 * PI,
+            (1, 0) => 1.5 * PI,
+            (1, 1) => 1.75 * PI,
+            _ => 0.0,
+        };
+
         commands.entity(entity).insert(MoveAnimation {
             from: old_pos.to_vec3(PLAYER_Z),
             to: pos.to_vec3(PLAYER_Z),
             timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
 
             ease: EaseFunction::Linear,
+            base_rotation: Some(rotation),
             rotation: None,
             sway: None,
         });
@@ -2277,6 +2297,7 @@ fn process_mob_turn(
                     timer: Timer::new(Duration::from_millis(100), TimerMode::Once),
 
                     ease: EaseFunction::SineInOut,
+                    base_rotation: None,
                     rotation: None,
                     sway: None,
                 });
@@ -2299,18 +2320,18 @@ fn process_mob_turn(
             }
             Action::RangedAttack(new_pos) => {
                 let direction = new_pos.0 - old_pos.0;
-                let (_, rotation) = match (direction.x, direction.y) {
-                    (1, 1) => (2093, 0.0),
-                    (-1, 1) => (2093, PI / 2.0),
-                    (-1, -1) => (2093, PI),
-                    (1, -1) => (2093, PI * 1.5),
-                    (0, 1) => (2094, 0.0),
-                    (-1, 0) => (2094, PI / 2.0),
-                    (0, -1) => (2094, PI),
-                    (1, 0) => (2094, PI * 1.5),
+                let rotation = match (direction.x, direction.y) {
+                    (0, 1) => 0.0,
+                    (-1, 1) => PI / 4.0,
+                    (-1, 0) => PI / 2.0,
+                    (-1, -1) => 3.0 * PI / 4.0,
+                    (0, -1) => PI,
+                    (1, -1) => 1.25 * PI,
+                    (1, 0) => 1.5 * PI,
+                    (1, 1) => 1.75 * PI,
                     _ => panic!("Unexpected bullet direction: {direction:?}"),
                 };
-                let bullet_sprite = assets.get_ascii_sprite('o', Color::WHITE);
+                let bullet_sprite = assets.get_ascii_sprite('^', Color::WHITE);
                 let transform = Transform::from_translation(new_pos.to_vec3(PLAYER_Z))
                     .with_rotation(Quat::from_rotation_z(rotation));
                 let bullet = Bullet {
@@ -2337,6 +2358,7 @@ fn process_mob_turn(
                     timer: Timer::new(Duration::from_millis(1), TimerMode::Once),
 
                     ease: EaseFunction::Linear,
+                    base_rotation: None,
                     rotation: None,
                     sway: None,
                 });

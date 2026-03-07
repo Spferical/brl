@@ -49,6 +49,7 @@ pub struct MoveAnimation {
     pub to: Vec3,
     pub timer: Timer,
     pub ease: EaseFunction,
+    pub base_rotation: Option<f32>,
     pub rotation: Option<f32>,
     pub sway: Option<f32>,
 }
@@ -64,7 +65,7 @@ pub fn process_move_animations(
         let MoveAnimation { from, to, ease, .. } = *animation;
         transform.translation = EasingCurve::new(from, to, ease).sample_clamped(fraction);
 
-        let mut rotation = 0.0;
+        let mut rotation = animation.base_rotation.unwrap_or(0.0);
         if let Some(total_rotation) = animation.rotation {
             rotation += total_rotation * fraction;
         }
