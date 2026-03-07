@@ -127,6 +127,16 @@ const MOG_MESSAGES: &[&str] = &[
     "AURA UNLIMITED",
 ];
 
+const YAP_MESSAGES: &[&str] = &[
+    "YAP",
+    "how is your day",
+    "yes dude",
+    "+2",
+    "-2",
+    "what",
+    "uhh",
+];
+
 const AURA_LOSS_MESSAGES: &[&str] = &[
     "AURA LOSS",
     "L RIZZ",
@@ -383,6 +393,13 @@ pub fn queue_mog_message(chat: &mut ChatHistory, streaming_state: &StreamingStat
     if streaming_state.is_streaming && streaming_state.viewers > 0 {
         let mut rng = rand::rng();
         queue_message(chat, &mut rng, MOG_MESSAGES);
+    }
+}
+
+pub fn queue_yap_message(chat: &mut ChatHistory, streaming_state: &StreamingState) {
+    if streaming_state.is_streaming && streaming_state.viewers > 0 {
+        let mut rng = rand::rng();
+        queue_message(chat, &mut rng, YAP_MESSAGES);
     }
 }
 

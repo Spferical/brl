@@ -674,6 +674,7 @@ pub enum Ability {
     Mog,
     Cook,
     ReadBook,
+    Yap,
 }
 
 impl std::fmt::Display for Ability {
@@ -684,6 +685,7 @@ impl std::fmt::Display for Ability {
             Ability::Mog => "Mog",
             Ability::Cook => "Cook",
             Ability::ReadBook => "Read Book",
+            Ability::Yap => "Yap",
         })
     }
 }
@@ -708,6 +710,9 @@ impl Ability {
             Ability::ReadBook => {
                 "Reduce brainrot. Might be a little boring. (Borrow period: 10 turns)"
             }
+            Ability::Yap => {
+                "Deal boredom damage to a nearby enemy. Scales with boredom. Increases your own boredom."
+            }
         }
     }
     pub(crate) fn target(&self) -> AbilityTarget {
@@ -716,6 +721,7 @@ impl Ability {
             Ability::ShoulderCheck => AbilityTarget::NearbyMob { maxdist: 1 },
             Ability::Mog => AbilityTarget::NearbyMob { maxdist: 5 },
             Ability::Cook | Ability::ReadBook => AbilityTarget::NoTarget,
+            Ability::Yap => AbilityTarget::NearbyMob { maxdist: 3 },
         }
     }
 }
@@ -1420,6 +1426,30 @@ fn handle_player_move(
                             base_translation: old_pos.to_vec3(PLAYER_Z),
                         });
                     crate::game::chat::queue_mog_message(&mut chat, &streaming_state);
+                }
+            }
+            Ability::Yap => {
+                let new_pos = map_pos;
+                if let Some(mob_entity) = pos_to_creature.0.get(&new_pos.0) {
+                    let min_damage = 1 + player_stats.boredom / 50;
+                    let max_damage = 1 + player_stats.boredom / 25;
+                    let amount = rand::rng().random_range(min_damage..=max_damage);
+                    damage.0.push(DamageInstance {
+                        entity: *mob_entity,
+                        attacker: Some(player_entity),
+                        amount,
+                        ty: DamageType::Boredom,
+                    });
+                    player_stats.boredom += 3;
+                    anger_crew(
+                        *mob_entity,
+                        player_entity,
+                        &mut creatures,
+                        &mut commands,
+                        &pos_to_creature,
+                        &sight_blocked_map,
+                    );
+                    crate::game::chat::queue_yap_message(&mut chat, &streaming_state);
                 }
             }
             Ability::Cook => {
