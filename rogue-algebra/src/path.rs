@@ -136,7 +136,7 @@ impl<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>, R: FnMut(Pos) -> T> It
                     if !self.visited.contains(&pos) {
                         self.visited.insert(pos.clone());
                         self.to_emit.push((dist + 1, pos.clone()));
-                        if dist < self.maxdist {
+                        if dist + 1 < self.maxdist {
                             self.new_periphery.push((dist + 1, pos.clone()));
                         }
                     }
