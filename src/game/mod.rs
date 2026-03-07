@@ -192,6 +192,7 @@ pub(super) fn plugin(app: &mut App) {
                 .run_if(player_moved),
             (
                 update_frozen,
+                map::update_sight_blocked_map,
                 map::update_player_visibility,
                 map::apply_hard_fov_to_tiles,
                 update_nearby_mobs,
