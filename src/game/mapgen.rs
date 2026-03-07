@@ -41,7 +41,7 @@ pub(crate) enum MobKind {
     AmogusCrew,
     AmogusImpostor,
     Capybara,
-    KlarnaKop,
+    KlarnaKop(i32),
     BrainrotEnemy,
     Fortnite(i32),
     Animatronic,
@@ -156,7 +156,7 @@ impl MobKind {
                     boredom: 30,
                 },
             ),
-            MobKind::KlarnaKop => (
+            MobKind::KlarnaKop(_) => (
                 "4-Part Interest-Free Burrito",
                 CookedMeal {
                     hunger: 20,
@@ -393,31 +393,43 @@ impl MobKind {
                     kind: *self,
                 },
             },
-            MobKind::KlarnaKop => MobBundle {
-                name: Name::new("Klarna Kop"),
-                creature: Creature {
-                    hp: 3,
-                    max_hp: 3,
-                    faction: -1,
-                    killed_by_player: false,
-                },
-                mob: Mob {
-                    melee_damage: 1,
-                    attrs: MobAttrs {
-                        aura_resist: Resist::Weak,
-                        knows_player_location: true,
-                        ..Default::default()
+            MobKind::KlarnaKop(level) => {
+                let level = (*level).max(1);
+                let hp = 3 + (level - 1) * 5;
+                let damage = 1 + (level - 1) * 1;
+                let name = if level > 1 {
+                    format!("Klarna Kop (Lvl {level})")
+                } else {
+                    "Klarna Kop".to_string()
+                };
+                MobBundle {
+                    name: Name::new(name.clone()),
+                    creature: Creature {
+                        hp,
+                        max_hp: hp,
+                        faction: -1,
+                        killed_by_player: false,
                     },
-                    ..default()
-                },
-                sprite: assets.get_ascii_sprite('k', Color::srgb(0.2, 0.2, 0.8)),
-                corpse: DropsCorpse {
-                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
-                    nutrition: 4,
-                    name: "Klarna Kop".to_string(),
-                    kind: *self,
-                },
-            },
+                    mob: Mob {
+                        melee_damage: damage,
+                        target: None,
+                        destination: None,
+                        ranged: false,
+                        attrs: MobAttrs {
+                            aura_resist: Resist::Weak,
+                            knows_player_location: true,
+                            ..Default::default()
+                        },
+                    },
+                    sprite: assets.get_ascii_sprite('k', Color::srgb(0.2, 0.2, 0.8)),
+                    corpse: DropsCorpse {
+                        sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                        nutrition: 4,
+                        name,
+                        kind: *self,
+                    },
+                }
+            }
             MobKind::BrainrotEnemy => MobBundle {
                 name: Name::new("????"),
                 creature: Creature {

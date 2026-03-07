@@ -1498,7 +1498,7 @@ fn spawn_klarna_kop(
 ) {
     let (player_stats, player_pos) = player.into_inner();
     let debt = -player_stats.money;
-    if turn_counter.0 > 0 && debt > 5 {
+    if turn_counter.0 > 0 && debt >= 5 {
         let spawn_rate = if debt > 50 { 5 } else { 10 };
         if turn_counter.0.is_multiple_of(spawn_rate) {
             let mut rng = rand::rng();
@@ -1509,12 +1509,8 @@ fn spawn_klarna_kop(
             {
                 let map_pos = *pos;
                 let transform = Transform::from_translation(map_pos.to_vec3(PLAYER_Z));
-                let mut bundle = mapgen::MobKind::KlarnaKop.get_bundle(&assets);
-
-                if debt > 100 {
-                    bundle.creature.hp *= 2;
-                    bundle.creature.max_hp *= 2;
-                }
+                let level = (debt / 50) + 1;
+                let bundle = mapgen::MobKind::KlarnaKop(level).get_bundle(&assets);
 
                 let new_mob = commands.spawn((bundle, map_pos, transform)).id();
                 commands.entity(world.into_inner()).add_child(new_mob);
