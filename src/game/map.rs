@@ -132,25 +132,64 @@ pub(crate) fn update_player_visibility(
 pub(crate) fn apply_hard_fov_to_tiles(
     player_vis_map: Res<PlayerVisibilityMap>,
     player_memory_map: Res<PlayerMemoryMap>,
+    lighting_settings: Res<crate::game::lighting::LightingSettings>,
     mut q_tiles: Query<
-        (&MapPos, &mut Visibility, Has<crate::game::Creature>),
+        (
+            &MapPos,
+            &mut Visibility,
+            Has<crate::game::Creature>,
+            Option<&mut Sprite>,
+            Option<&mut TextColor>,
+            Option<&crate::game::assets::BaseColor>,
+        ),
         (Without<crate::game::Player>, Without<crate::game::Frozen>),
     >,
 ) {
-    for (pos, mut vis, is_creature) in q_tiles.iter_mut() {
-        let is_visible = if is_creature {
-            player_vis_map.contains(&pos.0)
+    #[allow(unused_mut)]
+    for (pos, mut vis, is_creature, mut sprite, mut text_color, base_color) in q_tiles.iter_mut() {
+        let is_visible = player_vis_map.contains(&pos.0);
+        let is_remembered = player_memory_map.contains(&pos.0);
+
+        let target_vis = if is_creature {
+            if is_visible {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            }
         } else {
-            player_memory_map.contains(&pos.0)
+            if is_remembered {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            }
         };
 
-        let target_vis = if is_visible {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        };
         if *vis != target_vis {
             *vis = target_vis;
+        }
+
+        // Apply simple lighting if fancy lighting is disabled
+        if !lighting_settings.fancy_lighting && !is_creature && is_remembered {
+            let dim_factor = if is_visible { 1.0 } else { 0.2 };
+            let original_color = base_color.map(|bc| bc.0).unwrap_or(Color::WHITE);
+            let linear = original_color.to_linear();
+            let target_color = Color::LinearRgba(LinearRgba {
+                red: linear.red * dim_factor,
+                green: linear.green * dim_factor,
+                blue: linear.blue * dim_factor,
+                alpha: linear.alpha,
+            });
+
+            if let Some(mut sprite) = sprite {
+                if sprite.color != target_color {
+                    sprite.color = target_color;
+                }
+            }
+            if let Some(mut text_color) = text_color {
+                if text_color.0 != target_color {
+                    text_color.0 = target_color;
+                }
+            }
         }
     }
 }

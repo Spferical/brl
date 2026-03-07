@@ -1,9 +1,12 @@
 use std::{f32::consts::PI, ops::RangeInclusive, time::Duration};
 
 use bevy::{
+    asset::RenderAssetUsages,
     ecs::{schedule::ScheduleLabel, system::SystemParam},
+    image::ImageSampler,
     platform::collections::{HashMap, HashSet},
     prelude::*,
+    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
 use bevy_egui::{
     EguiContexts, EguiPrimaryContextPass,
@@ -83,7 +86,6 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<NearbyMobs>();
     app.init_resource::<LastTitleDropLevel>();
     app.init_resource::<DebugSettings>();
-    #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]
     app.init_resource::<lighting::LightingSettings>();
     app.init_resource::<examine::ExaminePos>();
     app.init_resource::<examine::ExamineResults>();
@@ -107,8 +109,9 @@ pub(super) fn plugin(app: &mut App) {
     app.add_message::<upgrades::UpgradeMessage>();
     app.add_systems(
         Update,
-        (
+        ((
             lighting::update_lighting,
+            update_fov_mask,
             lighting::on_add_occluder,
             lighting::on_add_player,
             input::handle_input.run_if(is_player_alive.and(phone::is_phone_closed)),
@@ -144,7 +147,7 @@ pub(super) fn plugin(app: &mut App) {
             debug::teleport_player,
         )
             .run_if(in_state(Screen::Gameplay))
-            .chain(),
+            .chain(),),
     );
     app.init_schedule(Turn);
     app.add_systems(
@@ -575,6 +578,9 @@ pub struct Frozen;
 
 #[derive(Component)]
 pub struct GameWorld;
+
+#[derive(Component)]
+pub struct FovMask;
 
 #[derive(Component, Reflect)]
 pub struct Player {
@@ -3446,6 +3452,7 @@ pub struct GameResetParams<'w> {
     pub nearby_mobs: ResMut<'w, NearbyMobs>,
     pub last_title_drop_level: ResMut<'w, LastTitleDropLevel>,
     pub player_memory_map: ResMut<'w, PlayerMemoryMap>,
+    #[allow(dead_code)]
     pub lighting_settings: Res<'w, lighting::LightingSettings>,
     pub game_over_info: ResMut<'w, crate::screens::game_over::GameOverInfo>,
 }
@@ -3498,6 +3505,15 @@ pub fn enter(
     }
     mapgen::gen_map(world, &mut commands, assets, &mut params.map_info);
 
+    commands.spawn((
+        FovMask,
+        Name::new("FovMask"),
+        Sprite::default(),
+        Transform::IDENTITY,
+        GlobalTransform::IDENTITY,
+        Visibility::Hidden,
+    ));
+
     commands.run_schedule(Turn);
 }
 
@@ -3505,9 +3521,13 @@ pub fn exit(
     mut commands: Commands,
     _q_camera: Single<Entity, With<PrimaryCamera>>,
     game_world: Query<Entity, With<GameWorld>>,
+    fov_mask: Query<Entity, With<FovMask>>,
 ) {
     for world in game_world.iter() {
         commands.entity(world).despawn();
+    }
+    for mask in fov_mask.iter() {
+        commands.entity(mask).despawn();
     }
     #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]
     {
@@ -3569,4 +3589,103 @@ fn draw_hunger_warning(
                 egui::Align::Center,
             ));
         });
+}
+
+fn update_fov_mask(
+    _commands: Commands,
+    lighting_settings: Res<lighting::LightingSettings>,
+    player_vis_map: Res<PlayerVisibilityMap>,
+    player_memory_map: Res<PlayerMemoryMap>,
+    mut q_mask: Query<(Entity, &mut Visibility, &mut Transform, &mut Sprite), With<FovMask>>,
+    mut images: ResMut<Assets<Image>>,
+    player: Single<&MapPos, With<Player>>,
+    map_info: Res<mapgen::MapInfo>,
+) {
+    let Some((_entity, mut visibility, mut transform, mut sprite)) = q_mask.iter_mut().next()
+    else {
+        return;
+    };
+
+    if lighting_settings.fancy_lighting {
+        *visibility = Visibility::Hidden;
+        return;
+    }
+
+    let player_pos = **player;
+    let Some(level) = map_info.get_level(player_pos) else {
+        return;
+    };
+
+    *visibility = Visibility::Inherited;
+
+    let rect = level.rect;
+    let width = rect.width() as u32;
+    let height = rect.height() as u32;
+
+    // Check if we need to recreate the image
+    let needs_new_image = if let Some(img) = images.get(sprite.image.id()) {
+        img.texture_descriptor.size.width != width || img.texture_descriptor.size.height != height
+    } else {
+        true
+    };
+
+    if needs_new_image {
+        let data = vec![0u8; (width * height * 4) as usize];
+
+        let mut image = Image::new(
+            Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            data,
+            TextureFormat::Rgba8Unorm,
+            RenderAssetUsages::MAIN_WORLD | RenderAssetUsages::RENDER_WORLD,
+        );
+        image.sampler = ImageSampler::nearest();
+
+        let image_handle = images.add(image);
+
+        // Position the mask
+        let world_width = rect.width() as f32 * map::TILE_WIDTH;
+        let world_height = rect.height() as f32 * map::TILE_HEIGHT;
+        let center_x = (rect.x1 as f32 + rect.x2 as f32) * map::TILE_WIDTH / 2.0;
+        let center_y = (rect.y1 as f32 + rect.y2 as f32) * map::TILE_HEIGHT / 2.0;
+
+        transform.translation = Vec3::new(center_x, center_y, TILE_Z - 0.02);
+
+        sprite.image = image_handle;
+        sprite.custom_size = Some(Vec2::new(world_width, world_height));
+    }
+
+    // Update the image data
+    if let Some(img) = images.get_mut(sprite.image.id()) {
+        let Some(ref mut data) = img.data else { return };
+        for y in 0..height {
+            for x in 0..width {
+                let map_x = rect.x1 + x as i32;
+                let map_y = rect.y1 + y as i32;
+                let pos = IVec2::new(map_x, map_y);
+
+                let alpha = if player_vis_map.contains(&pos) {
+                    0u8
+                } else if player_memory_map.contains(&pos) {
+                    180u8
+                } else {
+                    255u8
+                };
+
+                // Invert Y for texture coordinates (0,0 is top-left in image data)
+                let img_y = height - 1 - y;
+                let idx = ((img_y * width + x) * 4) as usize;
+                if data[idx + 3] != alpha {
+                    data[idx + 3] = alpha;
+                    data[idx] = 0;
+                    data[idx + 1] = 0;
+                    data[idx + 2] = 0;
+                }
+            }
+        }
+    }
 }

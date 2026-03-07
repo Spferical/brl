@@ -17,7 +17,9 @@ pub(super) fn plugin(app: &mut App) {
 fn settings_menu(
     mut contexts: EguiContexts,
     mut global_volume: ResMut<GlobalVolume>,
-    mut lighting_settings: ResMut<crate::game::lighting::LightingSettings>,
+    #[allow(unused_variables, unused_mut)] mut lighting_settings: ResMut<
+        crate::game::lighting::LightingSettings,
+    >,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     screen: Res<State<Screen>>,
     mut next_menu: ResMut<NextState<Menu>>,
