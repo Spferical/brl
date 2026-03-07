@@ -2819,6 +2819,12 @@ fn sidebar(
                                             egui::Color32::LIGHT_BLUE,
                                             "Will not attack unless provoked",
                                         ),
+                                        (
+                                            creature.machine,
+                                            "Machine",
+                                            egui::Color32::LIGHT_GRAY,
+                                            "It's a robot",
+                                        ),
                                     ] {
                                         if attr {
                                             ui.add(
