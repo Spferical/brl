@@ -665,7 +665,7 @@ impl Player {
     }
 
     fn melee_damage(&self) -> i32 {
-        (self.strength / 5).max(1)
+        (self.strength / 10).max(1)
     }
 }
 
