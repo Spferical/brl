@@ -356,6 +356,7 @@ impl MobKind {
                 mob: Mob {
                     melee_damage: 1,
                     ranged: true,
+                    keepaway: false,
                     attrs: MobAttrs {
                         psychic_resist: Resist::Strong,
                         ..Default::default()
@@ -663,6 +664,7 @@ impl MobKind {
                         target: None,
                         destination: None,
                         ranged: false,
+                        keepaway: false,
                         attrs: MobAttrs {
                             aura_resist: Resist::Weak,
                             knows_player_location: true,
@@ -716,6 +718,7 @@ impl MobKind {
                 mob: Mob {
                     melee_damage: 2,
                     ranged: true,
+                    keepaway: false,
                     attrs: MobAttrs {
                         ..Default::default()
                     },
@@ -741,6 +744,7 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 5,
+                    keepaway: true,
                     attrs: MobAttrs {
                         based: true,
                         physical_resist: Resist::Weak,

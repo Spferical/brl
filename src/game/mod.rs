@@ -987,6 +987,7 @@ pub(crate) enum Resist {
 pub(crate) struct Mob {
     pub melee_damage: i32,
     pub ranged: bool,
+    pub keepaway: bool,
     pub attrs: MobAttrs,
     pub target: Option<IVec2>,
     pub destination: Option<IVec2>,
@@ -2076,6 +2077,16 @@ fn process_mob_turn(
                     ..default()
                 });
             }
+        }
+
+        // keepaway mobs don't close in the final 2 steps unless they are
+        // damaged
+        if mob.keepaway
+            && let Some(target) = mob.target
+            && (2..=3).contains(&pos.0.chebyshev_distance(target))
+            && creature.hp >= creature.max_hp
+        {
+            mob.target = None;
         }
 
         if mob.target.is_none() {
