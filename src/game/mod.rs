@@ -2717,62 +2717,62 @@ fn sidebar(
         .min_width(TILE_WIDTH * 8.0)
         .show(ctx, |ui| {
             let examine_pos = examine_results.info.as_ref().map(|i| i.pos);
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.group(|ui| {
+                    ui.set_min_height(400.0);
 
-            ui.group(|ui| {
-                ui.set_min_height(400.0);
-
-                for (i, (pos, creature, mob, text, color, _sprite, name)) in
-                    nearby_mobs.mobs.iter().enumerate()
-                {
-                    let highlight = Some(*pos) == examine_pos;
-                    let mut frame = egui::Frame::new().inner_margin(Margin::same(4));
-                    if highlight {
-                        frame = frame.fill(ui.style().visuals.code_bg_color);
-                    }
-                    frame.show(ui, |ui| {
-                        ui.vertical(|ui| {
-                            if !name.as_str().is_empty() {
-                                ui.add(
-                                    egui::Label::new(apply_brainrot_ui(
-                                        RichText::new(name.as_str()).strong(),
-                                        player.brainrot,
-                                        ui.style(),
-                                        FontSelection::Default,
-                                        Align::LEFT,
-                                    ))
-                                    .selectable(false),
-                                );
-                            }
-                            ui.horizontal(|ui| {
-                                if let Some(text) = text
-                                    && let Some(color) = color
-                                {
-                                    let [r, g, b, a] = color.to_srgba().to_u8_array();
-                                    let c32 = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
-                                    ui.add(
-                                        egui::Label::new(apply_brainrot_ui(
-                                            RichText::new(text)
-                                                .size(TILE_HEIGHT)
-                                                .color(c32)
-                                                .background_color(if highlight {
-                                                    ui.style().visuals.code_bg_color
-                                                } else {
-                                                    egui::Color32::TRANSPARENT
-                                                }),
-                                            player.brainrot,
-                                            ui.style(),
-                                            FontSelection::Default,
-                                            Align::LEFT,
-                                        ))
-                                        .selectable(false),
-                                    );
-                                } else if let Some(sprite_img) = &mob_images[i] {
-                                    ui.add(
-                                        sprite_img
-                                            .clone()
-                                            .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT)),
-                                    );
-                                }
+                    for (i, (pos, creature, mob, text, color, _sprite, name)) in
+                        nearby_mobs.mobs.iter().enumerate()
+                    {
+                        let highlight = Some(*pos) == examine_pos;
+                        let mut frame = egui::Frame::new().inner_margin(Margin::same(4));
+                        if highlight {
+                            frame = frame.fill(ui.style().visuals.code_bg_color);
+                        }
+                        frame.show(ui, |ui| {
+                            ui.vertical(|ui| {
+                                ui.horizontal(|ui| {
+                                    if let Some(text) = text
+                                        && let Some(color) = color
+                                    {
+                                        let [r, g, b, a] = color.to_srgba().to_u8_array();
+                                        let c32 = egui::Color32::from_rgba_unmultiplied(r, g, b, a);
+                                        ui.add(
+                                            egui::Label::new(apply_brainrot_ui(
+                                                RichText::new(text)
+                                                    .size(TILE_HEIGHT)
+                                                    .color(c32)
+                                                    .background_color(if highlight {
+                                                        ui.style().visuals.code_bg_color
+                                                    } else {
+                                                        egui::Color32::TRANSPARENT
+                                                    }),
+                                                player.brainrot,
+                                                ui.style(),
+                                                FontSelection::Default,
+                                                Align::LEFT,
+                                            ))
+                                            .selectable(false),
+                                        );
+                                    } else if let Some(sprite_img) = &mob_images[i] {
+                                        ui.add(sprite_img.clone().fit_to_exact_size(egui::vec2(
+                                            TILE_WIDTH,
+                                            TILE_HEIGHT,
+                                        )));
+                                    }
+                                    if !name.as_str().is_empty() {
+                                        ui.add(
+                                            egui::Label::new(apply_brainrot_ui(
+                                                RichText::new(name.as_str()).strong(),
+                                                player.brainrot,
+                                                ui.style(),
+                                                FontSelection::Default,
+                                                Align::LEFT,
+                                            ))
+                                            .selectable(false),
+                                        );
+                                    }
+                                });
                                 let ratio = creature.hp as f32 / creature.max_hp as f32;
                                 draw_meter(
                                     ui,
@@ -2781,316 +2781,316 @@ fn sidebar(
                                     egui::Color32::from_rgb(0, 150, 0),
                                     player.brainrot,
                                 );
-                            });
-                            ui.horizontal(|ui| {
-                                if let Some(mob) = mob {
-                                    ui.add(sword.clone());
-                                    ui.label(mob.melee_damage.to_string());
-                                    for (attr, name, color, tooltip) in [
-                                        (
-                                            mob.ranged,
-                                            "Gun",
-                                            egui::Color32::RED,
-                                            "oh shit he got a gun",
-                                        ),
-                                        (
-                                            mob.attrs.based,
-                                            "Based",
-                                            egui::Color32::PURPLE,
-                                            "Deals psychic damage",
-                                        ),
-                                        (
-                                            mob.attrs.basic,
-                                            "Basic",
-                                            egui::Color32::DARK_GRAY,
-                                            "Deals boredom damage",
-                                        ),
-                                        (
-                                            mob.attrs.mog_risk,
-                                            "Mog Risk",
-                                            egui::Color32::DARK_GREEN,
-                                            "Deals aura damage",
-                                        ),
-                                        (
-                                            mob.attrs.sus,
-                                            "Sus",
-                                            egui::Color32::RED,
-                                            "Can teleport when attacking",
-                                        ),
-                                        (
-                                            mob.attrs.friendly && !mob.attrs.sus,
-                                            "Friendly",
-                                            egui::Color32::LIGHT_BLUE,
-                                            "Will not attack unless provoked",
-                                        ),
-                                        (
-                                            creature.machine,
-                                            "Machine",
-                                            egui::Color32::LIGHT_GRAY,
-                                            "It's a robot",
-                                        ),
-                                    ] {
-                                        if attr {
-                                            ui.add(
-                                                egui::Label::new(apply_brainrot_ui(
-                                                    RichText::new(name).background_color(color),
-                                                    player.brainrot,
-                                                    ui.style(),
-                                                    FontSelection::Default,
-                                                    Align::LEFT,
-                                                ))
-                                                .selectable(false),
-                                            )
-                                            .on_hover_text(tooltip);
+                                ui.horizontal(|ui| {
+                                    if let Some(mob) = mob {
+                                        ui.add(sword.clone());
+                                        ui.label(mob.melee_damage.to_string());
+                                        for (attr, name, color, tooltip) in [
+                                            (
+                                                mob.ranged,
+                                                "Gun",
+                                                egui::Color32::RED,
+                                                "oh shit he got a gun",
+                                            ),
+                                            (
+                                                mob.attrs.based,
+                                                "Based",
+                                                egui::Color32::PURPLE,
+                                                "Deals psychic damage",
+                                            ),
+                                            (
+                                                mob.attrs.basic,
+                                                "Basic",
+                                                egui::Color32::DARK_GRAY,
+                                                "Deals boredom damage",
+                                            ),
+                                            (
+                                                mob.attrs.mog_risk,
+                                                "Mog Risk",
+                                                egui::Color32::DARK_GREEN,
+                                                "Deals aura damage",
+                                            ),
+                                            (
+                                                mob.attrs.sus,
+                                                "Sus",
+                                                egui::Color32::RED,
+                                                "Can teleport when attacking",
+                                            ),
+                                            (
+                                                mob.attrs.friendly && !mob.attrs.sus,
+                                                "Friendly",
+                                                egui::Color32::LIGHT_BLUE,
+                                                "Will not attack unless provoked",
+                                            ),
+                                            (
+                                                creature.machine,
+                                                "Machine",
+                                                egui::Color32::LIGHT_GRAY,
+                                                "It's a robot",
+                                            ),
+                                        ] {
+                                            if attr {
+                                                ui.add(
+                                                    egui::Label::new(apply_brainrot_ui(
+                                                        RichText::new(name).background_color(color),
+                                                        player.brainrot,
+                                                        ui.style(),
+                                                        FontSelection::Default,
+                                                        Align::LEFT,
+                                                    ))
+                                                    .selectable(false),
+                                                )
+                                                .on_hover_text(tooltip);
+                                            }
+                                        }
+                                        fn resist_name(
+                                            ty: DamageType,
+                                            resist: Resist,
+                                        ) -> Option<(&'static str, egui::Color32, &'static str)>
+                                        {
+                                            match (ty, resist) {
+                                                (_, Resist::Normal) => None,
+                                                (DamageType::Physical, Resist::Weak) => Some((
+                                                    "Weak",
+                                                    egui::Color32::DARK_RED,
+                                                    "Takes double physical damage",
+                                                )),
+                                                (DamageType::Physical, Resist::Strong) => Some((
+                                                    "Unit",
+                                                    egui::Color32::DARK_BLUE,
+                                                    "Takes half physical damage",
+                                                )),
+                                                (DamageType::Psychic, Resist::Weak) => Some((
+                                                    "Cooked",
+                                                    egui::Color32::DARK_RED,
+                                                    "Takes double psychic damage",
+                                                )),
+                                                (DamageType::Psychic, Resist::Strong) => Some((
+                                                    "Locked in",
+                                                    egui::Color32::DARK_BLUE,
+                                                    "Takes half psychic damage",
+                                                )),
+                                                (DamageType::Aura, Resist::Weak) => Some((
+                                                    "Cringe",
+                                                    egui::Color32::DARK_RED,
+                                                    "Takes double aura damage",
+                                                )),
+                                                (DamageType::Aura, Resist::Strong) => Some((
+                                                    "Snatched",
+                                                    egui::Color32::DARK_BLUE,
+                                                    "Takes half aura damage",
+                                                )),
+                                                (DamageType::Boredom, Resist::Weak) => Some((
+                                                    "NPC",
+                                                    egui::Color32::DARK_RED,
+                                                    "Takes double boredom damage",
+                                                )),
+                                                (DamageType::Boredom, Resist::Strong) => Some((
+                                                    "Focused",
+                                                    egui::Color32::DARK_BLUE,
+                                                    "Takes half boredom damage",
+                                                )),
+                                                _ => None,
+                                            }
+                                        }
+                                        for damage_type in [
+                                            DamageType::Physical,
+                                            DamageType::Psychic,
+                                            DamageType::Aura,
+                                            DamageType::Boredom,
+                                        ] {
+                                            if let Some((name, color, tooltip)) = resist_name(
+                                                damage_type,
+                                                mob.get_damage_resist(damage_type),
+                                            ) {
+                                                ui.add(
+                                                    egui::Label::new(apply_brainrot_ui(
+                                                        RichText::new(name).background_color(color),
+                                                        player.brainrot,
+                                                        ui.style(),
+                                                        FontSelection::Default,
+                                                        Align::LEFT,
+                                                    ))
+                                                    .selectable(false),
+                                                )
+                                                .on_hover_text(tooltip);
+                                            }
                                         }
                                     }
-                                    fn resist_name(
-                                        ty: DamageType,
-                                        resist: Resist,
-                                    ) -> Option<(&'static str, egui::Color32, &'static str)>
-                                    {
-                                        match (ty, resist) {
-                                            (_, Resist::Normal) => None,
-                                            (DamageType::Physical, Resist::Weak) => Some((
-                                                "Weak",
-                                                egui::Color32::DARK_RED,
-                                                "Takes double physical damage",
-                                            )),
-                                            (DamageType::Physical, Resist::Strong) => Some((
-                                                "Unit",
-                                                egui::Color32::DARK_BLUE,
-                                                "Takes half physical damage",
-                                            )),
-                                            (DamageType::Psychic, Resist::Weak) => Some((
-                                                "Cooked",
-                                                egui::Color32::DARK_RED,
-                                                "Takes double psychic damage",
-                                            )),
-                                            (DamageType::Psychic, Resist::Strong) => Some((
-                                                "Locked in",
-                                                egui::Color32::DARK_BLUE,
-                                                "Takes half psychic damage",
-                                            )),
-                                            (DamageType::Aura, Resist::Weak) => Some((
-                                                "Cringe",
-                                                egui::Color32::DARK_RED,
-                                                "Takes double aura damage",
-                                            )),
-                                            (DamageType::Aura, Resist::Strong) => Some((
-                                                "Snatched",
-                                                egui::Color32::DARK_BLUE,
-                                                "Takes half aura damage",
-                                            )),
-                                            (DamageType::Boredom, Resist::Weak) => Some((
-                                                "NPC",
-                                                egui::Color32::DARK_RED,
-                                                "Takes double boredom damage",
-                                            )),
-                                            (DamageType::Boredom, Resist::Strong) => Some((
-                                                "Focused",
-                                                egui::Color32::DARK_BLUE,
-                                                "Takes half boredom damage",
-                                            )),
-                                            _ => None,
-                                        }
-                                    }
-                                    for damage_type in [
-                                        DamageType::Physical,
-                                        DamageType::Psychic,
-                                        DamageType::Aura,
-                                        DamageType::Boredom,
-                                    ] {
-                                        if let Some((name, color, tooltip)) = resist_name(
-                                            damage_type,
-                                            mob.get_damage_resist(damage_type),
-                                        ) {
-                                            ui.add(
-                                                egui::Label::new(apply_brainrot_ui(
-                                                    RichText::new(name).background_color(color),
-                                                    player.brainrot,
-                                                    ui.style(),
-                                                    FontSelection::Default,
-                                                    Align::LEFT,
-                                                ))
-                                                .selectable(false),
-                                            )
-                                            .on_hover_text(tooltip);
-                                        }
-                                    }
-                                }
+                                });
                             });
                         });
-                    });
-                }
-                if let Some(ref info) = examine_results.info {
-                    ui.label(apply_brainrot_ui(
-                        &info.info,
-                        player.brainrot,
-                        ui.style(),
-                        FontSelection::Default,
-                        Align::LEFT,
-                    ));
-                }
-            });
-
-            ui.add_space(20.0);
-
-            ui.group(|ui| {
-                match *input_mode {
-                    InputMode::Normal => {
-                        ui.label(apply_brainrot_ui(
-                            "move: arrow keys",
-                            player.brainrot,
-                            ui.style(),
-                            FontSelection::Default,
-                            Align::LEFT,
-                        ));
-                        ui.label(apply_brainrot_ui(
-                            "move: hjklyubn",
-                            player.brainrot,
-                            ui.style(),
-                            FontSelection::Default,
-                            Align::LEFT,
-                        ));
-                        ui.label(apply_brainrot_ui(
-                            "examine: x",
-                            player.brainrot,
-                            ui.style(),
-                            FontSelection::Default,
-                            Align::LEFT,
-                        ));
-                        ui.label(apply_brainrot_ui(
-                            "phone: space",
-                            player.brainrot,
-                            ui.style(),
-                            FontSelection::Default,
-                            Align::LEFT,
-                        ));
-                        ui.label(apply_brainrot_ui(
-                            "wait: .",
-                            player.brainrot,
-                            ui.style(),
-                            FontSelection::Default,
-                            Align::LEFT,
-                        ));
-
-                        for (i, ability) in player.abilities.iter().enumerate() {
-                            let ability_key = (i + 1) % 10;
-                            let label = if matches!(ability, Ability::Sprint) {
-                                format!("{ability_key}/Shift: {ability}")
-                            } else {
-                                format!("{ability_key}: {ability}")
-                            };
-                            let cooldown = player.ability_cooldowns.get(ability).unwrap_or(&0);
-                            let label = if *cooldown > 0 {
-                                format!("{label} ({cooldown})")
-                            } else {
-                                label
-                            };
-                            ui.horizontal(|ui| {
-                                let button = egui::Button::new(apply_brainrot_ui(
-                                    label,
-                                    player.brainrot,
-                                    ui.style(),
-                                    FontSelection::Default,
-                                    Align::LEFT,
-                                ));
-                                if ui.add_enabled(*cooldown == 0, button).clicked() {
-                                    msg_ability_clicked.write(AbilityClicked(*ability));
-                                }
-                                if let Some((ty, range)) = ability.damage_info(player) {
-                                    let [r, g, b, a] = ty.color().to_srgba().to_u8_array();
-                                    let color = Color32::from_rgba_unmultiplied(r, g, b, a);
-                                    ui.label(
-                                        RichText::new(format!(
-                                            "{}-{} {} damage",
-                                            range.start(),
-                                            range.end(),
-                                            ty,
-                                        ))
-                                        .color(color),
-                                    );
-                                }
-                            });
-                        }
                     }
-                    InputMode::Examine(_) => {
+                    if let Some(ref info) = examine_results.info {
                         ui.label(apply_brainrot_ui(
-                            RichText::new("EXAMINING"),
-                            player.brainrot,
-                            ui.style(),
-                            FontSelection::Default,
-                            Align::LEFT,
-                        ));
-                        ui.label(apply_brainrot_ui(
-                            "move: arrow keys",
-                            player.brainrot,
-                            ui.style(),
-                            FontSelection::Default,
-                            Align::LEFT,
-                        ));
-                        ui.label(apply_brainrot_ui(
-                            "move: hjklyubn",
-                            player.brainrot,
-                            ui.style(),
-                            FontSelection::Default,
-                            Align::LEFT,
-                        ));
-                        ui.label(apply_brainrot_ui(
-                            "exit: x",
+                            &info.info,
                             player.brainrot,
                             ui.style(),
                             FontSelection::Default,
                             Align::LEFT,
                         ));
                     }
-                    InputMode::Targeting(ability, _pos) => {
-                        ui.label(apply_brainrot_ui(
-                            RichText::new(format!("TARGETING {ability}")),
-                            player.brainrot,
-                            ui.style(),
-                            FontSelection::Default,
-                            Align::LEFT,
-                        ));
-                        ui.label(apply_brainrot_ui(
-                            "choose target: enter",
-                            player.brainrot,
-                            ui.style(),
-                            FontSelection::Default,
-                            Align::LEFT,
-                        ));
-                        ui.label(apply_brainrot_ui(
-                            "move: arrow keys",
-                            player.brainrot,
-                            ui.style(),
-                            FontSelection::Default,
-                            Align::LEFT,
-                        ));
-                        ui.label(apply_brainrot_ui(
-                            "move: hjklyubn",
-                            player.brainrot,
-                            ui.style(),
-                            FontSelection::Default,
-                            Align::LEFT,
-                        ));
-                        ui.label(apply_brainrot_ui(
-                            "exit: x",
-                            player.brainrot,
-                            ui.style(),
-                            FontSelection::Default,
-                            Align::LEFT,
-                        ));
-                        if ability == Ability::Sprint {
+                });
+
+                ui.add_space(20.0);
+
+                ui.group(|ui| {
+                    match *input_mode {
+                        InputMode::Normal => {
                             ui.label(apply_brainrot_ui(
-                                "exit: shift",
+                                "move: arrow keys",
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                            ui.label(apply_brainrot_ui(
+                                "move: hjklyubn",
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                            ui.label(apply_brainrot_ui(
+                                "examine: x",
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                            ui.label(apply_brainrot_ui(
+                                "phone: space",
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                            ui.label(apply_brainrot_ui(
+                                "wait: .",
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+
+                            for (i, ability) in player.abilities.iter().enumerate() {
+                                let ability_key = (i + 1) % 10;
+                                let label = if matches!(ability, Ability::Sprint) {
+                                    format!("{ability_key}/Shift: {ability}")
+                                } else {
+                                    format!("{ability_key}: {ability}")
+                                };
+                                let cooldown = player.ability_cooldowns.get(ability).unwrap_or(&0);
+                                let label = if *cooldown > 0 {
+                                    format!("{label} ({cooldown})")
+                                } else {
+                                    label
+                                };
+                                ui.horizontal(|ui| {
+                                    let button = egui::Button::new(apply_brainrot_ui(
+                                        label,
+                                        player.brainrot,
+                                        ui.style(),
+                                        FontSelection::Default,
+                                        Align::LEFT,
+                                    ));
+                                    if ui.add_enabled(*cooldown == 0, button).clicked() {
+                                        msg_ability_clicked.write(AbilityClicked(*ability));
+                                    }
+                                    if let Some((ty, range)) = ability.damage_info(player) {
+                                        let [r, g, b, a] = ty.color().to_srgba().to_u8_array();
+                                        let color = Color32::from_rgba_unmultiplied(r, g, b, a);
+                                        ui.label(
+                                            RichText::new(format!(
+                                                "{}-{} {} damage",
+                                                range.start(),
+                                                range.end(),
+                                                ty,
+                                            ))
+                                            .color(color),
+                                        );
+                                    }
+                                });
+                            }
+                        }
+                        InputMode::Examine(_) => {
+                            ui.label(apply_brainrot_ui(
+                                RichText::new("EXAMINING"),
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                            ui.label(apply_brainrot_ui(
+                                "move: arrow keys",
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                            ui.label(apply_brainrot_ui(
+                                "move: hjklyubn",
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                            ui.label(apply_brainrot_ui(
+                                "exit: x",
                                 player.brainrot,
                                 ui.style(),
                                 FontSelection::Default,
                                 Align::LEFT,
                             ));
                         }
-                    }
-                };
+                        InputMode::Targeting(ability, _pos) => {
+                            ui.label(apply_brainrot_ui(
+                                RichText::new(format!("TARGETING {ability}")),
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                            ui.label(apply_brainrot_ui(
+                                "choose target: enter",
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                            ui.label(apply_brainrot_ui(
+                                "move: arrow keys",
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                            ui.label(apply_brainrot_ui(
+                                "move: hjklyubn",
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                            ui.label(apply_brainrot_ui(
+                                "exit: x",
+                                player.brainrot,
+                                ui.style(),
+                                FontSelection::Default,
+                                Align::LEFT,
+                            ));
+                            if ability == Ability::Sprint {
+                                ui.label(apply_brainrot_ui(
+                                    "exit: shift",
+                                    player.brainrot,
+                                    ui.style(),
+                                    FontSelection::Default,
+                                    Align::LEFT,
+                                ));
+                            }
+                        }
+                    };
+                });
             });
         });
 }
