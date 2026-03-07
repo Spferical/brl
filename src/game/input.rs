@@ -6,7 +6,7 @@ use bevy_egui::EguiContexts;
 use crate::{
     PrimaryCamera,
     game::{
-        Ability, AbilityTarget, Player, Turn,
+        Ability, AbilityTarget, Interactable, Player, Turn,
         examine::ExaminePos,
         map::{MapPos, PosToInteractable},
         targeting::ValidTargets,
@@ -113,6 +113,7 @@ pub(crate) fn handle_input(
     valid_targets: Res<ValidTargets>,
     camera: Single<(&Camera, &GlobalTransform), With<PrimaryCamera>>,
     pos_to_interactable: Res<PosToInteractable>,
+    interactables: Query<&Interactable>,
 ) {
     let (player_entity, player, player_pos, player_transform) = player.into_inner();
     let (camera, camera_transform) = camera.into_inner();
@@ -228,8 +229,12 @@ pub(crate) fn handle_input(
                             .get(&MapPos(player_pos.0 + dir))
                             .and_then(|v| v.first())
                         {
-                            target_entity = Some(*entity);
-                            break;
+                            if let Ok(interactable) = interactables.get(*entity) {
+                                if !interactable.require_on_top {
+                                    target_entity = Some(*entity);
+                                    break;
+                                }
+                            }
                         }
                     }
                 }

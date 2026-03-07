@@ -332,7 +332,7 @@ pub(crate) fn draw_interactable_popup(
         let is_at_pos = pos.0 == player_pos.0;
         let is_adjacent = (pos.0 - player_pos.0).abs().max_element() <= 1;
 
-        if is_at_pos || is_adjacent {
+        if is_at_pos || (is_adjacent && !interactable.require_on_top) {
             // Get screen position
             let world_pos = pos.to_vec3(PLAYER_Z);
             let Ok(viewport_pos) = camera.world_to_viewport(camera_transform, world_pos) else {
@@ -762,6 +762,7 @@ pub struct Interactable {
     pub action: String,
     pub description: Option<String>,
     pub kind: InteractionType,
+    pub require_on_top: bool,
 }
 
 impl Default for Interactable {
@@ -770,6 +771,7 @@ impl Default for Interactable {
             action: "Use".to_string(),
             description: None,
             kind: InteractionType::Stairs,
+            require_on_top: false,
         }
     }
 }
@@ -1520,6 +1522,7 @@ fn handle_player_move(
                                 action: "Eat".to_string(),
                                 description: Some(format!("A freshly cooked {}!", meal_name)),
                                 kind: InteractionType::Eat,
+                                require_on_top: false,
                             },
                             sprite,
                             *corpse_pos,
@@ -2435,6 +2438,7 @@ fn prune_dead(
                             action: "Eat".to_string(),
                             description: Some("Directly edible brainrot essence.".to_string()),
                             kind: InteractionType::Eat,
+                            require_on_top: false,
                         },
                     ));
                 }

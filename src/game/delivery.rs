@@ -254,6 +254,7 @@ pub fn spawn_food(
                 action,
                 description: None,
                 kind: InteractionType::Eat,
+                require_on_top: false,
             },
             sprite,
             map_pos,

@@ -1757,6 +1757,7 @@ pub(crate) fn spawn_level(
                         action: "Use".to_string(),
                         description: None,
                         kind: InteractionType::Arcade,
+                        require_on_top: false,
                     },
                 ));
             }
@@ -1769,6 +1770,7 @@ pub(crate) fn spawn_level(
                         action: "Use".to_string(),
                         description: None,
                         kind: InteractionType::Workout,
+                        require_on_top: false,
                     },
                 ));
             }
@@ -1791,6 +1793,7 @@ pub(crate) fn spawn_level(
                         action: "Expose to Radiation".to_string(),
                         description: Some("Increases brainrot, decreases strength".to_string()),
                         kind: InteractionType::Irradiate,
+                        require_on_top: false,
                     },
                     Occluder,
                     map::BlocksMovement,
@@ -1805,6 +1808,7 @@ pub(crate) fn spawn_level(
                         action: "Heal".to_string(),
                         description: Some("Heals 5 HP".to_string()),
                         kind: InteractionType::MedicalPod,
+                        require_on_top: false,
                     },
                     map::BlocksMovement,
                 ));
@@ -1826,6 +1830,7 @@ pub(crate) fn spawn_level(
                         kind: InteractionType::Upgrade(
                             name.map(|name| UPGRADES.iter().position(|x| x.name == name).unwrap()),
                         ),
+                        require_on_top: false,
                     },
                 ));
             }
