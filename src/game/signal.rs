@@ -12,6 +12,7 @@ pub fn generate_signal_map(
     seed: u32,
     strength: f32,
     frequency: f32,
+    edge_attenuation: bool,
 ) -> SignalMap {
     let mut bars = HashMap::default();
 
@@ -24,15 +25,20 @@ pub fn generate_signal_map(
                 seed as f32,
             );
 
-            let dist_to_edge_x = (x - rect.x1).min(rect.x2 - x) as f32;
-            let dist_to_edge_y = (y - rect.y1).min(rect.y2 - y) as f32;
-            let min_dist_to_edge = dist_to_edge_x.min(dist_to_edge_y);
+            let base = if edge_attenuation {
+                let dist_to_edge_x = (x - rect.x1).min(rect.x2 - x) as f32;
+                let dist_to_edge_y = (y - rect.y1).min(rect.y2 - y) as f32;
+                let min_dist_to_edge = dist_to_edge_x.min(dist_to_edge_y);
 
-            // e = 0.0 at center, 1.0 at closest edge
-            let e = (1.0 - (min_dist_to_edge / max_min_dist)).clamp(0.0, 1.0);
+                // e = 0.0 at center, 1.0 at closest edge
+                let e = (1.0 - (min_dist_to_edge / max_min_dist)).clamp(0.0, 1.0);
 
-            // 0.5 at center (2.5 bars average), 0.9 at edges (4.5 bars average)
-            let base = e * 0.5 + 0.5;
+                // 0.5 at center (2.5 bars average), 0.9 at edges (4.5 bars average)
+                e * 0.5 + 0.5
+            } else {
+                1.0
+            };
+
             // n * 0.5 adds +/- 2.5 bars of oscillation
             let s = ((base + n * 0.5).clamp(0.0, 1.0) * strength).clamp(0.0, 1.0);
 
@@ -44,6 +50,24 @@ pub fn generate_signal_map(
     SignalMap { bars }
 }
 
+pub fn update_player_signal(
+    player: Single<(&mut Player, &MapPos)>,
+    signal_maps: Query<&SignalMap>,
+) {
+    let (mut player, pos) = player.into_inner();
+
+    if player.has_subscription(crate::game::Subscription::FiveGLTE) {
+        player.signal = 5;
+        return;
+    }
+
+    for signal_map in signal_maps.iter() {
+        if let Some(&bars) = signal_map.bars.get(&pos.0) {
+            player.signal = bars;
+            return;
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -53,7 +77,7 @@ mod tests {
     fn test_signal_map_variation() {
         let rect = Rect::new(0, 20, 0, 20);
         let seed = 12345;
-        let signal_map = generate_signal_map(rect, seed, 1.0, 0.1);
+        let signal_map = generate_signal_map(rect, seed, 1.0, 0.1, true);
 
         let mut counts = [0; 6];
         let mut center_sum = 0;
@@ -94,23 +118,29 @@ mod tests {
             "Edges should have higher average signal than center"
         );
     }
-}
 
-pub fn update_player_signal(
-    player: Single<(&mut Player, &MapPos)>,
-    signal_maps: Query<&SignalMap>,
-) {
-    let (mut player, pos) = player.into_inner();
+    #[test]
+    fn test_poor_signal() {
+        let rect = Rect::new(0, 20, 0, 20);
+        let seed = 12345;
+        // Poor: strength=0.7, edge_attenuation=true
+        let signal_map = generate_signal_map(rect, seed, 0.7, 0.1, true);
 
-    if player.has_subscription(crate::game::Subscription::FiveGLTE) {
-        player.signal = 5;
-        return;
-    }
-
-    for signal_map in signal_maps.iter() {
-        if let Some(&bars) = signal_map.bars.get(&pos.0) {
-            player.signal = bars;
-            return;
+        for &bars in signal_map.bars.values() {
+            // max s is 1.0 * 0.7 = 0.7. (3.5 bars).
+            assert!(
+                bars <= 4,
+                "Poor signal should not exceed 4 bars (with rounding), got {}",
+                bars
+            );
         }
+
+        let avg =
+            signal_map.bars.values().map(|&b| b as f32).sum::<f32>() / signal_map.bars.len() as f32;
+        assert!(
+            avg < 3.0,
+            "Poor signal should have low average, got {}",
+            avg
+        );
     }
 }

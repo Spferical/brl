@@ -1268,15 +1268,17 @@ pub(crate) fn spawn_level(
     draft: &LevelDraft,
     offset: rogue_algebra::Offset,
 ) {
-    let (strength, frequency) = match draft.title {
-        LevelTitle::AmogusSpaceship => (1.2, 0.05),
-        _ => (1.0, 0.1),
+    let (strength, frequency, edge_attenuation) = match draft.title {
+        LevelTitle::Island => (1.0, 0.1, false),
+        LevelTitle::AmogusSpaceship => (0.7, 0.1, true),
+        _ => (1.0, 0.1, true),
     };
     let signal_map = signal::generate_signal_map(
         draft.get_containing_rect() + offset,
         rng.random(),
         strength,
         frequency,
+        edge_attenuation,
     );
 
     let level_entity_cmds = commands.spawn((
