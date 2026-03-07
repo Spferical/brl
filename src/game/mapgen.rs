@@ -69,7 +69,10 @@ pub(crate) enum MobKind {
     Fortnite(i32),
     Animatronic,
     Streamer,
+    Eceleb,
+    Fan,
     Stan,
+    Whale,
     Zombie,
     Skeleton,
     Spider,
@@ -82,7 +85,6 @@ const LVL1_DIST: &[(MobKind, usize)] = &[
     (MobKind::Influencer, 1),
     (MobKind::Normie, 1),
     (MobKind::Capybara, 1),
-    (MobKind::Streamer, 1),
 ];
 const BACKROOM_DIST: &[(MobKind, usize)] = &[
     (MobKind::SadFrog, 3),
@@ -96,7 +98,7 @@ const BACKROOM_DIST: &[(MobKind, usize)] = &[
 const GYM_DIST: &[(MobKind, usize)] = &[
     (MobKind::GymBro, 10),
     (MobKind::Normie, 1),
-    (MobKind::Influencer, 1),
+    (MobKind::Influencer, 2),
     (MobKind::GiantFrog, 1),
 ];
 const FORTNITE_DIST: &[(MobKind, usize)] = &[
@@ -117,12 +119,12 @@ const MINECRAFT_DIST: &[(MobKind, usize)] = &[
 ];
 const FREDDY_DIST: &[(MobKind, usize)] = &[(MobKind::Animatronic, 1)];
 const CAVES_DIST: &[(MobKind, usize)] = &[
-    (MobKind::Zombie, 5),
-    (MobKind::Skeleton, 5),
-    (MobKind::Spider, 5),
+    (MobKind::Zombie, 2),
+    (MobKind::Skeleton, 2),
+    (MobKind::Spider, 2),
     (MobKind::SmugFrog, 5),
     (MobKind::MadFrog, 5),
-    (MobKind::Streamer, 5),
+    (MobKind::Eceleb, 5),
     (MobKind::Animatronic, 2),
 ];
 
@@ -283,7 +285,7 @@ impl MobKind {
                     boredom: 0,
                 },
             ),
-            MobKind::Streamer => (
+            MobKind::Streamer | MobKind::Eceleb => (
                 "Gamer Juice",
                 CookedMeal {
                     hunger: 5,
@@ -294,7 +296,7 @@ impl MobKind {
                     boredom: 0,
                 },
             ),
-            MobKind::Stan => (
+            MobKind::Stan | MobKind::Fan | MobKind::Whale => (
                 "Long Pork",
                 CookedMeal {
                     hunger: 40,
@@ -627,6 +629,10 @@ impl MobKind {
                 mob: Mob {
                     melee_damage: 5,
                     attrs: MobAttrs {
+                        summon: Some(Summon {
+                            kind: MobKind::Fan,
+                            delay: 4,
+                        }),
                         mog_risk: true,
                         aura_resist: Resist::Weak,
                         ..Default::default()
@@ -874,8 +880,43 @@ impl MobKind {
                     kind: *self,
                 },
             },
-            MobKind::Stan => MobBundle {
-                name: Name::new("Stan"),
+            MobKind::Eceleb => MobBundle {
+                name: Name::new("E-Celeb"),
+                creature: Creature {
+                    hp: 8,
+                    max_hp: 8,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 30,
+                    keepaway: true,
+                    attrs: MobAttrs {
+                        based: true,
+                        raids_player: true,
+                        summon: Some(Summon {
+                            kind: MobKind::Whale,
+                            delay: 4,
+                        }),
+                        physical_resist: Resist::Weak,
+                        aura_resist: Resist::Strong,
+                        psychic_resist: Resist::Strong,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('E', Color::srgb(0.5, 0.2, 0.8)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 5,
+                    name: "E-Celeb".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::Fan => MobBundle {
+                name: Name::new("Fan"),
                 creature: Creature {
                     hp: 2,
                     max_hp: 2,
@@ -887,6 +928,33 @@ impl MobKind {
                 mob: Mob {
                     melee_damage: 1,
                     attrs: MobAttrs {
+                        aura_resist: Resist::Weak,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('f', Color::srgb(0.7, 0.4, 0.9)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 3,
+                    name: "Fan".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::Stan => MobBundle {
+                name: Name::new("Stan"),
+                creature: Creature {
+                    hp: 4,
+                    max_hp: 4,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 2,
+                    attrs: MobAttrs {
+                        aura_resist: Resist::Weak,
                         ..Default::default()
                     },
                     ..default()
@@ -896,6 +964,32 @@ impl MobKind {
                     sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
                     nutrition: 3,
                     name: "Stan".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::Whale => MobBundle {
+                name: Name::new("Whale"),
+                creature: Creature {
+                    hp: 8,
+                    max_hp: 8,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 4,
+                    attrs: MobAttrs {
+                        aura_resist: Resist::Weak,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('w', Color::srgb(0.62, 0.82, 1.0)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 3,
+                    name: "Whale".to_string(),
                     kind: *self,
                 },
             },
