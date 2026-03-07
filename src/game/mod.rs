@@ -1,4 +1,4 @@
-use std::{f32::consts::PI, time::Duration};
+use std::{f32::consts::PI, ops::RangeInclusive, time::Duration};
 
 use bevy::{
     ecs::{schedule::ScheduleLabel, system::SystemParam},
@@ -726,6 +726,18 @@ impl Ability {
             Ability::Yap => AbilityTarget::NearbyMob { maxdist: 3 },
         }
     }
+
+    pub(crate) fn damage_range(&self, player: &Player) -> Option<RangeInclusive<i32>> {
+        let Player { rizz, boredom, .. } = player;
+        match self {
+            Ability::Sprint => None,
+            Ability::ShoulderCheck => Some(player.melee_damage()..=player.melee_damage()),
+            Ability::Mog => Some(2 + (rizz * 6) / 100..=2 + (rizz * 12) / 100),
+            Ability::Cook => None,
+            Ability::ReadBook => None,
+            Ability::Yap => Some(1 + boredom / 50..=1 + boredom / 25),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1404,9 +1416,8 @@ fn handle_player_move(
                 let new_pos = map_pos;
                 let old_pos = pos;
                 if let Some(mob_entity) = pos_to_creature.0.get(&new_pos.0) {
-                    let min_damage = 2 + (player_stats.rizz * 6) / 100;
-                    let max_damage = 2 + (player_stats.rizz * 12) / 100;
-                    let amount = rand::rng().random_range(min_damage..=max_damage);
+                    let amount =
+                        rand::rng().random_range(Ability::Mog.damage_range(&player_stats).unwrap());
                     damage.0.push(DamageInstance {
                         entity: *mob_entity,
                         attacker: Some(player_entity),
@@ -1434,9 +1445,8 @@ fn handle_player_move(
             Ability::Yap => {
                 let new_pos = map_pos;
                 if let Some(mob_entity) = pos_to_creature.0.get(&new_pos.0) {
-                    let min_damage = 1 + player_stats.boredom / 50;
-                    let max_damage = 1 + player_stats.boredom / 25;
-                    let amount = rand::rng().random_range(min_damage..=max_damage);
+                    let amount =
+                        rand::rng().random_range(Ability::Yap.damage_range(&player_stats).unwrap());
                     damage.0.push(DamageInstance {
                         entity: *mob_entity,
                         attacker: Some(player_entity),
