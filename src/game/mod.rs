@@ -65,6 +65,10 @@ const PLAYER_FACTION: i32 = 0;
 const FRIENDLY_FACTION: i32 = 2;
 const ENEMY_FACTION: i32 = -1;
 
+const UI_GREEN: egui::Color32 = egui::Color32::from_rgb(65, 148, 109);
+const UI_YELLOW: egui::Color32 = egui::Color32::from_rgb(183, 171, 116);
+const UI_RED: egui::Color32 = egui::Color32::from_rgb(195, 135, 129);
+
 pub(super) fn plugin(app: &mut App) {
     #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]
     {
@@ -2779,7 +2783,7 @@ fn sidebar(
                                         ui,
                                         ratio,
                                         format!("{}/{}", creature.hp, creature.max_hp),
-                                        egui::Color32::from_rgb(0, 150, 0),
+                                        egui::Color32::from_rgb(65, 148, 109),
                                         player.brainrot,
                                     );
                                 });
@@ -2788,12 +2792,7 @@ fn sidebar(
                                         ui.add(sword.clone());
                                         ui.label(mob.melee_damage.to_string());
                                         for (attr, name, color, tooltip) in [
-                                            (
-                                                mob.ranged,
-                                                "Gun",
-                                                egui::Color32::RED,
-                                                "oh shit he got a gun",
-                                            ),
+                                            (mob.ranged, "Gun", UI_RED, "oh shit he got a gun"),
                                             (
                                                 mob.attrs.based,
                                                 "Based",
@@ -2815,7 +2814,7 @@ fn sidebar(
                                             (
                                                 mob.attrs.sus,
                                                 "Sus",
-                                                egui::Color32::RED,
+                                                UI_RED,
                                                 "Can teleport when attacking",
                                             ),
                                             (
@@ -3190,20 +3189,20 @@ fn left_sidebar(
                 };
                 let color = if !invert_colors {
                     if ratio > 0.5 {
-                        egui::Color32::from_rgb(0, 150, 0)
+                        UI_GREEN
                     } else if ratio > 0.25 {
-                        egui::Color32::from_rgb(180, 150, 0)
+                        UI_YELLOW
                     } else {
-                        egui::Color32::from_rgb(150, 0, 0)
+                        UI_RED
                     }
                 } else {
                     // High is bad
                     if ratio < 0.5 {
-                        egui::Color32::from_rgb(0, 150, 0)
+                        UI_GREEN
                     } else if ratio < 0.75 {
-                        egui::Color32::from_rgb(180, 150, 0)
+                        UI_YELLOW
                     } else {
-                        egui::Color32::from_rgb(150, 0, 0)
+                        UI_RED
                     }
                 };
 
@@ -3238,10 +3237,10 @@ fn left_sidebar(
                 );
                 let color = if i < signal_val {
                     match signal_val {
-                        1 | 2 => egui::Color32::from_rgb(255, 50, 50), // Red
-                        3 => egui::Color32::from_rgb(255, 255, 50),    // Yellow
-                        4 | 5 => egui::Color32::from_rgb(50, 255, 50), // Green
-                        _ => egui::Color32::from_rgb(255, 50, 50),
+                        1 | 2 => UI_RED,
+                        3 => UI_YELLOW,
+                        4 | 5 => UI_GREEN,
+                        _ => UI_RED,
                     }
                 } else {
                     egui::Color32::from_rgba_premultiplied(100, 100, 100, 100)
