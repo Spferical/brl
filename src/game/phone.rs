@@ -8,7 +8,8 @@ use rand::Rng;
 use crate::game::{Creature, Player, apply_brainrot_ui};
 use crate::game::{assets::WorldAssets, upgrades::UpgradeMessage};
 
-use crate::game::mobile_apps::{self, AppId, DungeonDashScreen, DungeonDashSelection};
+use crate::game::delivery::{DungeonDashScreen, DungeonDashState as DungeonDashSelection};
+use crate::game::mobile_apps::{self, AppId};
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PhoneScreen {

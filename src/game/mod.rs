@@ -23,6 +23,7 @@ use crate::{
         animation::{DamageAnimationMessage, FloatingTextMessage, MoveAnimation, TitleDropMessage},
         assets::{WorldAssets, get_egui_image_from_sprite},
         debug::{DebugSettings, redo_faction_map},
+        delivery::DungeonDashState,
         input::{AbilityClicked, EatEvent, InputMode, PlayerIntent, StairsClicked},
         map::{
             MapPos, PlayerMemoryMap, PlayerVisibilityMap, PosToCreature, PosToInteractable,
@@ -33,7 +34,6 @@ use crate::{
     },
     screens::Screen,
 };
-
 mod animation;
 mod assets;
 mod camera;
@@ -88,14 +88,14 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<input::InputMode>();
     app.init_resource::<targeting::ValidTargets>();
     app.init_resource::<phone::PhoneState>();
-    app.init_resource::<mobile_apps::DungeonDashSelection>();
+    app.init_resource::<delivery::DungeonDashState>();
     app.init_resource::<mobile_apps::CockatriceState>();
     app.init_resource::<delivery::ActiveDelivery>();
     app.init_resource::<chat::StreamingState>();
     app.init_resource::<chat::ChatHistory>();
     app.init_resource::<TurnCounter>();
     app.init_state::<phone::PhoneScreen>();
-    app.init_state::<mobile_apps::DungeonDashScreen>();
+    app.init_state::<delivery::DungeonDashScreen>();
     app.add_message::<DamageAnimationMessage>();
     app.add_message::<FloatingTextMessage>();
     app.add_message::<animation::TitleDropMessage>();
@@ -160,7 +160,7 @@ pub(super) fn plugin(app: &mut App) {
                     handle_subscriptions,
                     signal::update_player_signal,
                     delivery::process_deliveries,
-                    mobile_apps::process_dungeon_dash_jobs,
+                    delivery::process_dungeon_dash_jobs,
                     process_despawns,
                 )
                     .chain(),
@@ -777,7 +777,7 @@ pub(crate) fn handle_eat(
     mut commands: Commands,
     streaming_state: Res<chat::StreamingState>,
     mut chat: ResMut<chat::ChatHistory>,
-    dd_selection: Option<ResMut<crate::game::mobile_apps::DungeonDashSelection>>,
+    dd_selection: Option<ResMut<DungeonDashState>>,
     mut floating_text: MessageWriter<crate::game::animation::FloatingTextMessage>,
 ) {
     let mut dd_selection = dd_selection;
@@ -1791,7 +1791,7 @@ fn apply_damage(
     mut animation: MessageWriter<DamageAnimationMessage>,
     mut creature: Query<(&mut Creature, Option<&mut Player>, Option<&Mob>, &Transform)>,
     player_q: Query<Entity, With<Player>>,
-    dd_selection: Option<ResMut<crate::game::mobile_apps::DungeonDashSelection>>,
+    dd_selection: Option<ResMut<DungeonDashState>>,
     mut floating_text: MessageWriter<crate::game::animation::FloatingTextMessage>,
 ) {
     let mut dd_selection = dd_selection;
@@ -3143,7 +3143,7 @@ fn update_level_info_on_change(
     player: Single<(&MapPos, &mut Player), (With<Player>, Changed<MapPos>)>,
     all_map_pos: Query<(Entity, &MapPos), Without<Player>>,
     all_spawn_zones: Query<(Entity, &MinSpawnZone)>,
-    mut dd_selection: ResMut<mobile_apps::DungeonDashSelection>,
+    mut dd_selection: ResMut<DungeonDashState>,
 ) {
     let (pos, mut player_stats) = player.into_inner();
     if let Some(cur_map) = map_info.get_level(*pos)
@@ -3268,11 +3268,11 @@ pub struct GameResetParams<'w> {
     pub streaming_state: ResMut<'w, chat::StreamingState>,
     pub chat_history: ResMut<'w, chat::ChatHistory>,
     pub active_delivery: ResMut<'w, delivery::ActiveDelivery>,
-    pub dungeon_dash_selection: ResMut<'w, mobile_apps::DungeonDashSelection>,
+    pub dungeon_dash_selection: ResMut<'w, delivery::DungeonDashState>,
     pub cockatrice_state: ResMut<'w, mobile_apps::CockatriceState>,
     pub turn_counter: ResMut<'w, TurnCounter>,
     pub next_phone_screen: ResMut<'w, NextState<phone::PhoneScreen>>,
-    pub next_dungeon_dash_screen: ResMut<'w, NextState<mobile_apps::DungeonDashScreen>>,
+    pub next_dungeon_dash_screen: ResMut<'w, NextState<delivery::DungeonDashScreen>>,
     pub examine_pos: ResMut<'w, examine::ExaminePos>,
     pub examine_results: ResMut<'w, examine::ExamineResults>,
     pub screen_shake: ResMut<'w, camera::ScreenShake>,
@@ -3304,7 +3304,7 @@ pub fn enter(
     *params.streaming_state = chat::StreamingState::default();
     *params.chat_history = chat::ChatHistory::default();
     *params.active_delivery = delivery::ActiveDelivery::default();
-    *params.dungeon_dash_selection = mobile_apps::DungeonDashSelection::default();
+    *params.dungeon_dash_selection = delivery::DungeonDashState::default();
     *params.cockatrice_state = mobile_apps::CockatriceState::default();
     *params.turn_counter = TurnCounter::default();
     *params.examine_pos = examine::ExaminePos::default();
@@ -3319,7 +3319,7 @@ pub fn enter(
     params.next_phone_screen.set(phone::PhoneScreen::Home);
     params
         .next_dungeon_dash_screen
-        .set(mobile_apps::DungeonDashScreen::RoleSelection);
+        .set(delivery::DungeonDashScreen::RoleSelection);
 
     examine::init_examine_highlight(world, &mut commands, &assets);
     #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]

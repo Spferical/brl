@@ -5,6 +5,95 @@ use crate::game::{
     assets::WorldAssets, map,
 };
 use bevy::prelude::*;
+use rand::Rng;
+
+#[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum DungeonDashScreen {
+    #[default]
+    RoleSelection,
+    Menu,
+    Checkout,
+    JobOffer,
+}
+
+#[derive(Resource, Default)]
+pub struct DungeonDashState {
+    pub selected_food: Option<usize>,
+    pub tip_percentage: u32,
+    pub checkout_start_time: f64,
+    pub job_target: Option<map::MapPos>,
+    pub job_distance: i32,
+    pub active_job_turns: Option<u32>,
+    pub active_job_amount: Option<i32>,
+    pub job_turns_at_completion: Option<u32>,
+    pub failed_job_turns: Option<u32>,
+    pub cancelled_job_turns: Option<u32>,
+    pub spawn_customer_at: Option<map::MapPos>,
+    pub customer_entity: Option<Entity>,
+    pub dropped_food_entity: Option<Entity>,
+    pub deliveries_this_level: u32,
+}
+
+impl DungeonDashState {
+    pub fn reset_job(&mut self) {
+        self.active_job_turns = None;
+        self.active_job_amount = None;
+        self.job_turns_at_completion = None;
+        self.job_target = None;
+        self.dropped_food_entity = None;
+        self.customer_entity = None;
+    }
+
+    pub fn start_job(&mut self, turn_limit: u32, amount: i32) {
+        self.active_job_turns = Some(turn_limit);
+        self.active_job_amount = Some(amount);
+        self.spawn_customer_at = self.job_target;
+        self.cancelled_job_turns = None;
+        self.failed_job_turns = None;
+        self.job_turns_at_completion = None;
+    }
+
+    pub fn fail_job(&mut self, commands: &mut Commands) {
+        self.reset_job();
+        if let Some(food_entity) = self.dropped_food_entity.take() {
+            if let Ok(mut entity) = commands.get_entity(food_entity) {
+                entity.despawn();
+            }
+        }
+        self.failed_job_turns = Some(10);
+    }
+
+    pub fn decrement_timers(&mut self) {
+        if let Some(mut turns) = self.active_job_turns
+            && self.dropped_food_entity.is_none()
+        {
+            if turns > 0 {
+                turns -= 1;
+                self.active_job_turns = Some(turns);
+            }
+        }
+
+        if let Some(mut f_turns) = self.failed_job_turns {
+            if f_turns > 0 {
+                f_turns -= 1;
+                self.failed_job_turns = Some(f_turns);
+            }
+            if f_turns == 0 {
+                self.failed_job_turns = None;
+            }
+        }
+
+        if let Some(mut c_turns) = self.cancelled_job_turns {
+            if c_turns > 0 {
+                c_turns -= 1;
+                self.cancelled_job_turns = Some(c_turns);
+            }
+            if c_turns == 0 {
+                self.cancelled_job_turns = None;
+            }
+        }
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct Delivery {
@@ -136,6 +225,42 @@ pub struct Food {
     pub food_idx: usize,
 }
 
+pub fn spawn_food(
+    commands: &mut Commands,
+    assets: &WorldAssets,
+    food_idx: usize,
+    map_pos: map::MapPos,
+) -> Entity {
+    let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
+    let sprite = assets.get_ascii_sprite('%', Color::srgb(0.5, 0.25, 0.0));
+    let food = FOODS[food_idx];
+    let action = if food.rizz > 0 {
+        "Equip".to_string()
+    } else {
+        "Eat".to_string()
+    };
+
+    commands
+        .spawn((
+            Corpse {
+                nutrition: 0,
+                name: food.name.to_string(),
+                kind: crate::game::mapgen::MobKind::Normie,
+            },
+            DespawnAfterTurns(50),
+            Food { food_idx },
+            Interactable {
+                action,
+                description: None,
+                kind: InteractionType::Eat,
+            },
+            sprite,
+            map_pos,
+            transform,
+        ))
+        .id()
+}
+
 pub(crate) fn process_deliveries(
     mut commands: Commands,
     world: Single<Entity, With<GameWorld>>,
@@ -173,40 +298,12 @@ pub(crate) fn process_deliveries(
 
             // Drop off the food delivery
             let map_pos = map::MapPos(delivery.target_pos);
-            let transform = Transform::from_translation(map_pos.to_vec3(CORPSE_Z));
-            let sprite = assets.get_ascii_sprite('%', Color::srgb(0.5, 0.25, 0.0));
-            let food = FOODS[delivery.food_idx];
-            let action = if food.rizz > 0 {
-                "Equip".to_string()
-            } else {
-                "Eat".to_string()
-            };
-            let drop_id = commands
-                .spawn((
-                    Corpse {
-                        nutrition: 0,
-                        name: food.name.to_string(),
-                        kind: crate::game::mapgen::MobKind::Normie,
-                    },
-                    DespawnAfterTurns(50),
-                    Food {
-                        food_idx: delivery.food_idx,
-                    },
-                    Interactable {
-                        action,
-                        description: None,
-                        kind: InteractionType::Eat,
-                    },
-                    sprite,
-                    map_pos,
-                    transform,
-                ))
-                .id();
+            let drop_id = spawn_food(&mut commands, &assets, delivery.food_idx, map_pos);
             commands.entity(world_entity).add_child(drop_id);
             floating_text.write(FloatingTextMessage {
                 entity: Some(drop_id),
                 world_pos: None,
-                text: format!("{} Delivered!", food.name),
+                text: format!("{} Delivered!", FOODS[delivery.food_idx].name),
                 color: Color::srgb(1.0, 1.0, 1.0),
                 ..default()
             });
@@ -228,7 +325,7 @@ pub(crate) fn process_deliveries(
 
 pub(crate) fn draw_delivery_indicators(
     active_delivery: Res<ActiveDelivery>,
-    dd_selection: Res<crate::game::mobile_apps::DungeonDashSelection>,
+    dd_selection: Res<DungeonDashState>,
     q_camera: Single<(&Camera, &GlobalTransform), With<crate::PrimaryCamera>>,
     mut gizmos: Gizmos,
     time: Res<Time>,
@@ -324,7 +421,8 @@ pub(crate) fn draw_delivery_indicators(
                 edge_viewport += dir_to_target * t * 0.95; // 5% margin
 
                 // Convert back to world space for gizmos
-                if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, edge_viewport) {
+                if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, edge_viewport)
+                {
                     let arrow_center = world_pos;
                     let arrow_length = 30.0;
                     let arrow_width = 15.0;
@@ -341,6 +439,153 @@ pub(crate) fn draw_delivery_indicators(
                     gizmos.line_2d(right, arrow_center, Color::srgb(0.0, 1.0, 0.0));
                 }
             }
+        }
+    }
+}
+
+pub fn process_dungeon_dash_jobs(
+    mut dd_state: ResMut<DungeonDashState>,
+    mut commands: Commands,
+    world: Single<Entity, With<crate::game::GameWorld>>,
+    assets: Res<crate::game::assets::WorldAssets>,
+    mut floating_text: MessageWriter<crate::game::animation::FloatingTextMessage>,
+    player_query: Single<(Entity, &crate::game::map::MapPos, &mut crate::game::Player)>,
+    walk_blocked_map: Res<crate::game::map::WalkBlockedMap>,
+    mut mob_query: Query<(
+        &crate::game::map::MapPos,
+        &mut crate::game::Mob,
+        &crate::game::Creature,
+    )>,
+    food_query: Query<&crate::game::map::MapPos, With<crate::game::delivery::Food>>,
+) {
+    let (player_entity, player_pos, mut player) = player_query.into_inner();
+
+    // Check for customer death
+    if let Some(customer_entity) = dd_state.customer_entity {
+        let is_dead = match mob_query.get(customer_entity) {
+            Ok((_, _, creature)) => creature.is_dead(),
+            Err(_) => true,
+        };
+        if dd_state.active_job_turns.is_some() && is_dead {
+            dd_state.fail_job(&mut commands);
+            dd_state.cancelled_job_turns = Some(10);
+            return;
+        }
+    }
+
+    // Spawn new customer if needed
+    if let Some(target) = dd_state.spawn_customer_at.take() {
+        let customer = crate::game::spawn::spawn_mob(
+            &mut commands,
+            *world,
+            target,
+            crate::game::mapgen::MobKind::FriendlyNormie,
+            &assets,
+        );
+        dd_state.customer_entity = Some(customer);
+    }
+
+    if let Some(food_entity) = dd_state.dropped_food_entity {
+        if let Some(customer_entity) = dd_state.customer_entity {
+            if let Ok(food_pos) = food_query.get(food_entity) {
+                if let Ok((customer_pos, mut mob, _creature)) = mob_query.get_mut(customer_entity) {
+                    if customer_pos.0 == food_pos.0 {
+                        // Picked up!
+                        commands.entity(food_entity).despawn();
+
+                        let dist = dd_state.job_distance as f32;
+                        let max_amount = dd_state.active_job_amount.unwrap_or(0) as f32;
+                        let max_turns = (dist * 1.5) as u32;
+                        let turns_left = dd_state
+                            .job_turns_at_completion
+                            .or(dd_state.active_job_turns)
+                            .unwrap_or(0);
+                        let turns_taken = max_turns.saturating_sub(turns_left);
+
+                        let t1 = dist * 1.1;
+                        let t2 = dist * 1.5;
+                        let min_amount = dist * 1.0;
+
+                        let payout = if (turns_taken as f32) <= t1 {
+                            max_amount
+                        } else {
+                            let t = ((turns_taken as f32) - t1) / (t2 - t1);
+                            max_amount - t * (max_amount - min_amount)
+                        }
+                        .max(0.0)
+                        .round() as i32;
+
+                        player.money += payout + 1; // Payout + $1 tip
+
+                        floating_text.write(crate::game::animation::FloatingTextMessage {
+                            entity: Some(player_entity),
+                            world_pos: None,
+                            text: format!("+${} Payout", payout),
+                            color: Color::srgb(0.0, 1.0, 0.0),
+                            ..default()
+                        });
+
+                        let mut tip_pos = customer_pos.to_vec3(crate::game::PLAYER_Z);
+                        tip_pos.y += 16.0;
+                        floating_text.write(crate::game::animation::FloatingTextMessage {
+                            entity: None,
+                            world_pos: Some(tip_pos),
+                            text: "+$1 Tip".to_string(),
+                            color: Color::srgb(0.5, 1.0, 0.5),
+                            delay: 1.0,
+                            ..default()
+                        });
+
+                        dd_state.reset_job();
+                        dd_state.deliveries_this_level += 1;
+
+                        // make customer walk away randomly
+                        mob.destination = Some(customer_pos.0 + bevy::math::IVec2::new(10, 10));
+                        return;
+                    } else {
+                        mob.destination = Some(food_pos.0);
+                    }
+                }
+            }
+        }
+    } else if let Some(target) = dd_state.job_target {
+        if target.0 == player_pos.0 {
+            // Drop off the food
+            let mut rng = rand::rng();
+            let food_idx = rng.random_range(0..FOODS.len());
+
+            let mut drop_pos = *player_pos;
+            for adj in player_pos.adjacent() {
+                if !walk_blocked_map.0.contains(&adj.0) {
+                    drop_pos = adj;
+                    break;
+                }
+            }
+
+            let drop_id = spawn_food(&mut commands, &assets, food_idx, drop_pos);
+            commands.entity(*world).add_child(drop_id);
+            dd_state.dropped_food_entity = Some(drop_id);
+            dd_state.job_turns_at_completion = dd_state.active_job_turns;
+            dd_state.job_target = None;
+        }
+    }
+
+    // Handle job countdown and other timers
+    let turns_before = dd_state.active_job_turns;
+    dd_state.decrement_timers();
+
+    if let Some(0) = dd_state.active_job_turns {
+        if turns_before != Some(0) {
+            player.money -= 10;
+            floating_text.write(crate::game::animation::FloatingTextMessage {
+                entity: Some(player_entity),
+                world_pos: None,
+                text: "-$10 Failed Delivery".to_string(),
+                color: Color::srgb(1.0, 0.0, 0.0),
+                ..default()
+            });
+
+            dd_state.fail_job(&mut commands);
         }
     }
 }

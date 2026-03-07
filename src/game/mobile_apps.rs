@@ -5,7 +5,7 @@ use crate::game::animation;
 use crate::game::apply_brainrot_ui;
 use crate::game::assets::WorldAssets;
 use crate::game::chat::StreamingState;
-use crate::game::delivery::FOODS;
+use crate::game::delivery::{DungeonDashScreen, DungeonDashState as DungeonDashSelection, FOODS};
 use crate::game::phone::{PhoneScreen, PhoneState};
 use crate::game::upgrades::{UPGRADES, UpgradeMessage};
 use crate::game::{Creature, Player};
@@ -43,33 +43,6 @@ const AMOGUS_CONTENTS: &[&str] = &[
     "Blue is acting sus.",
 ];
 const CAPYBARA_CONTENTS: &[&str] = &["Chilling.", "Water is nice.", "Pull up."];
-
-#[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
-pub enum DungeonDashScreen {
-    #[default]
-    RoleSelection,
-    Menu,
-    Checkout,
-    JobOffer,
-}
-
-#[derive(Resource, Default)]
-pub struct DungeonDashSelection {
-    pub selected_food: Option<usize>,
-    pub tip_percentage: u32,
-    pub checkout_start_time: f64,
-    pub job_target: Option<crate::game::map::MapPos>,
-    pub job_distance: i32,
-    pub active_job_turns: Option<u32>,
-    pub active_job_amount: Option<i32>,
-    pub job_turns_at_completion: Option<u32>,
-    pub failed_job_turns: Option<u32>,
-    pub cancelled_job_turns: Option<u32>,
-    pub spawn_customer_at: Option<crate::game::map::MapPos>,
-    pub customer_entity: Option<Entity>,
-    pub dropped_food_entity: Option<Entity>,
-    pub deliveries_this_level: u32,
-}
 
 #[derive(Clone)]
 pub struct Tweet {
@@ -375,7 +348,9 @@ impl DungeonDash {
         walk_blocked_map: &crate::game::map::WalkBlockedMap,
         map_info: &crate::game::mapgen::MapInfo,
     ) {
-        if let Some(work_button) = ui.data_mut(|d| d.get_temp::<egui::Response>(egui::Id::new("work_button"))) {
+        if let Some(work_button) =
+            ui.data_mut(|d| d.get_temp::<egui::Response>(egui::Id::new("work_button")))
+        {
             if work_button.clicked() && dd_selection.deliveries_this_level < 3 {
                 next_dd_screen.set(DungeonDashScreen::JobOffer);
 
@@ -476,12 +451,7 @@ impl DungeonDash {
                 );
 
                 if go_button.clicked() {
-                    dd_selection.active_job_turns = Some(turn_limit as u32);
-                    dd_selection.active_job_amount = Some(max_amount);
-                    dd_selection.spawn_customer_at = dd_selection.job_target;
-                    dd_selection.cancelled_job_turns = None;
-                    dd_selection.failed_job_turns = None;
-                    dd_selection.job_turns_at_completion = None;
+                    dd_selection.start_job(turn_limit as u32, max_amount);
                 }
             } else {
                 ui.label(apply_brainrot_ui(
@@ -1544,232 +1514,6 @@ pub fn get_apps() -> Vec<(AppId, Box<dyn MobileApp>)> {
         (AppId::Cockatrice, Box::new(Cockatrice)),
         (AppId::Upgrade, Box::new(Upgrade)),
     ]
-}
-
-pub fn process_dungeon_dash_jobs(
-    mut dd_selection: ResMut<DungeonDashSelection>,
-    mut commands: Commands,
-    world: Single<Entity, With<crate::game::GameWorld>>,
-    assets: Res<crate::game::assets::WorldAssets>,
-    mut floating_text: MessageWriter<crate::game::animation::FloatingTextMessage>,
-    player_query: Single<(Entity, &crate::game::map::MapPos, &mut crate::game::Player)>,
-    walk_blocked_map: Res<crate::game::map::WalkBlockedMap>,
-    mut mob_query: Query<(&crate::game::map::MapPos, &mut crate::game::Mob, &crate::game::Creature)>,
-    food_query: Query<&crate::game::map::MapPos, With<crate::game::delivery::Food>>,
-) {
-    let (player_entity, player_pos, mut player) = player_query.into_inner();
-
-    if let Some(customer_entity) = dd_selection.customer_entity {
-        let is_dead = match mob_query.get(customer_entity) {
-            Ok((_, _, creature)) => creature.is_dead(),
-            Err(_) => true,
-        };
-        if dd_selection.active_job_turns.is_some() && is_dead {
-            // Customer is dead!
-            dd_selection.active_job_turns = None;
-            dd_selection.active_job_amount = None;
-            dd_selection.job_target = None;
-            dd_selection.customer_entity = None;
-            if let Some(food_entity) = dd_selection.dropped_food_entity.take() {
-                if let Ok(mut entity) = commands.get_entity(food_entity) {
-                    entity.despawn();
-                }
-            }
-            dd_selection.cancelled_job_turns = Some(10);
-            return;
-        }
-    }
-
-    if let Some(target) = dd_selection.spawn_customer_at.take() {
-        let customer = crate::game::spawn::spawn_mob(
-            &mut commands,
-            *world,
-            target,
-            crate::game::mapgen::MobKind::FriendlyNormie,
-            &assets,
-        );
-        dd_selection.customer_entity = Some(customer);
-    }
-
-    if let Some(food_entity) = dd_selection.dropped_food_entity {
-        if let Some(customer_entity) = dd_selection.customer_entity {
-            if let Ok(food_pos) = food_query.get(food_entity) {
-                if let Ok((customer_pos, mut mob, _creature)) = mob_query.get_mut(customer_entity) {
-                    if customer_pos.0 == food_pos.0 {
-                        // Picked up!
-                        commands.entity(food_entity).despawn();
-
-                        let dist = dd_selection.job_distance as f32;
-                        let max_amount = dd_selection.active_job_amount.unwrap_or(0) as f32;
-                        let max_turns = (dist * 1.5) as u32;
-                        let turns_left = dd_selection
-                            .job_turns_at_completion
-                            .or(dd_selection.active_job_turns)
-                            .unwrap_or(0);
-                        let turns_taken = max_turns.saturating_sub(turns_left);
-
-                        let t1 = dist * 1.1;
-                        let t2 = dist * 1.5;
-                        let min_amount = dist * 1.0;
-
-                        let payout = if (turns_taken as f32) <= t1 {
-                            max_amount
-                        } else {
-                            let t = ((turns_taken as f32) - t1) / (t2 - t1);
-                            max_amount - t * (max_amount - min_amount)
-                        }
-                        .max(0.0)
-                        .round() as i32;
-
-                        player.money += payout;
-                        let tip = 1;
-                        player.money += tip;
-
-                        floating_text.write(crate::game::animation::FloatingTextMessage {
-                            entity: Some(player_entity),
-                            world_pos: None,
-                            text: format!("+${} Payout", payout),
-                            color: Color::srgb(0.0, 1.0, 0.0),
-                            ..default()
-                        });
-
-                        let mut tip_pos = customer_pos.to_vec3(crate::game::PLAYER_Z);
-                        tip_pos.y += 16.0;
-                        floating_text.write(crate::game::animation::FloatingTextMessage {
-                            entity: None,
-                            world_pos: Some(tip_pos),
-                            text: format!("+${} Tip", tip),
-                            color: Color::srgb(0.5, 1.0, 0.5),
-                            delay: 1.0,
-                            ..default()
-                        });
-
-                        dd_selection.active_job_turns = None;
-                        dd_selection.active_job_amount = None;
-                        dd_selection.job_turns_at_completion = None;
-                        dd_selection.job_target = None;
-                        dd_selection.failed_job_turns = None;
-                        dd_selection.dropped_food_entity = None;
-                        dd_selection.customer_entity = None;
-                        dd_selection.deliveries_this_level += 1;
-
-                        // make customer walk away randomly
-                        mob.destination = Some(customer_pos.0 + bevy::math::IVec2::new(10, 10));
-                        return;
-                    } else {
-                        // Walk to the food
-                        mob.destination = Some(food_pos.0);
-                    }
-                }
-            }
-        }
-    } else {
-        let mut completed = false;
-        if let Some(target) = dd_selection.job_target {
-            if target.0 == player_pos.0 {
-                completed = true;
-            }
-        }
-
-        if completed {
-            use rand::Rng;
-            let mut rng = rand::rng();
-            let food_idx = rng.random_range(0..crate::game::delivery::FOODS.len());
-            let food = crate::game::delivery::FOODS[food_idx];
-
-            let mut drop_pos = *player_pos;
-            for adj in player_pos.adjacent() {
-                if !walk_blocked_map.0.contains(&adj.0) {
-                    drop_pos = adj;
-                    break;
-                }
-            }
-
-            let map_pos = drop_pos;
-            let transform = Transform::from_translation(map_pos.to_vec3(crate::game::CORPSE_Z));
-            let sprite = assets.get_ascii_sprite('%', Color::srgb(0.5, 0.25, 0.0));
-            let action = if food.rizz > 0 {
-                "Equip".to_string()
-            } else {
-                "Eat".to_string()
-            };
-
-            let drop_id = commands
-                .spawn((
-                    crate::game::Corpse {
-                        nutrition: 0,
-                        name: food.name.to_string(),
-                        kind: crate::game::mapgen::MobKind::Normie,
-                    },
-                    crate::game::DespawnAfterTurns(50),
-                    crate::game::delivery::Food { food_idx },
-                    crate::game::Interactable {
-                        action,
-                        description: None,
-                        kind: crate::game::InteractionType::Eat,
-                    },
-                    sprite,
-                    map_pos,
-                    transform,
-                ))
-                .id();
-            commands.entity(*world).add_child(drop_id);
-            dd_selection.dropped_food_entity = Some(drop_id);
-            dd_selection.job_turns_at_completion = dd_selection.active_job_turns;
-            dd_selection.job_target = None;
-        }
-    }
-
-    if let Some(mut turns) = dd_selection.active_job_turns
-        && dd_selection.dropped_food_entity.is_none()
-    {
-        if turns > 0 {
-            turns -= 1;
-            dd_selection.active_job_turns = Some(turns);
-        }
-
-        if turns == 0 {
-            player.money -= 10;
-            floating_text.write(crate::game::animation::FloatingTextMessage {
-                entity: Some(player_entity),
-                world_pos: None,
-                text: "-$10 Failed Delivery".to_string(),
-                color: Color::srgb(1.0, 0.0, 0.0),
-                ..default()
-            });
-
-            dd_selection.active_job_turns = None;
-            dd_selection.active_job_amount = None;
-            dd_selection.job_turns_at_completion = None;
-            dd_selection.job_target = None;
-            if let Some(food_entity) = dd_selection.dropped_food_entity.take() {
-                if let Ok(mut entity) = commands.get_entity(food_entity) {
-                    entity.despawn();
-                }
-            }
-            dd_selection.failed_job_turns = Some(10);
-        }
-    }
-
-    if let Some(mut f_turns) = dd_selection.failed_job_turns {
-        if f_turns > 0 {
-            f_turns -= 1;
-            dd_selection.failed_job_turns = Some(f_turns);
-        }
-        if f_turns == 0 {
-            dd_selection.failed_job_turns = None;
-        }
-    }
-
-    if let Some(mut c_turns) = dd_selection.cancelled_job_turns {
-        if c_turns > 0 {
-            c_turns -= 1;
-            dd_selection.cancelled_job_turns = Some(c_turns);
-        }
-        if c_turns == 0 {
-            dd_selection.cancelled_job_turns = None;
-        }
-    }
 }
 
 pub fn update_cockatrice(

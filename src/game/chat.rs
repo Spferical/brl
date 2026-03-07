@@ -1,5 +1,6 @@
 use crate::game::animation::DamageAnimationMessage;
 use crate::game::apply_brainrot_ui;
+use crate::game::delivery::DungeonDashState as DungeonDashSelection;
 use crate::game::{DamageType, Player, TurnCounter};
 use bevy::prelude::*;
 use bevy_egui::EguiContexts;
@@ -539,7 +540,7 @@ pub fn draw_streaming_indicator(
     streaming_state: Res<StreamingState>,
     player: Single<&Player>,
     active_delivery: Res<crate::game::delivery::ActiveDelivery>,
-    dd_selection: Res<crate::game::mobile_apps::DungeonDashSelection>,
+    dd_selection: Res<DungeonDashSelection>,
 ) {
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
