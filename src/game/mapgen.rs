@@ -993,7 +993,7 @@ fn create_prefab_room(
 ) -> rogue_algebra::Rect {
     let mut max_x = 0;
     let mut max_y = 0;
-    for (y, line) in prefab.lines().enumerate() {
+    for (y, line) in prefab.lines().rev().enumerate() {
         for (x, c) in line.chars().enumerate() {
             let pos = start_pos + rogue_algebra::Offset::new(x as i32, y as i32);
             let tk = match c {
@@ -1081,8 +1081,8 @@ fn gen_amogus_spaceship(rng: &mut impl Rng) -> LevelDraft {
     let electrical_prefab = "
 ###########
 #.........#
-#..&...&..#
 #..#####..#
+#..&...&..#
 #.........#
 ###########";
     let admin_navigation_prefab = "
