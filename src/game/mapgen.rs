@@ -1508,6 +1508,25 @@ pub(crate) fn spawn_level(
     let level_entity = level_entity_cmds.id();
     commands.entity(world).add_child(level_entity);
 
+    // Spawn floor background
+    let level_rect = draft.get_containing_rect() + offset;
+    let width = level_rect.width() as f32 * map::TILE_WIDTH;
+    let height = level_rect.height() as f32 * map::TILE_HEIGHT;
+    let center_x = (level_rect.x1 + level_rect.x2) as f32 * map::TILE_WIDTH / 2.0;
+    let center_y = (level_rect.y1 + level_rect.y2) as f32 * map::TILE_HEIGHT / 2.0;
+
+    commands.entity(level_entity).with_children(|parent| {
+        parent.spawn((
+            Sprite {
+                image: assets.get_solid_mask(),
+                color: Color::srgb(0.1, 0.1, 0.1),
+                custom_size: Some(Vec2::new(width + 2.0, height + 2.0)),
+                ..default()
+            },
+            Transform::from_translation(Vec3::new(center_x, center_y, TILE_Z - 0.1)),
+        ));
+    });
+
     let mut tiles = vec![];
     for (&pos, &tile_kind) in draft.tiles.iter() {
         let pos = pos + offset;
@@ -1646,17 +1665,6 @@ pub(crate) fn spawn_level(
                 ));
             }
         }
-        tile.with_children(|parent| {
-            parent.spawn((
-                Sprite {
-                    image: assets.get_solid_mask(),
-                    color: Color::srgb(0.1, 0.1, 0.1),
-                    custom_size: Some(Vec2::new(map::TILE_WIDTH + 1.0, map::TILE_HEIGHT + 1.0)),
-                    ..default()
-                },
-                Transform::from_translation(Vec3::new(0.0, 0.0, -0.1)),
-            ));
-        });
 
         tiles.push(tile.id());
     }
