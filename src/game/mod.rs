@@ -1084,14 +1084,12 @@ fn tick_meters(
     let (mut player, mut creature, player_pos) = player.into_inner();
 
     // Touching Grass logic
-    if let Some(level) = map_info.get_level(*player_pos) {
-        if level.ty == mapgen::LevelTitle::Minecraft {
-            if q_grass.iter().any(|gp| gp.0 == player_pos.0) {
-                if player.brainrot > 10 {
-                    player.brainrot = (player.brainrot - 2).max(10);
-                }
-            }
-        }
+    if let Some(level) = map_info.get_level(*player_pos)
+        && level.ty == mapgen::LevelTitle::Minecraft
+        && q_grass.iter().any(|gp| gp.0 == player_pos.0)
+        && player.brainrot > 10
+    {
+        player.brainrot = (player.brainrot - 2).max(10);
     }
 
     // Decrement cooldowns
@@ -3551,12 +3549,11 @@ fn draw_hunger_warning(
     let (player, _creature, player_pos) = player.into_inner();
 
     let mut is_touching_grass = false;
-    if let Some(level) = map_info.get_level(*player_pos) {
-        if level.ty == mapgen::LevelTitle::Minecraft {
-            if q_grass.iter().any(|gp| gp.0 == player_pos.0) {
-                is_touching_grass = true;
-            }
-        }
+    if let Some(level) = map_info.get_level(*player_pos)
+        && level.ty == mapgen::LevelTitle::Minecraft
+        && q_grass.iter().any(|gp| gp.0 == player_pos.0)
+    {
+        is_touching_grass = true;
     }
 
     if player.hunger < 100 && !is_touching_grass {

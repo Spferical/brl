@@ -228,13 +228,11 @@ pub(crate) fn handle_input(
                             .0
                             .get(&MapPos(player_pos.0 + dir))
                             .and_then(|v| v.first())
+                            && let Ok(interactable) = interactables.get(*entity)
+                            && !interactable.require_on_top
                         {
-                            if let Ok(interactable) = interactables.get(*entity) {
-                                if !interactable.require_on_top {
-                                    target_entity = Some(*entity);
-                                    break;
-                                }
-                            }
+                            target_entity = Some(*entity);
+                            break;
                         }
                     }
                 }

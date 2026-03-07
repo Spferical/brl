@@ -27,13 +27,13 @@ pub(super) fn update_lighting(
     settings: Res<LightingSettings>,
     q_camera: Query<Entity, With<crate::PrimaryCamera>>,
 ) {
-    if settings.is_changed() {
-        if let Some(camera_entity) = q_camera.iter().next() {
-            if settings.fancy_lighting {
-                enable_lighting(&mut commands, camera_entity);
-            } else {
-                disable_lighting(&mut commands, camera_entity);
-            }
+    if settings.is_changed()
+        && let Some(camera_entity) = q_camera.iter().next()
+    {
+        if settings.fancy_lighting {
+            enable_lighting(&mut commands, camera_entity);
+        } else {
+            disable_lighting(&mut commands, camera_entity);
         }
     }
 }

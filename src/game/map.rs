@@ -156,12 +156,10 @@ pub(crate) fn apply_hard_fov_to_tiles(
             } else {
                 Visibility::Hidden
             }
+        } else if is_remembered {
+            Visibility::Inherited
         } else {
-            if is_remembered {
-                Visibility::Inherited
-            } else {
-                Visibility::Hidden
-            }
+            Visibility::Hidden
         };
 
         if *vis != target_vis {
@@ -180,15 +178,15 @@ pub(crate) fn apply_hard_fov_to_tiles(
                 alpha: linear.alpha,
             });
 
-            if let Some(mut sprite) = sprite {
-                if sprite.color != target_color {
-                    sprite.color = target_color;
-                }
+            if let Some(mut sprite) = sprite
+                && sprite.color != target_color
+            {
+                sprite.color = target_color;
             }
-            if let Some(mut text_color) = text_color {
-                if text_color.0 != target_color {
-                    text_color.0 = target_color;
-                }
+            if let Some(mut text_color) = text_color
+                && text_color.0 != target_color
+            {
+                text_color.0 = target_color;
             }
         }
     }
