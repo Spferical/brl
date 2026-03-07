@@ -29,6 +29,7 @@ enum TileKind {
     MedicalPod,
     Star,
     ArcadeMachine,
+    Table,
 }
 
 #[derive(Clone, Copy, Debug, Reflect, PartialEq, Eq, Hash)]
@@ -631,24 +632,6 @@ fn draft_level_mapgen_rs(
             furthest_tile = pos;
         }
     }
-    for y in 0..buf.height {
-        for x in 0..buf.width {
-            let c = match tiles.get(&Pos::new(x as i32, y as i32)) {
-                Some(TileKind::Floor) => '.',
-                Some(TileKind::Wall) => '#',
-                Some(TileKind::WorkoutMachine) => '&',
-                Some(TileKind::ArcadeMachine) => '$',
-                Some(TileKind::Water) => '~',
-                Some(TileKind::Reactor) => '*',
-                Some(TileKind::MedicalPod) => '+',
-                Some(TileKind::Star) => '\'',
-                None => ' ',
-            };
-            print!("{c}");
-        }
-        println!();
-    }
-
     LevelDraft {
         title: ty,
         entrances: vec![start_pos],
@@ -1021,6 +1004,7 @@ fn create_prefab_room(
                 '&' => TileKind::WorkoutMachine,
                 '*' => TileKind::Reactor,
                 '+' => TileKind::MedicalPod,
+                'T' => TileKind::Table,
                 ' ' => TileKind::Wall,
                 _ => {
                     warn!("create_prefab_room: unexpected '{c}'");
@@ -1351,6 +1335,11 @@ pub(crate) fn spawn_level(
                 let color = Color::srgb(0.4, 0.4, 1.0);
                 let sprite = assets.get_ascii_sprite('~', color);
                 tile.insert((Name::new("Water"), sprite, map::BlocksMovement));
+            }
+            TileKind::Table => {
+                let color = Color::srgb(0.6, 0.6, 0.2);
+                let sprite = assets.get_ascii_sprite('T', color);
+                tile.insert((Name::new("Table"), sprite, map::BlocksMovement));
             }
             TileKind::Reactor => {
                 let sprite = assets.get_ascii_sprite('*', Color::srgb(0.0, 1.0, 0.0));
