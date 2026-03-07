@@ -593,6 +593,7 @@ pub struct Player {
     pub upgrade_options: Vec<usize>,
     pub subscriptions: Vec<Subscription>,
     pub food_cooldowns: HashMap<usize, u32>,
+    pub is_raided: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect)]
@@ -1999,24 +2000,30 @@ fn process_mob_turn(
     assets: Res<WorldAssets>,
     pos_to_creature: Res<PosToCreature>,
     faction_map: Res<FactionMap>,
-    mut mobs: Query<(Entity, &mut MapPos, &Creature, &mut Mob), (Without<Player>, Without<Frozen>)>,
+    mut mobs: Query<
+        (Entity, &mut MapPos, &Creature, &mut Mob, &DropsCorpse),
+        (Without<Player>, Without<Frozen>),
+    >,
     mut commands: Commands,
     mut damage: ResMut<PendingDamage>,
-    player_q: Single<(Entity, &MapPos, &Creature), With<Player>>,
+    player_q: Single<(Entity, &MapPos, &Creature, &mut Player), With<Player>>,
     mut screen_shake: ResMut<camera::ScreenShake>,
     walk_blocked_map: Res<map::WalkBlockedMap>,
     sight_blocked_map: Res<map::SightBlockedMap>,
     map_info: Res<mapgen::MapInfo>,
     all_creatures: Query<&Creature>,
     mut floating_text: MessageWriter<FloatingTextMessage>,
+    turn_counter: Res<TurnCounter>,
 ) {
     let world_entity = world.into_inner();
     let rng = &mut rand::rng();
-    let (player_entity, player_pos, player_creature) = *player_q;
+    let (player_entity, player_pos, player_creature, mut player) = player_q.into_inner();
+    player.is_raided = false;
+
     // Determine mob intentions.
     let mut mob_moves = HashMap::new();
     let mut claimed_locations = HashSet::new();
-    for (entity, pos, creature, mut mob) in mobs.iter_mut() {
+    for (entity, pos, creature, mut mob, corpse) in mobs.iter_mut() {
         if creature.is_dead() {
             continue;
         }
@@ -2035,6 +2042,40 @@ fn process_mob_turn(
             && pos.0 == t
         {
             mob.target = None;
+        }
+
+        let sees_player = mob.target == Some(player_pos.0);
+
+        if corpse.kind == mapgen::MobKind::Streamer && sees_player {
+            player.is_raided = true;
+        }
+
+        if corpse.kind == mapgen::MobKind::Streamer
+            && turn_counter.0 > 0
+            && turn_counter.0 % 4 == 0
+            && sees_player
+        {
+            let spawn_pos = pos.adjacent().into_iter().find(|p| {
+                !walk_blocked_map.0.contains(&p.0)
+                    && !pos_to_creature.0.contains_key(&p.0)
+                    && !claimed_locations.contains(&p.0)
+            });
+            if let Some(spawn_pos) = spawn_pos {
+                spawn::spawn_mob(
+                    &mut commands,
+                    world_entity,
+                    spawn_pos,
+                    mapgen::MobKind::Stan,
+                    &assets,
+                );
+                floating_text.write(FloatingTextMessage {
+                    entity: Some(entity),
+                    world_pos: None,
+                    text: "Summoned Stan!".to_string(),
+                    color: Color::srgb(0.7, 0.4, 0.9),
+                    ..default()
+                });
+            }
         }
 
         if mob.target.is_none() {
@@ -2100,7 +2141,7 @@ fn process_mob_turn(
 
     // Apply moves.
     for (entity, action) in mob_moves.into_iter() {
-        let (entity, mut pos, _creature, mob) = mobs.get_mut(entity).unwrap();
+        let (entity, mut pos, _creature, mob, _corpse) = mobs.get_mut(entity).unwrap();
         let old_pos = *pos;
         match action {
             Action::Move(new_pos) => {
@@ -2197,7 +2238,7 @@ fn prune_dead(
         (Without<Player>, Without<Frozen>),
     >,
     mut player: Single<&mut Player>,
-    streaming_state: Res<chat::StreamingState>,
+    mut streaming_state: ResMut<chat::StreamingState>,
     mut chat: ResMut<chat::ChatHistory>,
 ) {
     let world_entity = world.into_inner();
@@ -2208,6 +2249,14 @@ fn prune_dead(
 
             if creature.killed_by_player {
                 chat::handle_payout(player, &streaming_state, &mut chat, name);
+                if let Some(corpse) = corpse {
+                    if corpse.kind == mapgen::MobKind::Streamer {
+                        use rand::Rng;
+                        let mut rng = rand::rng();
+                        let bonus = rng.random_range(50..=100);
+                        streaming_state.subscribers += bonus;
+                    }
+                }
             }
 
             if let Some(DropsCorpse {

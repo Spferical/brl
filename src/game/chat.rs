@@ -161,6 +161,20 @@ const BROKE_MESSAGES: &[&str] = &[
     "bro is in the negative right now",
 ];
 
+const RAID_MESSAGES: &[&str] = &[
+    "RAID ALERT!",
+    "POG RAID",
+    "THE RAID IS HERE",
+    "W RAID",
+    "GIVE THEM THE FOLLOWS",
+    "RAID INCOMING",
+    "WELCOME RAIDERS",
+    "STREAMS CROSSING",
+    "RAID HYPE",
+    "STREAMERS IN CHAT",
+    "IS THAT A STREAMER?",
+];
+
 #[derive(Resource)]
 pub struct ChatHistory {
     pub messages: Vec<ChatMessage>,
@@ -253,6 +267,10 @@ pub fn update_streaming_turn(
             // a = 100 / e^(100*b) = 0.00566 (100/turn at 100 rizz)
             let rizz = player.rizz as f32;
             let mut gain = 0.00566 * (0.0978 * rizz).exp();
+
+            if player.is_raided {
+                gain *= 2.0;
+            }
 
             if player.has_subscription(crate::game::Subscription::UndergroundTVPro) {
                 gain *= 3.0;
@@ -466,11 +484,16 @@ pub fn update_chat(
         // 1% chance per viewer, capped at 95%
         let spawn_chance = (streaming_state.viewers as f32 * 0.01).min(0.95);
         if rng.random_bool(spawn_chance as f64) {
-            let pool = if player.money < 0 && rng.random_bool(0.3) {
+            let mut pool = if player.money < 0 && rng.random_bool(0.3) {
                 BROKE_MESSAGES
             } else {
                 GENERIC_MESSAGES
             };
+
+            if player.is_raided && rng.random_bool(0.5) {
+                pool = RAID_MESSAGES;
+            }
+
             queue_message(&mut chat, &mut rng, pool);
         }
     }

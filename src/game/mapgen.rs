@@ -64,6 +64,8 @@ pub(crate) enum MobKind {
     BrainrotEnemy,
     Fortnite(i32),
     Animatronic,
+    Streamer,
+    Stan,
 }
 
 const GENERIC_DIST: &[(MobKind, usize)] = &[
@@ -73,6 +75,7 @@ const GENERIC_DIST: &[(MobKind, usize)] = &[
     (MobKind::Normie, 1),
     (MobKind::AmogusImpostor, 1),
     (MobKind::Capybara, 1),
+    (MobKind::Streamer, 1),
 ];
 
 const GYM_DIST: &[(MobKind, usize)] = &[
@@ -205,6 +208,28 @@ impl MobKind {
                     strength: 0,
                     rizz: 0,
                     brainrot: 1,
+                    boredom: 0,
+                },
+            ),
+            MobKind::Streamer => (
+                "Gamer Juice",
+                CookedMeal {
+                    hunger: 5,
+                    hp: 0,
+                    strength: 0,
+                    rizz: 10,
+                    brainrot: 15,
+                    boredom: 0,
+                },
+            ),
+            MobKind::Stan => (
+                "Long Pork",
+                CookedMeal {
+                    hunger: 40,
+                    hp: 0,
+                    strength: 0,
+                    rizz: 0,
+                    brainrot: 0,
                     boredom: 0,
                 },
             ),
@@ -543,6 +568,60 @@ impl MobKind {
                     sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
                     nutrition: 4,
                     name: "Battler".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::Streamer => MobBundle {
+                name: Name::new("Streamer"),
+                creature: Creature {
+                    hp: 4,
+                    max_hp: 4,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 5,
+                    attrs: MobAttrs {
+                        based: true,
+                        physical_resist: Resist::Weak,
+                        aura_resist: Resist::Strong,
+                        psychic_resist: Resist::Strong,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('S', Color::srgb(0.5, 0.2, 0.8)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 5,
+                    name: "Streamer".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::Stan => MobBundle {
+                name: Name::new("Stan"),
+                creature: Creature {
+                    hp: 2,
+                    max_hp: 2,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 1,
+                    attrs: MobAttrs {
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('s', Color::srgb(0.7, 0.4, 0.9)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 3,
+                    name: "Stan".to_string(),
                     kind: *self,
                 },
             },
@@ -1811,6 +1890,7 @@ pub(crate) fn gen_map(
             upgrade_options: vec![],
             subscriptions: vec![],
             food_cooldowns: HashMap::default(),
+            is_raided: false,
         },
         Creature {
             hp: 10,
