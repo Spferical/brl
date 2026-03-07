@@ -295,17 +295,19 @@ pub fn update_money_timer(time: Res<Time>, mut player: Single<&mut Player>) {
     }
 }
 
-pub fn handle_payout(
+fn apply_payout(
     player: &mut Player,
     streaming_state: &StreamingState,
     chat: &mut ChatHistory,
-    creature_name: &str,
+    multiplier: f32,
+    message_pool: &[&str],
+    debug_reason: &str,
 ) {
     if streaming_state.is_streaming && streaming_state.viewers > 0 {
         let mut rng = rand::rng();
 
         // $1 per 100 viewers
-        let base_payout = (streaming_state.viewers as f32 / 100.0).max(1.0);
+        let base_payout = (streaming_state.viewers as f32 / 100.0).max(1.0) * multiplier;
 
         // Add randomness: 20% to 250% of base
         let random_factor = rng.random_range(0.2..2.5);
@@ -321,8 +323,8 @@ pub fn handle_payout(
 
         player.money += payout;
         println!(
-            "DEBUG: Payout of ${} with {} viewers because {} died",
-            payout, streaming_state.viewers, creature_name
+            "DEBUG: Payout of ${} with {} viewers because {}",
+            payout, streaming_state.viewers, debug_reason
         );
         player.last_gain_amount = payout;
         player.money_gain_timer = 2.0;
@@ -332,7 +334,7 @@ pub fn handle_payout(
         let pool = if is_whale {
             WHALE_MESSAGES
         } else {
-            DONO_MESSAGES
+            message_pool
         };
         let text = pool.choose(&mut rng).unwrap().to_string();
 
@@ -343,6 +345,38 @@ pub fn handle_payout(
             donation: Some(payout),
         });
     }
+}
+
+pub fn handle_payout(
+    player: &mut Player,
+    streaming_state: &StreamingState,
+    chat: &mut ChatHistory,
+    creature_name: &str,
+) {
+    apply_payout(
+        player,
+        streaming_state,
+        chat,
+        1.0,
+        DONO_MESSAGES,
+        &format!("{} died", creature_name),
+    );
+}
+
+pub fn handle_food_payout(
+    player: &mut Player,
+    streaming_state: &StreamingState,
+    chat: &mut ChatHistory,
+    food_name: &str,
+) {
+    apply_payout(
+        player,
+        streaming_state,
+        chat,
+        2.0,
+        FOOD_MESSAGES,
+        &format!("player ate {}", food_name),
+    );
 }
 
 pub fn queue_mog_message(chat: &mut ChatHistory, streaming_state: &StreamingState) {

@@ -742,12 +742,20 @@ pub(crate) struct CookedMeal {
 pub(crate) fn handle_eat(
     mut events: MessageReader<EatEvent>,
     player_query: Single<(&mut Player, &mut Creature)>,
-    food_query: Query<(Option<&delivery::Food>, Option<&CookedMeal>, Has<Ambrosia>)>,
+    food_query: Query<(
+        Option<&delivery::Food>,
+        Option<&CookedMeal>,
+        Has<Ambrosia>,
+        Option<&Name>,
+    )>,
     mut commands: Commands,
+    streaming_state: Res<chat::StreamingState>,
+    mut chat: ResMut<chat::ChatHistory>,
 ) {
     let (mut player, mut creature) = player_query.into_inner();
     for event in events.read() {
-        if let Ok((food, cooked, is_ambrosia)) = food_query.get(event.0) {
+        if let Ok((food, cooked, is_ambrosia, name)) = food_query.get(event.0) {
+            let mut name_str = name.map(|n| n.as_str()).unwrap_or("Something unknown");
             if is_ambrosia {
                 use rand::Rng;
                 let mut rng = rand::rng();
@@ -758,12 +766,14 @@ pub(crate) fn handle_eat(
                     _ => player.strength += amount,
                 }
                 creature.hp = (creature.hp + 1).clamp(0, creature.max_hp);
+                name_str = "Ambrosia";
             } else if let Some(food) = food {
                 let food_item = delivery::FOODS[food.food_idx];
                 player.hunger = (player.hunger + food_item.hunger).clamp(0, 100);
                 player.strength += food_item.strength;
                 player.rizz += food_item.rizz;
                 creature.hp = (creature.hp + food_item.hp).clamp(0, creature.max_hp);
+                name_str = food_item.name;
             } else if let Some(cooked) = cooked {
                 player.hunger = (player.hunger - cooked.hunger).clamp(0, 100);
                 player.strength += cooked.strength;
@@ -772,6 +782,8 @@ pub(crate) fn handle_eat(
                 player.apply_boredom(&mut creature, -cooked.boredom);
                 creature.hp = (creature.hp + cooked.hp).clamp(0, creature.max_hp);
             }
+
+            chat::handle_food_payout(&mut player, &streaming_state, &mut chat, name_str);
             commands.entity(event.0).despawn();
         }
     }
