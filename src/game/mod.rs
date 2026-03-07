@@ -3109,7 +3109,7 @@ pub struct GameResetParams<'w> {
 pub fn enter(
     mut commands: Commands,
     assets: Res<assets::WorldAssets>,
-    q_camera: Single<Entity, With<PrimaryCamera>>,
+    _q_camera: Single<Entity, With<PrimaryCamera>>,
     mut params: GameResetParams,
 ) {
     let world = (
@@ -3147,7 +3147,7 @@ pub fn enter(
     examine::init_examine_highlight(world, &mut commands, &assets);
     #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]
     {
-        lighting::enable_lighting(&mut commands, *q_camera);
+        lighting::enable_lighting(&mut commands, *_q_camera);
     }
     mapgen::gen_map(world, &mut commands, assets, &mut params.map_info);
 
@@ -3156,7 +3156,7 @@ pub fn enter(
 
 pub fn exit(
     mut commands: Commands,
-    q_camera: Single<Entity, With<PrimaryCamera>>,
+    _q_camera: Single<Entity, With<PrimaryCamera>>,
     game_world: Query<Entity, With<GameWorld>>,
 ) {
     for world in game_world.iter() {
@@ -3165,7 +3165,7 @@ pub fn exit(
     #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]
     {
         info!("got here!");
-        lighting::disable_lighting(&mut commands, *q_camera);
+        lighting::disable_lighting(&mut commands, *_q_camera);
     }
 }
 

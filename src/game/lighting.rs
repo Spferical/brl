@@ -6,6 +6,7 @@ use crate::game::{Player, assets::WorldAssets, map::BlocksMovement};
 #[derive(Component, Default, Clone, Copy, Reflect)]
 pub struct Occluder;
 
+#[allow(dead_code)]
 pub fn enable_lighting(commands: &mut Commands, camera_entity: Entity) {
     commands.entity(camera_entity).insert(FireflyConfig {
         ambient_color: Color::from(WHITE),
@@ -15,6 +16,7 @@ pub fn enable_lighting(commands: &mut Commands, camera_entity: Entity) {
     });
 }
 
+#[allow(dead_code)]
 pub fn disable_lighting(commands: &mut Commands, camera_entity: Entity) {
     commands.entity(camera_entity).remove::<FireflyConfig>();
 }
