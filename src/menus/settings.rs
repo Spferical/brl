@@ -17,6 +17,7 @@ pub(super) fn plugin(app: &mut App) {
 fn settings_menu(
     mut contexts: EguiContexts,
     mut global_volume: ResMut<GlobalVolume>,
+    mut lighting_settings: ResMut<crate::game::lighting::LightingSettings>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
     screen: Res<State<Screen>>,
     mut next_menu: ResMut<NextState<Menu>>,
@@ -42,6 +43,12 @@ fn settings_menu(
                     })
                     .text("Volume"),
                 );
+
+                #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]
+                {
+                    ui.checkbox(&mut lighting_settings.fancy_lighting, "Fancy Lighting");
+                }
+
                 if ui.button("Back").clicked() || keyboard_input.just_pressed(KeyCode::Escape) {
                     next_menu.set(if screen.get() == &Screen::Title {
                         Menu::Main

@@ -83,6 +83,8 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<NearbyMobs>();
     app.init_resource::<LastTitleDropLevel>();
     app.init_resource::<DebugSettings>();
+    #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]
+    app.init_resource::<lighting::LightingSettings>();
     app.init_resource::<examine::ExaminePos>();
     app.init_resource::<examine::ExamineResults>();
     app.init_resource::<input::InputMode>();
@@ -106,6 +108,7 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         Update,
         (
+            lighting::update_lighting,
             lighting::on_add_occluder,
             lighting::on_add_player,
             input::handle_input.run_if(is_player_alive.and(phone::is_phone_closed)),
@@ -3443,6 +3446,7 @@ pub struct GameResetParams<'w> {
     pub nearby_mobs: ResMut<'w, NearbyMobs>,
     pub last_title_drop_level: ResMut<'w, LastTitleDropLevel>,
     pub player_memory_map: ResMut<'w, PlayerMemoryMap>,
+    pub lighting_settings: Res<'w, lighting::LightingSettings>,
     pub game_over_info: ResMut<'w, crate::screens::game_over::GameOverInfo>,
 }
 
@@ -3488,7 +3492,9 @@ pub fn enter(
     examine::init_examine_highlight(world, &mut commands, &assets);
     #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]
     {
-        lighting::enable_lighting(&mut commands, *_q_camera);
+        if params.lighting_settings.fancy_lighting {
+            lighting::enable_lighting(&mut commands, *_q_camera);
+        }
     }
     mapgen::gen_map(world, &mut commands, assets, &mut params.map_info);
 

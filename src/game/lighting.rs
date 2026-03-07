@@ -6,6 +6,35 @@ use crate::game::{Player, assets::WorldAssets, map::BlocksMovement};
 #[derive(Component, Default, Clone, Copy, Reflect)]
 pub struct Occluder;
 
+#[derive(Resource, Reflect, Debug, Clone, Copy)]
+pub struct LightingSettings {
+    pub fancy_lighting: bool,
+}
+
+impl Default for LightingSettings {
+    fn default() -> Self {
+        Self {
+            fancy_lighting: true,
+        }
+    }
+}
+
+pub(super) fn update_lighting(
+    mut commands: Commands,
+    settings: Res<LightingSettings>,
+    q_camera: Query<Entity, With<crate::PrimaryCamera>>,
+) {
+    if settings.is_changed() {
+        if let Some(camera_entity) = q_camera.iter().next() {
+            if settings.fancy_lighting {
+                enable_lighting(&mut commands, camera_entity);
+            } else {
+                disable_lighting(&mut commands, camera_entity);
+            }
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub fn enable_lighting(commands: &mut Commands, camera_entity: Entity) {
     commands.entity(camera_entity).insert(FireflyConfig {
