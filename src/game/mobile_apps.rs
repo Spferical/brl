@@ -281,27 +281,37 @@ impl DungeonDash {
 
             ui.add_space(40.0 * scale);
 
-            let work_button_color = if dd_selection.deliveries_this_level >= 3 {
+            let low_customer_count = dd_selection.current_mobs * 3 < dd_selection.initial_mobs;
+
+            let work_button_color = if dd_selection.deliveries_this_level >= 3 || low_customer_count
+            {
                 Color32::from_rgba_unmultiplied(100, 100, 100, alpha)
             } else {
                 button_color
             };
 
+            let work_button_text = if dd_selection.deliveries_this_level >= 3 {
+                "Max deliveries reached!"
+            } else if low_customer_count {
+                "Not enough customers in your area"
+            } else {
+                "DungeonDash for $$$"
+            };
+
             let work_button = ui.add(
                 egui::Button::new(
-                    RichText::new(if dd_selection.deliveries_this_level >= 3 {
-                        "Max deliveries reached!"
-                    } else {
-                        "DungeonDash for $$$"
-                    })
-                    .size(48.0 * scale)
-                    .color(Color32::BLACK),
+                    RichText::new(work_button_text)
+                        .size(48.0 * scale)
+                        .color(Color32::BLACK),
                 )
                 .fill(work_button_color)
                 .stroke(egui::Stroke::new(2.0, Color32::BLACK)),
             );
 
-            if work_button.clicked() && dd_selection.deliveries_this_level < 3 {
+            if work_button.clicked()
+                && dd_selection.deliveries_this_level < 3
+                && !low_customer_count
+            {
                 next_dd_screen.set(DungeonDashScreen::JobOffer);
 
                 // Pick an open location on the current level for the delivery location

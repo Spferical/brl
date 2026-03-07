@@ -136,6 +136,7 @@ pub(super) fn plugin(app: &mut App) {
             examine::update_examine_info,
             examine::highlight_examine_tile,
             delivery::draw_delivery_indicators,
+            delivery::update_current_mobs,
             upgrades::handle_upgrades,
             debug::teleport_player,
         )
@@ -3141,7 +3142,7 @@ fn update_level_info_on_change(
     map_info: Res<MapInfo>,
     mut last_level: ResMut<LastTitleDropLevel>,
     player: Single<(&MapPos, &mut Player), (With<Player>, Changed<MapPos>)>,
-    all_map_pos: Query<(Entity, &MapPos), Without<Player>>,
+    all_map_pos: Query<(Entity, &MapPos, Option<&Mob>), Without<Player>>,
     all_spawn_zones: Query<(Entity, &MinSpawnZone)>,
     mut dd_selection: ResMut<DungeonDashState>,
 ) {
@@ -3153,6 +3154,13 @@ fn update_level_info_on_change(
         msg_td.write(TitleDropMessage(format!("{}", cur_map.ty)));
 
         dd_selection.deliveries_this_level = 0;
+        let mob_count = all_map_pos
+            .iter()
+            .filter(|(_, map_pos, mob)| {
+                mob.is_some() && cur_map.rect.contains(rogue_algebra::Pos::from(map_pos.0))
+            })
+            .count() as u32;
+        dd_selection.initial_mobs = mob_count;
 
         if let Some(target) = dd_selection.job_target {
             if !cur_map.rect.contains(rogue_algebra::Pos::from(target.0)) {
@@ -3161,7 +3169,7 @@ fn update_level_info_on_change(
         }
 
         // Handle freezing/unfreezing
-        for (entity, map_pos) in all_map_pos.iter() {
+        for (entity, map_pos, _) in all_map_pos.iter() {
             if cur_map.rect.contains(rogue_algebra::Pos::from(map_pos.0)) {
                 commands.entity(entity).remove::<Frozen>();
             } else {

@@ -32,6 +32,8 @@ pub struct DungeonDashState {
     pub customer_entity: Option<Entity>,
     pub dropped_food_entity: Option<Entity>,
     pub deliveries_this_level: u32,
+    pub initial_mobs: u32,
+    pub current_mobs: u32,
 }
 
 impl DungeonDashState {
@@ -587,5 +589,24 @@ pub fn process_dungeon_dash_jobs(
 
             dd_state.fail_job(&mut commands);
         }
+    }
+}
+
+pub fn update_current_mobs(
+    mut dd_state: ResMut<DungeonDashState>,
+    map_info: Res<crate::game::mapgen::MapInfo>,
+    player_query: Single<&crate::game::map::MapPos, With<crate::game::Player>>,
+    mob_query: Query<
+        &crate::game::map::MapPos,
+        (With<crate::game::Mob>, Without<crate::game::Player>),
+    >,
+) {
+    let player_pos = player_query.into_inner();
+    if let Some(level) = map_info.get_level(*player_pos) {
+        let count = mob_query
+            .iter()
+            .filter(|&pos| level.rect.contains(rogue_algebra::Pos::from(pos.0)))
+            .count();
+        dd_state.current_mobs = count as u32;
     }
 }
