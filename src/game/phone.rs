@@ -248,6 +248,7 @@ pub fn draw_phone(
     mut dd_selection: ResMut<DungeonDashSelection>,
     mut msg_upgrade: MessageWriter<UpgradeMessage>,
     mut cockatrice_state: ResMut<mobile_apps::CockatriceState>,
+    map_info: Res<crate::game::mapgen::MapInfo>,
 ) {
     let (mut player, mut creature, player_pos) = player_query.into_inner();
     let texture_id = contexts.add_image(EguiTextureHandle::Weak(assets.phone.id()));
@@ -592,6 +593,7 @@ pub fn draw_phone(
                                 &mut msg_upgrade,
                                 &mut next_screen,
                                 &mut cockatrice_state,
+                                &map_info,
                             );
                         }
                     }

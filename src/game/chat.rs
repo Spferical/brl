@@ -622,6 +622,19 @@ pub fn draw_streaming_indicator(
                         );
                     }
                 });
+            } else if dd_selection.cancelled_job_turns.is_some() {
+                ui.horizontal(|ui| {
+                    ui.add_space(30.0); // Indent a bit
+                    ui.label(
+                        RichText::new("Order cancelled by customer")
+                            .color(Color32::GRAY)
+                            .font(egui::FontId::new(
+                                16.0,
+                                egui::FontFamily::Name("press_start".into()),
+                            ))
+                            .strong(),
+                    );
+                });
             } else if dd_selection.failed_job_turns.is_some() {
                 ui.horizontal(|ui| {
                     ui.add_space(30.0); // Indent a bit

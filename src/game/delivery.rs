@@ -277,39 +277,59 @@ pub(crate) fn draw_delivery_indicators(
 
         // Draw offscreen arrow
         let (camera, camera_transform) = *q_camera;
-        if let Some(ndc) = camera.world_to_ndc(camera_transform, center.extend(0.0)) {
-            // Check if point is outside the screen in NDC space (-1 to 1)
-            if ndc.x < -1.0 || ndc.x > 1.0 || ndc.y < -1.0 || ndc.y > 1.0 {
-                // Direction from center of screen to target in NDC
-                let dir = ndc.truncate().normalize();
+        if let Ok(viewport_pos) = camera.world_to_viewport(camera_transform, center.extend(0.0)) {
+            let Some(viewport_size) = camera.logical_viewport_size() else {
+                return;
+            };
 
-                // Raycast to find intersection with screen edge in NDC space
-                let mut edge_ndc = dir;
+            // Check if point is outside the viewport
+            if viewport_pos.x < 0.0
+                || viewport_pos.x > viewport_size.x
+                || viewport_pos.y < 0.0
+                || viewport_pos.y > viewport_size.y
+            {
+                let viewport_center = viewport_size / 2.0;
+                let dir_to_target = (viewport_pos - viewport_center).normalize();
 
-                // Scale until we hit an edge
-                let scale_x = if dir.x.abs() > 0.0 {
-                    1.0 / dir.x.abs()
+                // Direction in world space for the arrow rotation
+                // We use NDC to get world direction as viewport is y-down
+                let mut dir_world = Vec2::ZERO;
+                if let Some(ndc) = camera.world_to_ndc(camera_transform, center.extend(0.0)) {
+                    dir_world = ndc.truncate().normalize();
+                }
+
+                // Raycast to find intersection with screen edge in viewport space
+                let mut edge_viewport = viewport_center;
+
+                let dx = dir_to_target.x;
+                let dy = dir_to_target.y;
+
+                let t_x = if dx > 0.0 {
+                    (viewport_size.x - viewport_center.x) / dx
+                } else if dx < 0.0 {
+                    (0.0 - viewport_center.x) / dx
                 } else {
                     f32::MAX
                 };
-                let scale_y = if dir.y.abs() > 0.0 {
-                    1.0 / dir.y.abs()
+
+                let t_y = if dy > 0.0 {
+                    (viewport_size.y - viewport_center.y) / dy
+                } else if dy < 0.0 {
+                    (0.0 - viewport_center.y) / dy
                 } else {
                     f32::MAX
                 };
-                let scale = scale_x.min(scale_y);
 
-                edge_ndc *= scale;
-                // Pull back slightly so arrow isn't cut off
-                edge_ndc *= 0.9;
+                let t = t_x.min(t_y);
+                edge_viewport += dir_to_target * t * 0.95; // 5% margin
 
                 // Convert back to world space for gizmos
-                if let Some(world_pos) = camera.ndc_to_world(camera_transform, edge_ndc.extend(0.0))
-                {
-                    let arrow_center = world_pos.truncate();
+                if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, edge_viewport) {
+                    let arrow_center = world_pos;
                     let arrow_length = 30.0;
                     let arrow_width = 15.0;
 
+                    let dir = dir_world;
                     let back = arrow_center - dir * arrow_length;
                     let left =
                         arrow_center - dir * arrow_width + Vec2::new(-dir.y, dir.x) * arrow_width;

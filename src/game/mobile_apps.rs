@@ -62,7 +62,9 @@ pub struct DungeonDashSelection {
     pub job_distance: i32,
     pub active_job_turns: Option<u32>,
     pub active_job_amount: Option<i32>,
+    pub job_turns_at_completion: Option<u32>,
     pub failed_job_turns: Option<u32>,
+    pub cancelled_job_turns: Option<u32>,
     pub spawn_customer_at: Option<crate::game::map::MapPos>,
     pub customer_entity: Option<Entity>,
     pub dropped_food_entity: Option<Entity>,
@@ -121,6 +123,7 @@ pub trait MobileApp: Send + Sync {
         msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         next_phone_screen: &mut NextState<PhoneScreen>,
         cockatrice_state: &mut CockatriceState,
+        map_info: &crate::game::mapgen::MapInfo,
     );
 }
 
@@ -154,6 +157,7 @@ impl MobileApp for Crawlr {
         _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         _next_phone_screen: &mut NextState<PhoneScreen>,
         _cockatrice_state: &mut CockatriceState,
+        _map_info: &crate::game::mapgen::MapInfo,
     ) {
     }
 }
@@ -188,6 +192,7 @@ impl MobileApp for DungeonDash {
         _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         _next_phone_screen: &mut NextState<PhoneScreen>,
         _cockatrice_state: &mut CockatriceState,
+        map_info: &crate::game::mapgen::MapInfo,
     ) {
         let role_selection_alpha = ui.ctx().animate_bool_with_time(
             egui::Id::new("dd_role_selection_alpha"),
@@ -238,6 +243,9 @@ impl MobileApp for DungeonDash {
                 combined_alpha,
                 next_dd_screen,
                 dd_selection,
+                player_pos,
+                walk_blocked_map,
+                map_info,
             );
         } else if *dd_screen == DungeonDashScreen::Checkout {
             self.draw_checkout(
@@ -363,7 +371,57 @@ impl DungeonDash {
         alpha: u8,
         next_dd_screen: &mut NextState<DungeonDashScreen>,
         dd_selection: &mut DungeonDashSelection,
+        player_pos: &crate::game::map::MapPos,
+        walk_blocked_map: &crate::game::map::WalkBlockedMap,
+        map_info: &crate::game::mapgen::MapInfo,
     ) {
+        if let Some(work_button) = ui.data_mut(|d| d.get_temp::<egui::Response>(egui::Id::new("work_button"))) {
+            if work_button.clicked() && dd_selection.deliveries_this_level < 3 {
+                next_dd_screen.set(DungeonDashScreen::JobOffer);
+
+                // Pick an open location on the current level for the delivery location
+                let maxdist = 50; // allow far away targets for jobs
+                let reachable = |p: crate::game::map::MapPos| {
+                    p.adjacent()
+                        .into_iter()
+                        .filter(|adj| !walk_blocked_map.0.contains(&adj.0))
+                        .collect::<Vec<_>>()
+                };
+
+                let current_level = map_info.get_level(*player_pos);
+
+                let mut possible_spots = vec![];
+                for path in rogue_algebra::path::bfs_paths(&[*player_pos], maxdist, reachable) {
+                    if let Some(pos) = path.last()
+                        && !walk_blocked_map.0.contains(&pos.0)
+                        && pos.0 != player_pos.0
+                    {
+                        // Check if the spot is within the current level's bounds
+                        let in_bounds = if let Some(level) = current_level {
+                            level.rect.contains(rogue_algebra::Pos::from(pos.0))
+                        } else {
+                            true
+                        };
+
+                        if in_bounds {
+                            possible_spots.push((pos.0, path.len() as i32 - 1));
+                        }
+                    }
+                }
+
+                if !possible_spots.is_empty() {
+                    use rand::seq::IndexedRandom;
+                    let mut rng = rand::rng();
+                    let (target, dist) = possible_spots.choose(&mut rng).unwrap();
+                    dd_selection.job_target = Some(crate::game::map::MapPos(*target));
+                    dd_selection.job_distance = *dist;
+                } else {
+                    dd_selection.job_target = None;
+                    dd_selection.job_distance = 0;
+                }
+            }
+        }
+
         ui.vertical_centered(|ui| {
             ui.add_space(80.0 * scale);
 
@@ -372,6 +430,16 @@ impl DungeonDash {
                     RichText::new(format!("Deliver order in {} turns", turns))
                         .size(40.0 * scale)
                         .color(Color32::from_rgba_unmultiplied(0, 0, 0, alpha)),
+                    player.brainrot,
+                    ui.style(),
+                    egui::FontSelection::Default,
+                    egui::Align::Center,
+                ));
+            } else if dd_selection.cancelled_job_turns.is_some() {
+                ui.label(apply_brainrot_ui(
+                    RichText::new("Order cancelled by customer")
+                        .size(40.0 * scale)
+                        .color(Color32::GRAY),
                     player.brainrot,
                     ui.style(),
                     egui::FontSelection::Default,
@@ -411,6 +479,9 @@ impl DungeonDash {
                     dd_selection.active_job_turns = Some(turn_limit as u32);
                     dd_selection.active_job_amount = Some(max_amount);
                     dd_selection.spawn_customer_at = dd_selection.job_target;
+                    dd_selection.cancelled_job_turns = None;
+                    dd_selection.failed_job_turns = None;
+                    dd_selection.job_turns_at_completion = None;
                 }
             } else {
                 ui.label(apply_brainrot_ui(
@@ -1052,6 +1123,7 @@ impl MobileApp for UndergroundTV {
         _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         _next_phone_screen: &mut NextState<PhoneScreen>,
         _cockatrice_state: &mut CockatriceState,
+        _map_info: &crate::game::mapgen::MapInfo,
     ) {
         ui.add_space(ui.available_height() * 0.4);
         let is_low_signal = player.signal <= 2;
@@ -1136,6 +1208,7 @@ impl MobileApp for Cockatrice {
         _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         _next_phone_screen: &mut NextState<PhoneScreen>,
         cockatrice_state: &mut CockatriceState,
+        _map_info: &crate::game::mapgen::MapInfo,
     ) {
         if cockatrice_state.tweets.is_empty() {
             ui.add_space(ui.available_height() * 0.4);
@@ -1379,6 +1452,7 @@ impl MobileApp for Upgrade {
         msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         next_phone_screen: &mut NextState<PhoneScreen>,
         _cockatrice_state: &mut CockatriceState,
+        _map_info: &crate::game::mapgen::MapInfo,
     ) {
         ui.add_space(40.0 * scale);
         ui.label(apply_brainrot_ui(
@@ -1480,10 +1554,31 @@ pub fn process_dungeon_dash_jobs(
     mut floating_text: MessageWriter<crate::game::animation::FloatingTextMessage>,
     player_query: Single<(Entity, &crate::game::map::MapPos, &mut crate::game::Player)>,
     walk_blocked_map: Res<crate::game::map::WalkBlockedMap>,
-    mut mob_query: Query<(&crate::game::map::MapPos, &mut crate::game::Mob)>,
+    mut mob_query: Query<(&crate::game::map::MapPos, &mut crate::game::Mob, &crate::game::Creature)>,
     food_query: Query<&crate::game::map::MapPos, With<crate::game::delivery::Food>>,
 ) {
     let (player_entity, player_pos, mut player) = player_query.into_inner();
+
+    if let Some(customer_entity) = dd_selection.customer_entity {
+        let is_dead = match mob_query.get(customer_entity) {
+            Ok((_, _, creature)) => creature.is_dead(),
+            Err(_) => true,
+        };
+        if dd_selection.active_job_turns.is_some() && is_dead {
+            // Customer is dead!
+            dd_selection.active_job_turns = None;
+            dd_selection.active_job_amount = None;
+            dd_selection.job_target = None;
+            dd_selection.customer_entity = None;
+            if let Some(food_entity) = dd_selection.dropped_food_entity.take() {
+                if let Ok(mut entity) = commands.get_entity(food_entity) {
+                    entity.despawn();
+                }
+            }
+            dd_selection.cancelled_job_turns = Some(10);
+            return;
+        }
+    }
 
     if let Some(target) = dd_selection.spawn_customer_at.take() {
         let customer = crate::game::spawn::spawn_mob(
@@ -1499,7 +1594,7 @@ pub fn process_dungeon_dash_jobs(
     if let Some(food_entity) = dd_selection.dropped_food_entity {
         if let Some(customer_entity) = dd_selection.customer_entity {
             if let Ok(food_pos) = food_query.get(food_entity) {
-                if let Ok((customer_pos, mut mob)) = mob_query.get_mut(customer_entity) {
+                if let Ok((customer_pos, mut mob, _creature)) = mob_query.get_mut(customer_entity) {
                     if customer_pos.0 == food_pos.0 {
                         // Picked up!
                         commands.entity(food_entity).despawn();
@@ -1507,7 +1602,10 @@ pub fn process_dungeon_dash_jobs(
                         let dist = dd_selection.job_distance as f32;
                         let max_amount = dd_selection.active_job_amount.unwrap_or(0) as f32;
                         let max_turns = (dist * 1.5) as u32;
-                        let turns_left = dd_selection.active_job_turns.unwrap_or(0);
+                        let turns_left = dd_selection
+                            .job_turns_at_completion
+                            .or(dd_selection.active_job_turns)
+                            .unwrap_or(0);
                         let turns_taken = max_turns.saturating_sub(turns_left);
 
                         let t1 = dist * 1.1;
@@ -1548,6 +1646,7 @@ pub fn process_dungeon_dash_jobs(
 
                         dd_selection.active_job_turns = None;
                         dd_selection.active_job_amount = None;
+                        dd_selection.job_turns_at_completion = None;
                         dd_selection.job_target = None;
                         dd_selection.failed_job_turns = None;
                         dd_selection.dropped_food_entity = None;
@@ -1616,11 +1715,14 @@ pub fn process_dungeon_dash_jobs(
                 .id();
             commands.entity(*world).add_child(drop_id);
             dd_selection.dropped_food_entity = Some(drop_id);
+            dd_selection.job_turns_at_completion = dd_selection.active_job_turns;
             dd_selection.job_target = None;
         }
     }
 
-    if let Some(mut turns) = dd_selection.active_job_turns {
+    if let Some(mut turns) = dd_selection.active_job_turns
+        && dd_selection.dropped_food_entity.is_none()
+    {
         if turns > 0 {
             turns -= 1;
             dd_selection.active_job_turns = Some(turns);
@@ -1638,8 +1740,13 @@ pub fn process_dungeon_dash_jobs(
 
             dd_selection.active_job_turns = None;
             dd_selection.active_job_amount = None;
+            dd_selection.job_turns_at_completion = None;
             dd_selection.job_target = None;
-            dd_selection.dropped_food_entity = None;
+            if let Some(food_entity) = dd_selection.dropped_food_entity.take() {
+                if let Ok(mut entity) = commands.get_entity(food_entity) {
+                    entity.despawn();
+                }
+            }
             dd_selection.failed_job_turns = Some(10);
         }
     }
@@ -1651,6 +1758,16 @@ pub fn process_dungeon_dash_jobs(
         }
         if f_turns == 0 {
             dd_selection.failed_job_turns = None;
+        }
+    }
+
+    if let Some(mut c_turns) = dd_selection.cancelled_job_turns {
+        if c_turns > 0 {
+            c_turns -= 1;
+            dd_selection.cancelled_job_turns = Some(c_turns);
+        }
+        if c_turns == 0 {
+            dd_selection.cancelled_job_turns = None;
         }
     }
 }
