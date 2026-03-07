@@ -406,6 +406,7 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 2,
+                    keepaway: true,
                     attrs: MobAttrs {
                         psychic_resist: Resist::Strong,
                         ..Default::default()
