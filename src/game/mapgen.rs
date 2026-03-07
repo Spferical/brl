@@ -791,7 +791,7 @@ impl MobKind {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum LevelTitle {
     Caves,
     Gym,
@@ -1716,16 +1716,19 @@ pub(crate) fn spawn_level(
                             ' '
                         },
                     ),
-                    FloorKind::Grass => (
-                        Color::srgb(0.2, 0.8, 0.2),
-                        if r <= 0.2 {
-                            '.'
-                        } else if r <= 0.6 {
-                            '\''
-                        } else {
-                            '"'
-                        },
-                    ),
+                    FloorKind::Grass => {
+                        tile.insert(map::Grass);
+                        (
+                            Color::srgb(0.2, 0.8, 0.2),
+                            if r <= 0.2 {
+                                '.'
+                            } else if r <= 0.6 {
+                                '\''
+                            } else {
+                                '"'
+                            },
+                        )
+                    }
                     FloorKind::Sand => (
                         Color::srgb(0.703, 0.658, 0.428),
                         if r <= 0.3 {

@@ -1056,8 +1056,24 @@ fn increment_turn_counter(mut counter: ResMut<TurnCounter>) {
     counter.0 += 1;
 }
 
-fn tick_meters(turn_counter: Res<TurnCounter>, player: Single<(&mut Player, &mut Creature)>) {
-    let (mut player, mut creature) = player.into_inner();
+fn tick_meters(
+    turn_counter: Res<TurnCounter>,
+    player: Single<(&mut Player, &mut Creature, &MapPos)>,
+    map_info: Res<mapgen::MapInfo>,
+    q_grass: Query<&MapPos, With<map::Grass>>,
+) {
+    let (mut player, mut creature, player_pos) = player.into_inner();
+
+    // Touching Grass logic
+    if let Some(level) = map_info.get_level(*player_pos) {
+        if level.ty == mapgen::LevelTitle::Minecraft {
+            if q_grass.iter().any(|gp| gp.0 == player_pos.0) {
+                if player.brainrot > 10 {
+                    player.brainrot = (player.brainrot - 2).max(10);
+                }
+            }
+        }
+    }
 
     // Decrement cooldowns
     for cooldown in player.ability_cooldowns.values_mut() {
@@ -3468,35 +3484,53 @@ pub fn exit(
     }
 }
 
-fn draw_hunger_warning(mut contexts: EguiContexts, player: Single<(&Player, &Creature)>) {
-    let (player, _creature) = player.into_inner();
-    if player.hunger < 100 {
+fn draw_hunger_warning(
+    mut contexts: EguiContexts,
+    player: Single<(&Player, &Creature, &MapPos)>,
+    map_info: Res<mapgen::MapInfo>,
+    q_grass: Query<&MapPos, With<map::Grass>>,
+) {
+    let (player, _creature, player_pos) = player.into_inner();
+
+    let mut is_touching_grass = false;
+    if let Some(level) = map_info.get_level(*player_pos) {
+        if level.ty == mapgen::LevelTitle::Minecraft {
+            if q_grass.iter().any(|gp| gp.0 == player_pos.0) {
+                is_touching_grass = true;
+            }
+        }
+    }
+
+    if player.hunger < 100 && !is_touching_grass {
         return;
     }
 
     let Ok(ctx) = contexts.ctx_mut() else {
         return;
     };
-    let text = if player.brainrot > 80 {
-        if player.strength == 0 {
-            "HUNGERMAXXING FR"
+
+    let (text, color) = if player.hunger >= 100 {
+        let text = if player.brainrot > 80 {
+            if player.strength == 0 {
+                "HUNGERMAXXING FR"
+            } else {
+                "HUNGERMAXXING"
+            }
+        } else if player.strength == 0 {
+            "STARVING TO DEATH"
         } else {
-            "HUNGERMAXXING"
-        }
-    } else if player.strength == 0 {
-        "STARVING TO DEATH"
+            "STARVING"
+        };
+        (text, egui::Color32::RED)
     } else {
-        "STARVING"
+        ("TOUCHING GRASS", egui::Color32::GREEN)
     };
 
     egui::Area::new(egui::Id::new("hunger_warning"))
         .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -20.0))
         .show(ctx, |ui| {
             ui.label(apply_brainrot_ui(
-                egui::RichText::new(text)
-                    .color(egui::Color32::RED)
-                    .size(56.0)
-                    .strong(),
+                egui::RichText::new(text).color(color).size(56.0).strong(),
                 player.brainrot,
                 ui.style(),
                 egui::FontSelection::Default,

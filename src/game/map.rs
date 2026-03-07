@@ -69,6 +69,9 @@ impl MapPos {
 pub struct Tile;
 
 #[derive(Component)]
+pub struct Grass;
+
+#[derive(Component)]
 pub struct BlocksMovement;
 
 #[derive(Default, Resource, Deref, DerefMut)]
