@@ -14,6 +14,7 @@ use bevy::{
     platform::collections::{HashMap, HashSet},
     prelude::*,
 };
+use noisy_bevy::simplex_noise_2d_seeded;
 use rand::{
     Rng,
     seq::{IndexedRandom, SliceRandom},
@@ -25,6 +26,7 @@ use rogue_algebra::Pos;
 enum FloorKind {
     Sand,
     Rock,
+    Grass,
     Custom(char, Color),
 }
 
@@ -528,6 +530,7 @@ pub enum LevelTitle {
     Island,
     AmogusSpaceship,
     Freddy,
+    Minecraft,
 }
 
 impl std::fmt::Display for LevelTitle {
@@ -540,6 +543,7 @@ impl std::fmt::Display for LevelTitle {
             LevelTitle::Island => "Mysterious Island",
             LevelTitle::AmogusSpaceship => "The Skeld",
             LevelTitle::Freddy => "Friendo's Pizza & Prizes",
+            LevelTitle::Minecraft => "A Blocky Wilderness",
         })
     }
 }
@@ -1315,6 +1319,55 @@ fn gen_freddy(_rng: &mut impl Rng) -> LevelDraft {
     }
 }
 
+fn gen_minecraft(rng: &mut impl Rng) -> LevelDraft {
+    let rect = rogue_algebra::Rect::new(0, 80, 0, 50);
+    let mut mapgen_builder = mapgen::MapBuilder::new(80, 50);
+    mapgen_builder
+        .with(mapgen::SimpleRooms::new())
+        .with(mapgen::NearestCorridors::new())
+        .with(mapgen::AreaStartingPosition::new(
+            mapgen::XStart::LEFT,
+            mapgen::YStart::CENTER,
+        ))
+        .with(mapgen::CullUnreachable::new())
+        .with(mapgen::DistantExit::new());
+    let mut draft = draft_level_mapgen_rs(
+        mapgen_builder,
+        &mut rand_8::rngs::StdRng::from_seed(rng.random()),
+        LevelTitle::Minecraft,
+    );
+
+    // second pass, generate mountain/grass/sand/water based on CA
+    let seed = rng.random();
+    for pos in rect {
+        let frequency = 1.0f32 / 20.0f32;
+        let n = simplex_noise_2d_seeded(
+            Vec2::new(pos.x as f32 * frequency, pos.y as f32 * frequency),
+            seed,
+        );
+        if n < -0.8 {
+            draft.tiles.insert(pos, TileKind::Water);
+        } else if n < -0.5 {
+            draft.tiles.insert(pos, TileKind::Floor(FloorKind::Sand));
+        } else if n < 0.0 {
+            draft.tiles.insert(pos, TileKind::Floor(FloorKind::Grass));
+        }
+    }
+
+    // bfs from entrance and cull any unreachable floors
+    let accessible_floors = rogue_algebra::path::bfs(&draft.entrances, 99, |p| {
+        rogue_algebra::CARDINALS
+            .into_iter()
+            .map(move |o| p + o)
+            .filter(|p| draft.tiles.get(p).map(|t| t.is_floor()).unwrap_or(false))
+    })
+    .collect::<HashSet<_>>();
+    draft
+        .tiles
+        .retain(|k, v| !v.is_floor() || accessible_floors.contains(k));
+    draft
+}
+
 pub(crate) fn spawn_level(
     name: String,
     rng: &mut impl rand::Rng,
@@ -1372,6 +1425,16 @@ pub(crate) fn spawn_level(
                             ','
                         } else {
                             ' '
+                        },
+                    ),
+                    FloorKind::Grass => (
+                        Color::srgb(0.2, 0.8, 0.2),
+                        if r <= 0.2 {
+                            '.'
+                        } else if r <= 0.6 {
+                            '\''
+                        } else {
+                            '"'
                         },
                     ),
                     FloorKind::Sand => (
@@ -1612,7 +1675,7 @@ pub(crate) fn gen_map(
             gen_amogus_spaceship(rng)
                 .with_walls()
                 .sprinkle_mobs(rng, AMOGUS_DIST, 20),
-            gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+            gen_minecraft(rng)
                 .with_walls()
                 .sprinkle_mobs(rng, GENERIC_DIST, 30),
         ],

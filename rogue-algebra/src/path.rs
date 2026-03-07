@@ -155,7 +155,7 @@ pub fn bfs<Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos>>(
     maxdist: usize,
     reachable: impl FnMut(Pos) -> T,
 ) -> impl Iterator<Item = Pos> {
-    bfs_paths(starts, maxdist, reachable).map(|mut path| path.pop().unwrap())
+    bfs_dist(starts, maxdist, reachable).map(|(_, p)| p)
 }
 
 pub fn build_dijkstra_map<'a, Pos: Clone + Hash + Eq, T: IntoIterator<Item = Pos> + 'a>(
