@@ -21,13 +21,14 @@ use rand::{
 use rand_8::SeedableRng;
 use rogue_algebra::Pos;
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 enum FloorKind {
     Sand,
     Rock,
+    Custom(char, Color),
 }
 
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
+#[derive(PartialEq, Clone, Copy, Debug)]
 enum TileKind {
     Floor(FloorKind),
     Water,
@@ -1297,6 +1298,11 @@ fn gen_freddy(_rng: &mut impl Rng) -> LevelDraft {
           ###############";
 
     let _room = create_prefab_room(&mut tiles, Pos::new(0, 0), prefab);
+    for t in tiles.values_mut() {
+        if let TileKind::Floor(..) = t {
+            *t = TileKind::Floor(FloorKind::Custom('.', Color::srgb(0.0, 0.0, 1.0)));
+        }
+    }
 
     LevelDraft {
         title: LevelTitle::Freddy,
@@ -1357,6 +1363,7 @@ pub(crate) fn spawn_level(
             TileKind::Floor(fk) => {
                 let r = rng.random::<f32>();
                 let (color, ch) = match fk {
+                    FloorKind::Custom(ch, color) => (color, ch),
                     FloorKind::Rock => (
                         Color::srgb(0.4, 0.4, 0.4),
                         if r <= 0.1 {
