@@ -1145,8 +1145,8 @@ impl LevelDraft {
             .tiles
             .iter()
             .filter(|(_p, t)| t.is_floor())
-            .filter(|(p, _t)| self.entrances.contains(p))
-            .filter(|(p, _t)| self.exits.contains(p))
+            .filter(|(p, _t)| !self.entrances.contains(p))
+            .filter(|(p, _t)| !self.exits.contains(p))
             .map(|(p, _t)| *p)
             .collect::<HashSet<_>>();
         for e in self.entrances.iter().chain(self.exits.iter()) {
