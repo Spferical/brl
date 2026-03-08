@@ -1,5 +1,5 @@
 use bevy::{
-    asset::{RenderAssetUsages, embedded_asset},
+    asset::RenderAssetUsages,
     image::{CompressedImageFormats, ImageSampler, ImageType},
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
