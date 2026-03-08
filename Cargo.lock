@@ -871,9 +871,8 @@ dependencies = [
 
 [[package]]
 name = "bevy_firefly"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2144d44cbed9c3e4908e4d2a2f0730211f2369eabb3b0c7d04f440da8b7a7a70"
+version = "0.18.1-alpha"
+source = "git+https://github.com/AnimatedRNG/firefly-fix-webgpu.git#3e63ee9113ff320ddadd32dd8963ac31c1e1a3ee"
 dependencies = [
  "bevy",
  "bitflags 2.10.0",
