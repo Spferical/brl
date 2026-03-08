@@ -1003,7 +1003,8 @@ pub enum LevelTitle {
     Caves,
     Gym,
     Dungeon,
-    Office,
+    Entrance,
+    Backrooms,
     Island,
     AmogusSpaceship,
     Freddy,
@@ -1016,7 +1017,8 @@ impl std::fmt::Display for LevelTitle {
             LevelTitle::Caves => "Some Caves",
             LevelTitle::Gym => "Dungeon Fitness",
             LevelTitle::Dungeon => "The Dungeon",
-            LevelTitle::Office => "Some Unpopulated Backrooms",
+            LevelTitle::Entrance => "Dungeon Entrance",
+            LevelTitle::Backrooms => "Tastelessly Carpeted Backrooms",
             LevelTitle::Island => "Mysterious Island",
             LevelTitle::AmogusSpaceship => "Sussy Ship",
             LevelTitle::Freddy => "Friendo's Pizza & Prizes",
@@ -1388,6 +1390,17 @@ pub fn gen_bsp_tree(rect: rogue_algebra::Rect, opts: BspSplitOpts, rng: &mut imp
     }
 }
 
+fn gen_backrooms(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
+    let mut draft = gen_offices(rng, rect);
+    draft.title = LevelTitle::Backrooms;
+    for t in draft.tiles.values_mut() {
+        if t.is_floor() {
+            *t = TileKind::Floor(FloorKind::Custom('.', Color::srgb(0.929, 0.749, 0.549)));
+        }
+    }
+    draft
+}
+
 fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
     let max_width = rng.random_range(4..=rect.width().min(8));
     let min_width = max_width / 2 - 1;
@@ -1444,7 +1457,7 @@ fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
         .collect::<Vec<_>>();
 
     LevelDraft {
-        title: LevelTitle::Office,
+        title: LevelTitle::Entrance,
         entrances: stairs[0..3].to_vec(),
         exits: stairs[3..].to_vec(),
         tiles,
@@ -2157,7 +2170,7 @@ pub(crate) fn gen_map(
     let mut level_drafts_per_depth = vec![
         vec![level_1_draft],
         vec![
-            gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+            gen_backrooms(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
                 .with_walls()
                 .sprinkle_mobs(rng, BACKROOM_DIST, 20),
             gen_dungeon_fitness(rng)
