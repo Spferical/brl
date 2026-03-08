@@ -119,7 +119,10 @@ pub(crate) fn handle_upgrades(
                         player_creature.max_hp += amt;
                         player_creature.hp += amt;
                     }
-                    Attr::Brainrot => player.brainrot += amt,
+                    Attr::Brainrot => {
+                        player.brainrot += amt;
+                        player.brainrot = player.brainrot.max(0);
+                    }
                     Attr::Money => player.money += amt,
                     Attr::Rizz => player.rizz += amt,
                     Attr::Strength => player.strength += amt,
