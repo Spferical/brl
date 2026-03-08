@@ -9,7 +9,7 @@ use crate::game::chat::StreamingState;
 use crate::game::delivery::{DungeonDashScreen, DungeonDashState as DungeonDashSelection, FOODS};
 use crate::game::phone::{PhoneScreen, PhoneState};
 use crate::game::upgrades::{UPGRADES, UpgradeMessage};
-use crate::game::{Creature, Mob, Player, FRIENDLY_FACTION};
+use crate::game::{ALLIED_FACTION, Creature, Mob, Player};
 
 const FROG_HANDLES: &[&str] = &["@Hopper", "@Ribbit", "@SwampKing"];
 const GYM_BRO_HANDLES: &[&str] = &["@LiftHeavy", "@ProteinShake", "@DoYouEvenLift"];
@@ -107,18 +107,16 @@ pub fn update_crawlr(
     mut state: ResMut<CrawlrState>,
     turn_counter: Res<crate::game::TurnCounter>,
     player_query: Single<(&mut Player, &crate::game::map::MapPos)>,
-    mut mob_query: Query<
-        (
-            Entity,
-            &mut Creature,
-            &Name,
-            &Text2d,
-            &TextColor,
-            &crate::game::DropsCorpse,
-            &crate::game::map::MapPos,
-            &mut Mob,
-        ),
-    >,
+    mut mob_query: Query<(
+        Entity,
+        &mut Creature,
+        &Name,
+        &Text2d,
+        &TextColor,
+        &crate::game::DropsCorpse,
+        &crate::game::map::MapPos,
+        &mut Mob,
+    )>,
     mut phone_state: ResMut<PhoneState>,
 ) {
     let (mut player, player_pos) = player_query.into_inner();
@@ -176,7 +174,7 @@ pub fn update_crawlr(
 
             // Make them friendly
             if let Ok((_, mut creature, _, _, _, _, _, mut mob)) = mob_query.get_mut(entity) {
-                creature.faction = FRIENDLY_FACTION;
+                creature.faction = ALLIED_FACTION;
                 mob.attrs.friendly = true;
                 mob.target = None;
             }
@@ -184,7 +182,9 @@ pub fn update_crawlr(
     }
 
     // Clean up dead mobs from matches
-    state.matches.retain(|&e| mob_query.get(e).is_ok_and(|m| m.1.hp > 0));
+    state
+        .matches
+        .retain(|&e| mob_query.get(e).is_ok_and(|m| m.1.hp > 0));
 
     // Update potential matches pool for the UI
     state.last_mobs.clear();
@@ -203,7 +203,8 @@ pub fn update_crawlr(
                 crate::game::mapgen::MobKind::GymBro => seeded_rng.random_range(18..45),
                 crate::game::mapgen::MobKind::Influencer => seeded_rng.random_range(18..35),
                 crate::game::mapgen::MobKind::Normie => seeded_rng.random_range(18..80),
-                crate::game::mapgen::MobKind::AmogusCrew | crate::game::mapgen::MobKind::AmogusImpostor => seeded_rng.random_range(0..999),
+                crate::game::mapgen::MobKind::AmogusCrew
+                | crate::game::mapgen::MobKind::AmogusImpostor => seeded_rng.random_range(0..999),
                 crate::game::mapgen::MobKind::Capybara => seeded_rng.random_range(1..15),
                 _ => seeded_rng.random_range(18..99),
             };
@@ -246,8 +247,13 @@ pub fn update_crawlr(
         if rng.random_bool(chance) {
             // Find nearby mobs (50 tile radius)
             let mut nearby_mobs = vec![];
-            for (entity, creature, _name, _text, _color, corpse, mob_pos, mob) in mob_query.iter_mut() {
-                if creature.hp <= 0 || state.matches.contains(&entity) || state.swiped_entities.contains(&entity) {
+            for (entity, creature, _name, _text, _color, corpse, mob_pos, mob) in
+                mob_query.iter_mut()
+            {
+                if creature.hp <= 0
+                    || state.matches.contains(&entity)
+                    || state.swiped_entities.contains(&entity)
+                {
                     continue;
                 }
                 let diff = (player_pos.0 - mob_pos.0).abs();
@@ -260,7 +266,9 @@ pub fn update_crawlr(
             if !nearby_mobs.is_empty() {
                 use rand::seq::IndexedMutRandom;
                 // Weighted selection
-                if let Ok(matched_mob) = nearby_mobs.choose_weighted_mut(&mut rng, |m| m.1 as f32 + 1.0) {
+                if let Ok(matched_mob) =
+                    nearby_mobs.choose_weighted_mut(&mut rng, |m| m.1 as f32 + 1.0)
+                {
                     state.matches.push(matched_mob.0);
                     state.has_new_match = true;
                     phone_state.vibrate_timer = 0.5;
@@ -270,9 +278,9 @@ pub fn update_crawlr(
                         teletype_index: 0,
                         teletype_timer: 0.05,
                     });
-                    
+
                     // Make them friendly
-                    matched_mob.2.faction = FRIENDLY_FACTION;
+                    matched_mob.2.faction = ALLIED_FACTION;
                     matched_mob.3.attrs.friendly = true;
                     matched_mob.3.target = None;
                 }
@@ -402,10 +410,8 @@ impl MobileApp for Crawlr {
         // Profile Card
         let card_width = ui.available_width() * 0.9;
         let card_height = ui.available_height() * 0.7;
-        let (mut rect, _response) = ui.allocate_exact_size(
-            egui::vec2(card_width, card_height),
-            egui::Sense::hover(),
-        );
+        let (mut rect, _response) =
+            ui.allocate_exact_size(egui::vec2(card_width, card_height), egui::Sense::hover());
 
         rect.min.x += swipe_offset;
         rect.max.x += swipe_offset;
@@ -443,14 +449,14 @@ impl MobileApp for Crawlr {
             let color = mob.color;
 
             let text_job = crate::game::apply_brainrot_ui(
-                RichText::new(glyph).size(250.0 * scale).color(
-                    Color32::from_rgba_unmultiplied(
+                RichText::new(glyph)
+                    .size(250.0 * scale)
+                    .color(Color32::from_rgba_unmultiplied(
                         color.r(),
                         color.g(),
                         color.b(),
                         (color.a() as f32 * (card_alpha as f32 / 255.0)) as u8,
-                    ),
-                ),
+                    )),
                 player.brainrot,
                 ui.style(),
                 egui::FontSelection::Default,
@@ -499,9 +505,12 @@ impl MobileApp for Crawlr {
             ui.add_space(10.0 * scale);
 
             ui.label(crate::game::apply_brainrot_ui(
-                RichText::new(format!("{} • {} tiles away", mob.gender, mob.distance as i32))
-                    .size(24.0 * scale)
-                    .color(Color32::from_rgba_unmultiplied(100, 100, 100, card_alpha)),
+                RichText::new(format!(
+                    "{} • {} tiles away",
+                    mob.gender, mob.distance as i32
+                ))
+                .size(24.0 * scale)
+                .color(Color32::from_rgba_unmultiplied(100, 100, 100, card_alpha)),
                 player.brainrot,
                 ui.style(),
                 egui::FontSelection::Default,

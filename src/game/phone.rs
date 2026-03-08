@@ -506,7 +506,8 @@ pub fn draw_phone(
                     // Notification dot
                     if phone_state.unread_notification == Some(app_id) {
                         let dot_radius = 12.0 * scale_x;
-                        let dot_center = base_icon_rect.right_top() + egui::vec2(-dot_radius, dot_radius);
+                        let dot_center =
+                            base_icon_rect.right_top() + egui::vec2(-dot_radius, dot_radius);
                         ui.painter().circle_filled(
                             dot_center,
                             dot_radius,
@@ -515,7 +516,10 @@ pub fn draw_phone(
                         ui.painter().circle_stroke(
                             dot_center,
                             dot_radius,
-                            egui::Stroke::new(2.0, Color32::from_rgba_unmultiplied(255, 255, 255, home_alpha)),
+                            egui::Stroke::new(
+                                2.0,
+                                Color32::from_rgba_unmultiplied(255, 255, 255, home_alpha),
+                            ),
                         );
                     }
                 }

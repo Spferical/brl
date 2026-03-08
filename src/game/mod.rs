@@ -65,6 +65,7 @@ const TILE_Z: f32 = 0.0;
 
 pub(crate) const PLAYER_FACTION: i32 = 0;
 pub(crate) const FRIENDLY_FACTION: i32 = 2;
+pub(crate) const ALLIED_FACTION: i32 = 3;
 const ENEMY_FACTION: i32 = -1;
 
 const UI_GREEN: egui::Color32 = egui::Color32::from_rgb(65, 163, 109);
@@ -152,12 +153,11 @@ pub(super) fn plugin(app: &mut App) {
                 examine::update_examine_info,
                 examine::highlight_examine_tile,
                 delivery::draw_delivery_indicators,
-                            delivery::update_current_mobs,
-                            upgrades::handle_upgrades,
-                            debug::teleport_player,
-                            update_crawlr_animation,
-                        )
-                ,
+                delivery::update_current_mobs,
+                upgrades::handle_upgrades,
+                debug::teleport_player,
+                update_crawlr_animation,
+            ),
         )
             .run_if(in_state(Screen::Gameplay))
             .chain(),
@@ -1040,8 +1040,12 @@ pub(crate) struct Creature {
 fn is_enemy(faction: i32, other: i32) -> bool {
     if faction == FRIENDLY_FACTION || other == FRIENDLY_FACTION {
         false
+    } else if faction == ALLIED_FACTION {
+        other == ENEMY_FACTION
+    } else if other == ALLIED_FACTION {
+        faction == ENEMY_FACTION
     } else if faction == ENEMY_FACTION {
-        other == 0
+        other == PLAYER_FACTION
     } else {
         other != faction
     }
@@ -2256,7 +2260,7 @@ fn apply_friend_of_machines(
     if player.friend_of_machines {
         for mut creature in creatures {
             if creature.machine {
-                creature.faction = FRIENDLY_FACTION;
+                creature.faction = ALLIED_FACTION;
             }
         }
     }
@@ -2338,7 +2342,7 @@ fn process_mob_turn(
         }
 
         if mob.target.is_none() {
-            if creature.faction == FRIENDLY_FACTION
+            if (creature.faction == FRIENDLY_FACTION || creature.faction == ALLIED_FACTION)
                 && let Some(action) = get_crew_move(
                     *pos,
                     &mut mob,
@@ -2906,10 +2910,16 @@ fn sidebar(
                                                 "Can teleport when attacking",
                                             ),
                                             (
-                                                mob.attrs.friendly && !mob.attrs.sus,
+                                                creature.faction == ALLIED_FACTION,
+                                                "Allied",
+                                                egui::Color32::LIGHT_BLUE,
+                                                "Will fight for you",
+                                            ),
+                                            (
+                                                creature.faction == FRIENDLY_FACTION,
                                                 "Friendly",
                                                 egui::Color32::LIGHT_BLUE,
-                                                "Will not attack unless provoked",
+                                                "Neutral and peaceful",
                                             ),
                                             (
                                                 creature.machine,
@@ -3877,7 +3887,7 @@ fn update_crawlr_animation(
                 let is_match = state.matches.contains(&entity);
                 if state.last_swiped_is_like {
                     if is_match {
-                        state.pending_faction_changes.insert(entity, FRIENDLY_FACTION);
+                        state.pending_faction_changes.insert(entity, ALLIED_FACTION);
                         if let Ok((_, mut mob)) = mob_query.get_mut(entity) {
                             mob.target = None;
                         }
