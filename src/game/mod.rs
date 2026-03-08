@@ -27,7 +27,7 @@ use crate::{
         assets::{WorldAssets, get_egui_image_from_sprite},
         debug::{DebugSettings, redo_faction_map},
         delivery::DungeonDashState,
-        input::{AbilityClicked, EatEvent, InputMode, PlayerIntent, StairsClicked},
+        input::{AbilityClicked, EatEvent, InputMode, PlayerIntent, StairsClicked, WaitMessage},
         map::{
             MapPos, PlayerMemoryMap, PlayerVisibilityMap, PosToCreature, PosToInteractable,
             TILE_HEIGHT, TILE_WIDTH, WalkBlockedMap,
@@ -112,6 +112,7 @@ pub(super) fn plugin(app: &mut App) {
     app.add_message::<animation::TitleDropMessage>();
     app.add_message::<input::AbilityClicked>();
     app.add_message::<input::StairsClicked>();
+    app.add_message::<input::WaitMessage>();
     app.add_message::<input::EatEvent>();
     app.add_message::<upgrades::UpgradeMessage>();
     app.add_systems(
@@ -121,7 +122,8 @@ pub(super) fn plugin(app: &mut App) {
             update_fov_mask,
             lighting::on_add_occluder,
             lighting::on_add_player,
-            input::handle_input.run_if(is_player_alive.and(phone::is_phone_closed)),
+            (input::handle_wait_message, input::handle_input)
+                .run_if(is_player_alive.and(phone::is_phone_closed)),
             targeting::update_valid_targets,
             targeting::update_valid_target_indicators
                 .run_if(resource_changed::<targeting::ValidTargets>),
@@ -2798,6 +2800,7 @@ fn sidebar(
     mut input_mode: ResMut<InputMode>,
     mut examine_pos: ResMut<examine::ExaminePos>,
     mut msg_ability_clicked: MessageWriter<AbilityClicked>,
+    mut msg_wait: MessageWriter<WaitMessage>,
     mut phone_state: ResMut<phone::PhoneState>,
 ) {
     let (player, player_pos) = player.into_inner();
@@ -3105,13 +3108,18 @@ fn sidebar(
                                     phone_state.is_open = !phone_state.is_open;
                                 }
                             }
-                            ui.label(apply_brainrot_ui(
-                                "wait: .",
-                                player.brainrot,
-                                ui.style(),
-                                FontSelection::Default,
-                                Align::LEFT,
-                            ));
+                            if ui
+                                .button(apply_brainrot_ui(
+                                    "wait: .",
+                                    player.brainrot,
+                                    ui.style(),
+                                    FontSelection::Default,
+                                    Align::LEFT,
+                                ))
+                                .clicked()
+                            {
+                                msg_wait.write(WaitMessage);
+                            }
                             ui.label(
                                 RichText::new(format!(
                                     "melee damage: {}-{} {}",
