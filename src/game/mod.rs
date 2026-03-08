@@ -690,6 +690,7 @@ pub enum Ability {
     Cook,
     ReadBook,
     Yap,
+    Surveys,
 }
 
 impl std::fmt::Display for Ability {
@@ -701,6 +702,7 @@ impl std::fmt::Display for Ability {
             Ability::Cook => "Cook",
             Ability::ReadBook => "Read Book",
             Ability::Yap => "Yap",
+            Ability::Surveys => "Fill Surveys for Cash",
         })
     }
 }
@@ -728,6 +730,7 @@ impl Ability {
             Ability::Yap => {
                 "Deal boredom damage to a nearby enemy. Scales with boredom. Increases your own boredom."
             }
+            Ability::Surveys => "Gain money and boredom. Requires < 50 brainrot.",
         }
     }
     pub(crate) fn target(&self) -> AbilityTarget {
@@ -737,6 +740,7 @@ impl Ability {
             Ability::Mog => AbilityTarget::NearbyMob { maxdist: 1 },
             Ability::Cook | Ability::ReadBook => AbilityTarget::NoTarget,
             Ability::Yap => AbilityTarget::NearbyMob { maxdist: 3 },
+            Ability::Surveys => AbilityTarget::NoTarget,
         }
     }
 
@@ -754,6 +758,7 @@ impl Ability {
             )),
             Ability::Cook => None,
             Ability::ReadBook => None,
+            Ability::Surveys => None,
             Ability::Yap => Some((DamageType::Boredom, 1 + boredom / 50..=1 + boredom / 25)),
         }
     }
@@ -1573,6 +1578,15 @@ fn handle_player_move(
                     player_stats.brainrot = (player_stats.brainrot - 20).max(0);
                     player_stats.apply_boredom(&mut creature, boredom_increase);
                     player_stats.ability_cooldowns.insert(Ability::ReadBook, 10);
+                } else {
+                    moved.0 = false;
+                    return;
+                }
+            }
+            Ability::Surveys => {
+                if player_stats.brainrot <= 50 {
+                    player_stats.apply_boredom(&mut creature, 10);
+                    player_stats.money += 1;
                 } else {
                     moved.0 = false;
                     return;
