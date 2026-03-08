@@ -323,6 +323,7 @@ fn anger_crew(
 }
 
 pub(crate) fn draw_interactable_popup(
+    mut commands: Commands,
     mut contexts: EguiContexts,
     player_query: Single<(Entity, &MapPos, &Player)>,
     interactable_query: Query<
@@ -337,14 +338,29 @@ pub(crate) fn draw_interactable_popup(
     >,
     q_camera: Single<(&Camera, &GlobalTransform), With<PrimaryCamera>>,
 ) {
-    let (_player_entity, player_pos, player) = player_query.into_inner();
+    let (player_entity, player_pos, player) = player_query.into_inner();
     let (camera, camera_transform) = *q_camera;
 
-    for (_entity, pos, name, interactable, food) in interactable_query.iter() {
+    let mut interactables_by_pos: HashMap<MapPos, Vec<_>> = HashMap::default();
+
+    for (entity, pos, name, interactable, food) in interactable_query.iter() {
         let is_at_pos = pos.0 == player_pos.0;
         let is_adjacent = (pos.0 - player_pos.0).abs().max_element() <= 1;
 
         if is_at_pos || (is_adjacent && !interactable.require_on_top) {
+            interactables_by_pos
+                .entry(*pos)
+                .or_default()
+                .push((entity, name, interactable, food));
+        }
+    }
+
+    for (pos, list) in interactables_by_pos {
+        // Sort by entity for consistent order
+        let mut sorted_list = list;
+        sorted_list.sort_by_key(|(entity, _, _, _)| *entity);
+
+        for (i, (entity, name, interactable, food)) in sorted_list.into_iter().enumerate() {
             // Get screen position
             let world_pos = pos.to_vec3(PLAYER_Z);
             let Ok(viewport_pos) = camera.world_to_viewport(camera_transform, world_pos) else {
@@ -359,13 +375,13 @@ pub(crate) fn draw_interactable_popup(
                 let food_item = delivery::FOODS[food.food_idx];
                 let verb = if food_item.rizz > 0 { "Equip" } else { "Eat" };
                 (
-                    format!("{} {}? (e)", verb, food_item.name),
+                    format!("{} {}?", verb, food_item.name),
                     Some(food_item.effects.to_string()),
                 )
             } else {
                 let name_str = name.map(|n| n.as_str()).unwrap_or("");
                 (
-                    format!("{} {}? (e)", interactable.action, name_str),
+                    format!("{} {}?", interactable.action, name_str),
                     interactable.description.clone(),
                 )
             };
@@ -376,7 +392,10 @@ pub(crate) fn draw_interactable_popup(
                 title,
                 description,
                 player.brainrot,
-                _entity,
+                entity,
+                i as f32 * 100.0,
+                &mut commands,
+                player_entity,
             );
         }
     }
@@ -903,9 +922,15 @@ pub(crate) fn draw_world_popup(
     description: Option<String>,
     brainrot: i32,
     id_entity: Entity,
+    offset_y: f32,
+    commands: &mut Commands,
+    player_entity: Entity,
 ) {
     egui::Area::new(egui::Id::new(id_entity))
-        .fixed_pos(egui::pos2(viewport_pos.x - 100.0, viewport_pos.y - 120.0))
+        .fixed_pos(egui::pos2(
+            viewport_pos.x - 100.0,
+            viewport_pos.y - 120.0 - offset_y,
+        ))
         .show(ctx, |ui| {
             egui::Frame::window(ui.style())
                 .fill(egui::Color32::from_rgba_premultiplied(30, 30, 30, 240))
@@ -932,6 +957,21 @@ pub(crate) fn draw_world_popup(
                                 egui::FontSelection::Default,
                                 egui::Align::Center,
                             ));
+                        }
+                        if ui
+                            .button(apply_brainrot_ui(
+                                "Interact (e)",
+                                brainrot,
+                                ui.style(),
+                                egui::FontSelection::Default,
+                                egui::Align::Center,
+                            ))
+                            .clicked()
+                        {
+                            commands
+                                .entity(player_entity)
+                                .insert(PlayerIntent::Interact(id_entity));
+                            commands.run_schedule(Turn);
                         }
                     });
                 });
