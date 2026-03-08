@@ -240,6 +240,7 @@ pub(super) fn plugin(app: &mut App) {
                 map::apply_hard_fov_to_tiles,
                 update_nearby_mobs,
                 map::update_pos_to_interactable,
+                check_victory,
             )
                 .chain(),
         )
@@ -4010,5 +4011,22 @@ fn update_crawlr_animation(
                 }
             }
         }
+    }
+}
+
+fn check_victory(
+    player: Single<&MapPos, With<Player>>,
+    map_info: Res<MapInfo>,
+    screen: Res<State<Screen>>,
+    mut game_over_info: ResMut<crate::screens::game_over::GameOverInfo>,
+    mut next_screen: ResMut<NextState<Screen>>,
+) {
+    if *screen.get() == Screen::Gameplay
+        && let Some(level) = map_info.get_level(**player)
+        && level.ty == LevelTitle::Outside
+        && (rogue_algebra::Pos::from(player.0) - level.rect.center()).diag_walk_dist() > 3
+    {
+        game_over_info.cause = crate::screens::game_over::DeathCause::Victory;
+        next_screen.set(Screen::GameOver);
     }
 }

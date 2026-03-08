@@ -26,12 +26,23 @@ pub struct GameOverInfo {
     pub brainrot: i32,
 }
 
+impl GameOverInfo {
+    fn text(&self) -> &'static str {
+        if matches!(self.cause, DeathCause::Victory) {
+            VICTORY_TEXT
+        } else {
+            GAME_OVER_TEXT
+        }
+    }
+}
+
 #[derive(Default, Clone, Copy, PartialEq, Eq)]
 pub enum DeathCause {
     #[default]
     LowHP,
     Boredom,
     Other,
+    Victory,
 }
 
 #[derive(Resource)]
@@ -51,6 +62,7 @@ enum GameOverPhase {
 }
 
 const GAME_OVER_TEXT: &str = "GAME OVER";
+const VICTORY_TEXT: &str = "VICTORY";
 
 fn setup_game_over(mut commands: Commands) {
     commands.insert_resource(GameOverState {
@@ -69,10 +81,14 @@ fn cleanup_game_over(mut commands: Commands) {
     commands.remove_resource::<GameOverState>();
 }
 
-fn update_game_over_timers(time: Res<Time>, mut state: ResMut<GameOverState>) {
+fn update_game_over_timers(
+    time: Res<Time>,
+    mut state: ResMut<GameOverState>,
+    game_over_info: Res<GameOverInfo>,
+) {
     match state.phase {
         GameOverPhase::Teletype => {
-            if state.teletype_index < GAME_OVER_TEXT.len() {
+            if state.teletype_index < game_over_info.text().len() {
                 state.teletype_timer.tick(time.delta());
                 if state.teletype_timer.just_finished() {
                     state.teletype_index += 1;
@@ -114,7 +130,7 @@ fn update_game_over_ui(
                 GameOverPhase::Teletype => {
                     ui.vertical_centered(|ui| {
                         ui.add_space(screen_rect.height() * 0.45);
-                        let displayed_text = &GAME_OVER_TEXT[..state.teletype_index];
+                        let displayed_text = &game_over_info.text()[..state.teletype_index];
                         ui.label(
                             egui::RichText::new(displayed_text)
                                 .font(egui::FontId::new(
@@ -130,7 +146,7 @@ fn update_game_over_ui(
                     ui.vertical_centered(|ui| {
                         ui.add_space(screen_rect.height() * 0.45);
                         ui.label(
-                            egui::RichText::new(GAME_OVER_TEXT)
+                            egui::RichText::new(game_over_info.text())
                                 .font(egui::FontId::new(
                                     60.0,
                                     egui::FontFamily::Name("press_start".into()),
@@ -214,6 +230,24 @@ fn update_game_over_ui(
         });
 }
 
+const VICTORY_MESSAGES: &[&str] = &[
+    "W",
+    "clip this",
+    "OMG",
+    "POG",
+    "absolute cinema",
+    "I was here",
+    "gg",
+    "10/10",
+    "this game is too easy",
+    "LETS GOOOOOO",
+    "NIIIIICEEEEE",
+    "poggers",
+    "wowowowowowowowow",
+    "dungeon king",
+    "YES",
+];
+
 const LOW_HP_MESSAGES: &[&str] = &[
     "L HP",
     "HEAL??",
@@ -287,6 +321,7 @@ fn update_game_over_chat(
             DeathCause::LowHP => LOW_HP_MESSAGES,
             DeathCause::Boredom => BOREDOM_MESSAGES,
             DeathCause::Other => &["F", "L", "GG", "unlucky"],
+            DeathCause::Victory => VICTORY_MESSAGES,
         };
 
         let mut text = pool.choose(&mut rng).unwrap().to_string();
