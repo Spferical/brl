@@ -2399,7 +2399,7 @@ pub(crate) fn spawn_level(
             }
             TileKind::Table => {
                 let color = Color::srgb(0.6, 0.6, 0.2);
-                let sprite = assets.get_ascii_sprite('T', color);
+                let sprite = assets.get_ascii_sprite('╤', color);
                 tile.insert((Name::new("Table"), sprite, map::BlocksMovement));
             }
             TileKind::Throne => {
@@ -2442,8 +2442,8 @@ pub(crate) fn spawn_level(
                 tile.insert((Name::new("Star"), sprite));
             }
             TileKind::Upgrade(name) => {
-                let color = Color::srgb(0.5, 0.0, 1.0);
-                let sprite = assets.get_ascii_sprite('*', color);
+                let color = Color::srgb(0.569, 0.275, 1.0);
+                let sprite = assets.get_ascii_sprite('▲', color);
                 tile.insert((
                     Name::new("Upgrade Orb"),
                     sprite,
