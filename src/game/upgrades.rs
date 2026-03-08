@@ -78,6 +78,7 @@ pub struct Upgrade {
     pub name: &'static str,
     pub effects: Vec<Effect>,
     pub frequency: f64,
+    pub requires: &'static [&'static str],
 }
 impl Upgrade {
     pub fn describe(&self) -> String {
@@ -131,6 +132,12 @@ pub(crate) fn handle_upgrades(
         let num_needed = 3 - player.upgrade_options.len();
         let valid_options = (0..upgrades.len())
             .filter(|i| !player.upgrades.contains(i))
+            .filter(|i| {
+                UPGRADES[*i]
+                    .requires
+                    .iter()
+                    .all(|r| player.upgrades.iter().any(|u| &UPGRADES[*u].name == r))
+            })
             .collect::<Vec<_>>();
         if let Ok(choices) =
             valid_options.choose_multiple_weighted(rng, num_needed, |u| UPGRADES[*u].frequency)
@@ -146,101 +153,148 @@ pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
             name: "Cardio",
             effects: vec![Effect::AttrChange(Attr::MaxHp, 10)],
             frequency: 5.0,
+            requires: &[],
+        },
+        Upgrade {
+            name: "Organic",
+            effects: vec![Effect::AttrChange(Attr::MaxHp, 10)],
+            frequency: 2.0,
+            requires: &["Cardio"],
+        },
+        Upgrade {
+            name: "Multivitamin",
+            effects: vec![Effect::AttrChange(Attr::MaxHp, 10)],
+            frequency: 2.0,
+            requires: &["Organic"],
         },
         Upgrade {
             name: "Trust Fund",
             effects: vec![Effect::AttrChange(Attr::Money, 100)],
             frequency: 1.0,
+            requires: &[],
         },
         Upgrade {
             name: "Group Chat",
             effects: vec![Effect::AttrChange(Attr::Boredom, -25)],
             frequency: 1.0,
-        },
-        Upgrade {
-            name: "Organic",
-            effects: vec![Effect::AttrChange(Attr::MaxHp, 10)],
-            frequency: 1.0,
-        },
-        Upgrade {
-            name: "Protein Goblin",
-            effects: vec![Effect::AttrChange(Attr::Strength, 5)],
-            frequency: 1.0,
+            requires: &[],
         },
         Upgrade {
             name: "Grip Strengthener",
-            effects: vec![Effect::AttrChange(Attr::Strength, 5)],
+            effects: vec![Effect::AttrChange(Attr::Strength, 10)],
             frequency: 1.0,
+            requires: &[],
+        },
+        Upgrade {
+            name: "Protein Goblin",
+            effects: vec![Effect::AttrChange(Attr::Strength, 10)],
+            frequency: 1.0,
+            requires: &["Grip Strengthener"],
+        },
+        Upgrade {
+            name: "Performance Enhancing Drugs",
+            effects: vec![
+                Effect::AttrChange(Attr::Strength, 20),
+                Effect::AttrChange(Attr::MaxHp, 5),
+            ],
+            frequency: 1.0,
+            requires: &[],
         },
         Upgrade {
             name: "Mewing",
             effects: vec![Effect::AttrChange(Attr::Rizz, 20)],
             frequency: 5.0,
+            requires: &[],
+        },
+        Upgrade {
+            name: "Illegal Face Oils",
+            effects: vec![Effect::AttrChange(Attr::Rizz, 20)],
+            frequency: 3.0,
+            requires: &["Mewing"],
+        },
+        Upgrade {
+            name: "Sunscreen",
+            effects: vec![Effect::AttrChange(Attr::Rizz, 20)],
+            frequency: 1.0,
+            requires: &["Mewing"],
         },
         Upgrade {
             name: "Sprint",
             effects: vec![Effect::GainAbility(Ability::Sprint)],
             frequency: 1.0,
+            requires: &[],
         },
         Upgrade {
             name: "Shoulder Check",
             effects: vec![Effect::GainAbility(Ability::ShoulderCheck)],
             frequency: 1.0,
+            requires: &[],
         },
         Upgrade {
             name: "Mog",
             effects: vec![Effect::GainAbility(Ability::Mog)],
             frequency: 5.0,
+            requires: &[],
         },
         Upgrade {
             name: "Cook",
             effects: vec![Effect::GainAbility(Ability::Cook)],
             frequency: 5.0,
+            requires: &[],
         },
         Upgrade {
             name: "Memelord",
             effects: vec![Effect::AttrChange(Attr::Brainrot, 50)],
             frequency: 1.0,
+            requires: &[],
         },
         Upgrade {
             name: "DungeonDash Platinum",
             effects: vec![Effect::Subscription(Subscription::DungeonDashPlatinum)],
             frequency: 1.0,
+            requires: &[],
         },
         Upgrade {
             name: "UndergroundTV Pro",
             effects: vec![Effect::Subscription(Subscription::UndergroundTVPro)],
             frequency: 1.0,
+            requires: &[],
         },
         Upgrade {
             name: "5G LTE",
             effects: vec![Effect::Subscription(Subscription::FiveGLTE)],
             frequency: 1.0,
+            requires: &[],
         },
         Upgrade {
             name: "Dungeon Fitness Membership",
             effects: vec![Effect::Subscription(Subscription::DungeonFitness)],
             frequency: 1.0,
+            requires: &[],
         },
         Upgrade {
             name: "Library Card",
             effects: vec![Effect::GainAbility(Ability::ReadBook)],
             frequency: 5.0,
+            requires: &[],
         },
         Upgrade {
             name: "Yap",
             effects: vec![Effect::GainAbility(Ability::Yap)],
             frequency: 5.0,
+            requires: &[],
         },
         Upgrade {
             name: "SurveyGorilla",
             effects: vec![Effect::GainAbility(Ability::Surveys)],
             frequency: 1.0,
+            requires: &[],
         },
         Upgrade {
             name: "Gun",
             effects: vec![Effect::GainAbility(Ability::Gun)],
             frequency: 0.0,
+            requires: &[],
         },
         Upgrade {
             name: "Animatronic Bear Mask",
@@ -249,6 +303,7 @@ pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
                 Effect::FriendOfMachines,
             ],
             frequency: 0.0,
+            requires: &[],
         },
     ]
 });
