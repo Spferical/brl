@@ -125,7 +125,6 @@ pub(super) fn plugin(app: &mut App) {
         (
             (
                 lighting::update_lighting,
-                update_fov_mask,
                 lighting::on_add_occluder,
                 lighting::on_add_player,
                 (input::handle_wait_message, input::handle_input)
@@ -238,6 +237,7 @@ pub(super) fn plugin(app: &mut App) {
             (
                 map::update_sight_blocked_map,
                 map::update_player_visibility,
+                update_fov_mask,
                 map::apply_hard_fov_to_tiles,
                 update_nearby_mobs,
                 map::update_pos_to_interactable,
