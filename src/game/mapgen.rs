@@ -2263,7 +2263,7 @@ pub(crate) fn spawn_level(
                     Name::new("Upgrade"),
                     sprite,
                     Interactable {
-                        action: "Upgrade".to_string(),
+                        action: "Use".to_string(),
                         description: None,
                         kind: InteractionType::Upgrade(
                             name.map(|name| UPGRADES.iter().position(|x| x.name == name).unwrap()),
