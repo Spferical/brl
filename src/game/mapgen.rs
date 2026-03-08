@@ -2387,7 +2387,8 @@ pub(crate) fn gen_map(
         vec![
             gen_island(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, FORTNITE_DIST, 30),
+                .sprinkle_mobs(rng, FORTNITE_DIST, 30)
+                .with_upgrade(rng, Some("Gun")),
             gen_freddy(rng)
                 .with_walls()
                 .sprinkle_mobs(rng, FREDDY_DIST, 4)

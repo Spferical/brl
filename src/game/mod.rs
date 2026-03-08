@@ -55,6 +55,8 @@ mod spawn;
 mod targeting;
 mod upgrades;
 
+const BULLET_DAMAGE: i32 = 2;
+
 const HIGHLIGHT_Z: f32 = 20.0;
 const DAMAGE_Z: f32 = 15.0;
 const PLAYER_Z: f32 = 10.0;
@@ -688,6 +690,7 @@ pub enum Ability {
     ShoulderCheck,
     Mog,
     Cook,
+    Gun,
     ReadBook,
     Yap,
     Surveys,
@@ -702,12 +705,16 @@ impl std::fmt::Display for Ability {
             Ability::Cook => "Cook",
             Ability::ReadBook => "Read Book",
             Ability::Yap => "Yap",
+            Ability::Gun => "Shoot",
             Ability::Surveys => "Fill Surveys for Cash",
         })
     }
 }
 
 pub enum AbilityTarget {
+    NearbyTile {
+        maxdist: i32,
+    },
     ReachableTile {
         maxdist: i32,
     },
@@ -724,6 +731,7 @@ impl Ability {
             Ability::ShoulderCheck => "Damage and swap positions with an adjacent enemy.",
             Ability::Mog => "Deal aura damage to an adjacent enemy. Scales with rizz.",
             Ability::Cook => "Cook a corpse you are standing on. Requires < 10 brainrot.",
+            Ability::Gun => "Get a big iron on your hip.",
             Ability::ReadBook => {
                 "Reduce brainrot. Might be a little boring. (Borrow period: 10 turns)"
             }
@@ -738,6 +746,7 @@ impl Ability {
             Ability::Sprint => AbilityTarget::ReachableTile { maxdist: 5 },
             Ability::ShoulderCheck => AbilityTarget::NearbyMob { maxdist: 1 },
             Ability::Mog => AbilityTarget::NearbyMob { maxdist: 1 },
+            Ability::Gun => AbilityTarget::NearbyTile { maxdist: 1 },
             Ability::Cook | Ability::ReadBook => AbilityTarget::NoTarget,
             Ability::Yap => AbilityTarget::NearbyMob { maxdist: 3 },
             Ability::Surveys => AbilityTarget::NoTarget,
@@ -757,6 +766,7 @@ impl Ability {
                 2 + (rizz * 6) / 100..=2 + (rizz * 12) / 100,
             )),
             Ability::Cook => None,
+            Ability::Gun => Some((DamageType::Physical, BULLET_DAMAGE..=BULLET_DAMAGE)),
             Ability::ReadBook => None,
             Ability::Surveys => None,
             Ability::Yap => Some((DamageType::Boredom, 1 + boredom / 50..=1 + boredom / 25)),
@@ -1498,6 +1508,16 @@ fn handle_player_move(
                     crate::game::chat::queue_mog_message(&mut chat, &streaming_state);
                 }
             }
+            Ability::Gun => {
+                commands.entity(world_entity).with_children(|parent| {
+                    parent.spawn(get_bullet_bundle(
+                        *map_pos,
+                        map_pos.0 - pos.0,
+                        player_entity,
+                        &assets,
+                    ));
+                });
+            }
             Ability::Yap => {
                 let new_pos = map_pos;
                 if let Some(mob_entity) = pos_to_creature.0.get(&new_pos.0) {
@@ -1861,6 +1881,34 @@ pub struct DamageInstance {
 
 #[derive(Resource, Default)]
 pub struct PendingDamage(Vec<DamageInstance>);
+
+fn get_bullet_bundle(
+    new_pos: MapPos,
+    direction: IVec2,
+    attacker: Entity,
+    assets: &WorldAssets,
+) -> impl Bundle {
+    let rotation = match (direction.x, direction.y) {
+        (0, 1) => 0.0,
+        (-1, 1) => PI / 4.0,
+        (-1, 0) => PI / 2.0,
+        (-1, -1) => 3.0 * PI / 4.0,
+        (0, -1) => PI,
+        (1, -1) => 1.25 * PI,
+        (1, 0) => 1.5 * PI,
+        (1, 1) => 1.75 * PI,
+        _ => panic!("Unexpected bullet direction: {direction:?}"),
+    };
+    let bullet_sprite = assets.get_ascii_sprite('^', Color::WHITE);
+    let transform = Transform::from_translation(new_pos.to_vec3(PLAYER_Z))
+        .with_rotation(Quat::from_rotation_z(rotation));
+    let bullet = Bullet {
+        direction,
+        damage: BULLET_DAMAGE,
+        attacker,
+    };
+    (bullet, bullet_sprite, new_pos, transform)
+}
 
 fn check_bullet_collision(
     mut commands: Commands,
@@ -2345,29 +2393,9 @@ fn process_mob_turn(
             }
             Action::RangedAttack(new_pos) => {
                 let direction = new_pos.0 - old_pos.0;
-                let rotation = match (direction.x, direction.y) {
-                    (0, 1) => 0.0,
-                    (-1, 1) => PI / 4.0,
-                    (-1, 0) => PI / 2.0,
-                    (-1, -1) => 3.0 * PI / 4.0,
-                    (0, -1) => PI,
-                    (1, -1) => 1.25 * PI,
-                    (1, 0) => 1.5 * PI,
-                    (1, 1) => 1.75 * PI,
-                    _ => panic!("Unexpected bullet direction: {direction:?}"),
-                };
-                let bullet_sprite = assets.get_ascii_sprite('^', Color::WHITE);
-                let transform = Transform::from_translation(new_pos.to_vec3(PLAYER_Z))
-                    .with_rotation(Quat::from_rotation_z(rotation));
-                let bullet = Bullet {
-                    direction,
-                    damage: 1,
-                    attacker: entity,
-                };
-                let bullet_id = commands
-                    .spawn((bullet, bullet_sprite, new_pos, transform))
-                    .id();
-                commands.entity(world_entity).add_child(bullet_id);
+                commands.entity(world_entity).with_children(|parent| {
+                    parent.spawn(get_bullet_bundle(new_pos, direction, entity, &assets));
+                });
             }
             Action::AttackAndTeleport(enemy, teleport_pos) => {
                 damage.0.push(DamageInstance {

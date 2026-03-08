@@ -42,6 +42,18 @@ pub(crate) fn update_valid_targets(
                     reachable,
                 ));
             }
+            super::AbilityTarget::NearbyTile { maxdist } => {
+                let reachable = |p: MapPos| {
+                    p.adjacent()
+                        .into_iter()
+                        .filter(|p| !walk_blocked_map.0.contains(&p.0))
+                };
+                new_targets.extend(rogue_algebra::path::bfs(
+                    starts,
+                    maxdist as usize,
+                    reachable,
+                ));
+            }
             super::AbilityTarget::NearbyMob { maxdist } => {
                 let reachable = |p: MapPos| {
                     p.adjacent()

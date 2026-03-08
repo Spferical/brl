@@ -238,6 +238,11 @@ pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
             frequency: 1.0,
         },
         Upgrade {
+            name: "Gun",
+            effects: vec![Effect::GainAbility(Ability::Gun)],
+            frequency: 0.0,
+        },
+        Upgrade {
             name: "Animatronic Bear Mask",
             effects: vec![
                 Effect::AttrChange(Attr::Rizz, -10),
