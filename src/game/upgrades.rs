@@ -254,6 +254,12 @@ pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
             requires: &[],
         },
         Upgrade {
+            name: "Eyebleach",
+            effects: vec![Effect::AttrChange(Attr::Brainrot, -9999)],
+            frequency: 1.0,
+            requires: &[],
+        },
+        Upgrade {
             name: "DungeonDash Platinum",
             effects: vec![Effect::Subscription(Subscription::DungeonDashPlatinum)],
             frequency: 1.0,
