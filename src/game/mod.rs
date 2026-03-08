@@ -1163,6 +1163,7 @@ fn tick_meters(
     player: Single<(&mut Player, &mut Creature, &MapPos)>,
     map_info: Res<mapgen::MapInfo>,
     q_grass: Query<&MapPos, With<map::Grass>>,
+    streaming_state: Res<chat::StreamingState>,
 ) {
     let (mut player, mut creature, player_pos) = player.into_inner();
 
@@ -1176,7 +1177,7 @@ fn tick_meters(
     }
 
     // Passive brainrot decay
-    if turn_counter.0.is_multiple_of(10) {
+    if turn_counter.0.is_multiple_of(10) && !streaming_state.is_streaming {
         player.brainrot = (player.brainrot - 1).max(0);
     }
 
