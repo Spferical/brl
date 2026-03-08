@@ -35,6 +35,7 @@ pub(crate) enum Effect {
     GainAbility(Ability),
     FriendOfMachines,
     Subscription(Subscription),
+    HighMetabolism,
 }
 
 impl std::fmt::Display for Effect {
@@ -43,6 +44,9 @@ impl std::fmt::Display for Effect {
             Effect::AttrChange(attr, amt) => write!(f, "{amt:+} {attr}"),
             Effect::GainAbility(ability) => write!(f, "Learn {ability}: {}", ability.describe()),
             Effect::FriendOfMachines => write!(f, "Become friendly to machines"),
+            Effect::HighMetabolism => {
+                write!(f, "Regenerate health over time. Hunger increases faster.")
+            }
             Effect::Subscription(sub) => match sub {
                 Subscription::DungeonDashPlatinum => write!(
                     f,
@@ -124,6 +128,7 @@ pub(crate) fn handle_upgrades(
                 Effect::GainAbility(ability) => player.abilities.push(*ability),
                 Effect::Subscription(sub) => player.subscriptions.push(*sub),
                 Effect::FriendOfMachines => player_creature.friend_of_machines = true,
+                Effect::HighMetabolism => player.high_metabolism = true,
             }
         }
     }
@@ -249,6 +254,12 @@ pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
             requires: &[],
         },
         Upgrade {
+            name: "Eyebleach",
+            effects: vec![Effect::AttrChange(Attr::Brainrot, -9999)],
+            frequency: 1.0,
+            requires: &[],
+        },
+        Upgrade {
             name: "DungeonDash Platinum",
             effects: vec![Effect::Subscription(Subscription::DungeonDashPlatinum)],
             frequency: 1.0,
@@ -294,6 +305,12 @@ pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
             name: "Gun",
             effects: vec![Effect::GainAbility(Ability::Gun)],
             frequency: 0.0,
+            requires: &[],
+        },
+        Upgrade {
+            name: "High Metabolism",
+            effects: vec![Effect::HighMetabolism],
+            frequency: 1.0,
             requires: &[],
         },
         Upgrade {

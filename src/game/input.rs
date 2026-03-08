@@ -79,6 +79,9 @@ pub struct AbilityClicked(pub Ability);
 pub struct StairsClicked;
 
 #[derive(Message)]
+pub struct WaitMessage;
+
+#[derive(Message)]
 pub struct EatEvent(pub Entity);
 
 #[derive(Component, Debug, Clone, Copy, PartialEq, Eq)]
@@ -96,6 +99,17 @@ pub(crate) enum InputMode {
     Normal,
     Examine(IVec2),
     Targeting(Ability, IVec2),
+}
+
+pub(crate) fn handle_wait_message(
+    mut msg_wait: MessageReader<WaitMessage>,
+    player: Single<Entity, With<Player>>,
+    mut commands: Commands,
+) {
+    if msg_wait.read().last().is_some() {
+        commands.entity(*player).insert(PlayerIntent::Wait);
+        commands.run_schedule(Turn);
+    }
 }
 
 pub(crate) fn handle_input(

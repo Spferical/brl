@@ -27,13 +27,14 @@ use crate::{
         assets::{WorldAssets, get_egui_image_from_sprite},
         debug::{DebugSettings, redo_faction_map},
         delivery::DungeonDashState,
-        input::{AbilityClicked, EatEvent, InputMode, PlayerIntent, StairsClicked},
+        input::{AbilityClicked, EatEvent, InputMode, PlayerIntent, StairsClicked, WaitMessage},
         map::{
             MapPos, PlayerMemoryMap, PlayerVisibilityMap, PosToCreature, PosToInteractable,
             TILE_HEIGHT, TILE_WIDTH, WalkBlockedMap,
         },
         mapgen::{MapInfo, MobKind},
         spawn::spawn_mob,
+        upgrades::{Effect, UPGRADES},
     },
     screens::Screen,
 };
@@ -113,6 +114,7 @@ pub(super) fn plugin(app: &mut App) {
     app.add_message::<animation::TitleDropMessage>();
     app.add_message::<input::AbilityClicked>();
     app.add_message::<input::StairsClicked>();
+    app.add_message::<input::WaitMessage>();
     app.add_message::<input::EatEvent>();
     app.add_message::<upgrades::UpgradeMessage>();
     app.add_systems(
@@ -123,7 +125,8 @@ pub(super) fn plugin(app: &mut App) {
                 update_fov_mask,
                 lighting::on_add_occluder,
                 lighting::on_add_player,
-                input::handle_input.run_if(is_player_alive.and(phone::is_phone_closed)),
+                (input::handle_wait_message, input::handle_input)
+                    .run_if(is_player_alive.and(phone::is_phone_closed)),
                 targeting::update_valid_targets,
                 targeting::update_valid_target_indicators
                     .run_if(resource_changed::<targeting::ValidTargets>),
@@ -259,6 +262,11 @@ pub(super) fn plugin(app: &mut App) {
             .chain()
             .run_if(in_state(Screen::Gameplay)),
     );
+}
+
+fn bevy_to_egui_color(color: Color) -> Color32 {
+    let [r, g, b, a] = color.to_srgba().to_u8_array();
+    Color32::from_rgba_unmultiplied(r, g, b, a)
 }
 
 fn anger_crew(
@@ -637,6 +645,7 @@ pub struct Player {
     pub subscriptions: Vec<Subscription>,
     pub food_cooldowns: HashMap<usize, u32>,
     pub is_raided: bool,
+    pub high_metabolism: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect)]
@@ -1163,6 +1172,11 @@ fn tick_meters(
         player.brainrot = (player.brainrot - 2).max(10);
     }
 
+    // Passive brainrot decay
+    if turn_counter.0.is_multiple_of(10) {
+        player.brainrot = (player.brainrot - 1).max(0);
+    }
+
     // Decrement cooldowns
     for cooldown in player.ability_cooldowns.values_mut() {
         if *cooldown > 0 {
@@ -1173,6 +1187,15 @@ fn tick_meters(
         if *cooldown > 0 {
             *cooldown -= 1;
         }
+    }
+
+    let hunger_cooldown = if player.high_metabolism { 3 } else { 5 };
+    if turn_counter.0.is_multiple_of(hunger_cooldown) {
+        player.apply_hunger_damage(&mut creature, 1);
+    }
+
+    if player.high_metabolism && turn_counter.0.is_multiple_of(10) {
+        creature.hp = (creature.hp + 1).clamp(0, creature.max_hp);
     }
 
     if turn_counter.0.is_multiple_of(5) {
@@ -1951,6 +1974,7 @@ fn get_bullet_bundle(
         (1, 1) => 1.75 * PI,
         _ => panic!("Unexpected bullet direction: {direction:?}"),
     };
+    let name = Name::new("Bullet");
     let bullet_sprite = assets.get_ascii_sprite('^', Color::WHITE);
     let transform = Transform::from_translation(new_pos.to_vec3(PLAYER_Z))
         .with_rotation(Quat::from_rotation_z(rotation));
@@ -1959,7 +1983,7 @@ fn get_bullet_bundle(
         damage: BULLET_DAMAGE,
         attacker,
     };
-    (bullet, bullet_sprite, new_pos, transform)
+    (name, bullet, bullet_sprite, new_pos, transform, Frozen)
 }
 
 fn check_bullet_collision(
@@ -2329,6 +2353,7 @@ fn process_mob_turn(
                     && !claimed_locations.contains(&p.0)
             });
             if let Some(spawn_pos) = spawn_pos {
+                claimed_locations.insert(spawn_pos.0);
                 spawn::spawn_mob(&mut commands, world_entity, spawn_pos, kind, &assets);
                 let name = kind.get_bundle(&assets).name;
                 floating_text.write(FloatingTextMessage {
@@ -2788,6 +2813,7 @@ fn sidebar(
     mut input_mode: ResMut<InputMode>,
     mut examine_pos: ResMut<examine::ExaminePos>,
     mut msg_ability_clicked: MessageWriter<AbilityClicked>,
+    mut msg_wait: MessageWriter<WaitMessage>,
     mut phone_state: ResMut<phone::PhoneState>,
 ) {
     let (player, player_pos) = player.into_inner();
@@ -3096,18 +3122,31 @@ fn sidebar(
                                     Align::LEFT,
                                 ))
                                 .clicked()
+                                && !phone_state.forced_open
                             {
-                                if !phone_state.forced_open {
-                                    phone_state.is_open = !phone_state.is_open;
-                                }
+                                phone_state.is_open = !phone_state.is_open;
                             }
-                            ui.label(apply_brainrot_ui(
-                                "wait: .",
-                                player.brainrot,
-                                ui.style(),
-                                FontSelection::Default,
-                                Align::LEFT,
-                            ));
+                            if ui
+                                .button(apply_brainrot_ui(
+                                    "wait: .",
+                                    player.brainrot,
+                                    ui.style(),
+                                    FontSelection::Default,
+                                    Align::LEFT,
+                                ))
+                                .clicked()
+                            {
+                                msg_wait.write(WaitMessage);
+                            }
+                            ui.label(
+                                RichText::new(format!(
+                                    "melee damage: {}-{} {}",
+                                    player.melee_damage(),
+                                    player.melee_damage(),
+                                    DamageType::Physical,
+                                ))
+                                .color(bevy_to_egui_color(DamageType::Physical.color())),
+                            );
 
                             for (i, ability) in player.abilities.iter().enumerate() {
                                 let ability_key = (i + 1) % 10;
@@ -3134,8 +3173,6 @@ fn sidebar(
                                         msg_ability_clicked.write(AbilityClicked(*ability));
                                     }
                                     if let Some((ty, range)) = ability.damage_info(player) {
-                                        let [r, g, b, a] = ty.color().to_srgba().to_u8_array();
-                                        let color = Color32::from_rgba_unmultiplied(r, g, b, a);
                                         ui.label(
                                             RichText::new(format!(
                                                 "{}-{} {} damage",
@@ -3143,7 +3180,7 @@ fn sidebar(
                                                 range.end(),
                                                 ty,
                                             ))
-                                            .color(color),
+                                            .color(bevy_to_egui_color(ty.color())),
                                         );
                                     }
                                 });
@@ -3449,6 +3486,26 @@ fn left_sidebar(
                         FontSelection::Default,
                         Align::LEFT,
                     ));
+                }
+            }
+            // non-subscription non-active upgrades
+            let passive_upgrades = player_stats
+                .upgrades
+                .iter()
+                .map(|u| &UPGRADES[*u])
+                .filter(|upgrade| {
+                    upgrade
+                        .effects
+                        .iter()
+                        .all(|eff| !matches!(eff, Effect::GainAbility(_) | Effect::Subscription(_)))
+                })
+                .collect::<Vec<_>>();
+            if !passive_upgrades.is_empty() {
+                ui.add_space(20.0);
+                ui.label("PASSIVE UPGRADES:");
+                ui.add_space(5.0);
+                for upgrade in passive_upgrades.into_iter() {
+                    ui.label(upgrade.name);
                 }
             }
         });
