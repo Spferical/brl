@@ -333,6 +333,37 @@ impl MobKind {
         }
     }
 
+    pub(crate) fn get_attractiveness(&self) -> i32 {
+        match self {
+            MobKind::GiantFrog => 10,
+            MobKind::SadFrog => 5,
+            MobKind::SmugFrog => 40,
+            MobKind::MadFrog => 15,
+            MobKind::GymBro => 80,
+            MobKind::Influencer => 90,
+            MobKind::Normie => 20,
+            MobKind::FriendlyNormie => 30,
+            MobKind::AmogusCrew => 10,
+            MobKind::AmogusImpostor => 50,
+            MobKind::Capybara => 100,
+            MobKind::KlarnaKop(_) => 5,
+            MobKind::BrainrotEnemy => 0,
+            MobKind::Fortnite(_) => 10,
+            MobKind::Animatronic => 5,
+            MobKind::Streamer => 70,
+            MobKind::Eceleb => 85,
+            MobKind::Fan => 15,
+            MobKind::Stan => 10,
+            MobKind::Whale => 25,
+            MobKind::Drone => 0,
+            MobKind::Zombie => 0,
+            MobKind::Skeleton => 0,
+            MobKind::Spider => 0,
+            MobKind::Enderman => 15,
+            MobKind::ChadGPT => 95,
+        }
+    }
+
     pub(crate) fn get_bundle(&self, assets: &WorldAssets) -> MobBundle {
         match self {
             MobKind::Animatronic => MobBundle {

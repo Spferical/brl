@@ -63,8 +63,8 @@ const PLAYER_Z: f32 = 10.0;
 const CORPSE_Z: f32 = 5.0;
 const TILE_Z: f32 = 0.0;
 
-const PLAYER_FACTION: i32 = 0;
-const FRIENDLY_FACTION: i32 = 2;
+pub(crate) const PLAYER_FACTION: i32 = 0;
+pub(crate) const FRIENDLY_FACTION: i32 = 2;
 const ENEMY_FACTION: i32 = -1;
 
 const UI_GREEN: egui::Color32 = egui::Color32::from_rgb(65, 163, 109);
@@ -100,6 +100,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<phone::PhoneState>();
     app.init_resource::<delivery::DungeonDashState>();
     app.init_resource::<mobile_apps::CockatriceState>();
+    app.init_resource::<mobile_apps::CrawlrState>();
     app.init_resource::<delivery::ActiveDelivery>();
     app.init_resource::<chat::StreamingState>();
     app.init_resource::<chat::ChatHistory>();
@@ -115,45 +116,51 @@ pub(super) fn plugin(app: &mut App) {
     app.add_message::<upgrades::UpgradeMessage>();
     app.add_systems(
         Update,
-        ((
-            lighting::update_lighting,
-            update_fov_mask,
-            lighting::on_add_occluder,
-            lighting::on_add_player,
-            input::handle_input.run_if(is_player_alive.and(phone::is_phone_closed)),
-            targeting::update_valid_targets,
-            targeting::update_valid_target_indicators
-                .run_if(resource_changed::<targeting::ValidTargets>),
+        (
             (
-                phone::set_notification,
-                phone::toggle_phone,
-                phone::update_phone,
-                mobile_apps::update_cockatrice,
-            )
-                .chain(),
-            chat::update_streaming_stats,
-            chat::update_money_timer,
-            chat::update_chat,
-            update_level_info_on_change,
+                lighting::update_lighting,
+                update_fov_mask,
+                lighting::on_add_occluder,
+                lighting::on_add_player,
+                input::handle_input.run_if(is_player_alive.and(phone::is_phone_closed)),
+                targeting::update_valid_targets,
+                targeting::update_valid_target_indicators
+                    .run_if(resource_changed::<targeting::ValidTargets>),
+                (
+                    phone::set_notification,
+                    phone::toggle_phone,
+                    phone::update_phone,
+                    mobile_apps::update_cockatrice,
+                )
+                    .chain(),
+                chat::update_streaming_stats,
+                chat::update_money_timer,
+                chat::update_chat,
+            ),
             (
-                animation::process_move_animations,
-                animation::process_attack_animations,
-                animation::spawn_damage_animations,
-                animation::spawn_floating_messages,
-                animation::update_floating_text,
-                animation::update_title_drop,
-            )
-                .chain(),
-            camera::update_camera,
-            examine::update_examine_info,
-            examine::highlight_examine_tile,
-            delivery::draw_delivery_indicators,
-            delivery::update_current_mobs,
-            upgrades::handle_upgrades,
-            debug::teleport_player,
+                update_level_info_on_change,
+                (
+                    animation::process_move_animations,
+                    animation::process_attack_animations,
+                    animation::spawn_damage_animations,
+                    animation::spawn_floating_messages,
+                    animation::update_floating_text,
+                    animation::update_title_drop,
+                )
+                    .chain(),
+                camera::update_camera,
+                examine::update_examine_info,
+                examine::highlight_examine_tile,
+                delivery::draw_delivery_indicators,
+                            delivery::update_current_mobs,
+                            upgrades::handle_upgrades,
+                            debug::teleport_player,
+                            update_crawlr_animation,
+                        )
+                ,
         )
             .run_if(in_state(Screen::Gameplay))
-            .chain(),),
+            .chain(),
     );
     app.init_schedule(Turn);
     app.add_systems(
@@ -168,6 +175,7 @@ pub(super) fn plugin(app: &mut App) {
             (
                 (
                     increment_turn_counter,
+                    mobile_apps::update_crawlr,
                     chat::update_streaming_turn,
                     tick_meters,
                     handle_subscriptions,
@@ -242,7 +250,7 @@ pub(super) fn plugin(app: &mut App) {
         (
             sidebar,
             left_sidebar,
-            draw_hunger_warning,
+            draw_status_indicator,
             chat::draw_streaming_indicator,
             phone::draw_phone,
             chat::draw_chat,
@@ -1030,7 +1038,7 @@ pub(crate) struct Creature {
 }
 
 fn is_enemy(faction: i32, other: i32) -> bool {
-    if faction == FRIENDLY_FACTION {
+    if faction == FRIENDLY_FACTION || other == FRIENDLY_FACTION {
         false
     } else if faction == ENEMY_FACTION {
         other == 0
@@ -2634,7 +2642,6 @@ fn get_crew_move(
     claimed_locations: &HashSet<IVec2>,
 ) -> Option<Action> {
     if (mob.destination.is_none() || mob.destination == Some(pos.0))
-        && !mob.attrs.friendly
         && let Some(level) = map_info.get_level(pos)
         && !level.destinations.is_empty()
     {
@@ -3582,6 +3589,7 @@ pub struct GameResetParams<'w> {
     pub active_delivery: ResMut<'w, delivery::ActiveDelivery>,
     pub dungeon_dash_selection: ResMut<'w, delivery::DungeonDashState>,
     pub cockatrice_state: ResMut<'w, mobile_apps::CockatriceState>,
+    pub crawlr_state: ResMut<'w, mobile_apps::CrawlrState>,
     pub turn_counter: ResMut<'w, TurnCounter>,
     pub next_phone_screen: ResMut<'w, NextState<phone::PhoneScreen>>,
     pub next_dungeon_dash_screen: ResMut<'w, NextState<delivery::DungeonDashScreen>>,
@@ -3622,6 +3630,7 @@ pub fn enter(
     *params.active_delivery = delivery::ActiveDelivery::default();
     *params.dungeon_dash_selection = delivery::DungeonDashState::default();
     *params.cockatrice_state = mobile_apps::CockatriceState::default();
+    *params.crawlr_state = mobile_apps::CrawlrState::default();
     *params.turn_counter = TurnCounter::default();
     *params.examine_pos = examine::ExaminePos::default();
     *params.examine_results = examine::ExamineResults::default();
@@ -3677,11 +3686,12 @@ pub fn exit(
     }
 }
 
-fn draw_hunger_warning(
+fn draw_status_indicator(
     mut contexts: EguiContexts,
     player: Single<(&Player, &Creature, &MapPos)>,
     map_info: Res<mapgen::MapInfo>,
     q_grass: Query<&MapPos, With<map::Grass>>,
+    crawlr_state: Res<mobile_apps::CrawlrState>,
 ) {
     let (player, _creature, player_pos) = player.into_inner();
 
@@ -3693,7 +3703,7 @@ fn draw_hunger_warning(
         is_touching_grass = true;
     }
 
-    if player.hunger < 100 && !is_touching_grass {
+    if player.hunger < 100 && !is_touching_grass && crawlr_state.match_effect.is_none() {
         return;
     }
 
@@ -3701,7 +3711,10 @@ fn draw_hunger_warning(
         return;
     };
 
-    let (text, color) = if player.hunger >= 100 {
+    let (text, color) = if let Some(effect) = &crawlr_state.match_effect {
+        let displayed = &effect.text[..effect.teletype_index];
+        (displayed, egui::Color32::from_rgb(255, 50, 50))
+    } else if player.hunger >= 100 {
         let text = if player.brainrot > 80 {
             if player.strength == 0 {
                 "HUNGERMAXXING FR"
@@ -3721,13 +3734,16 @@ fn draw_hunger_warning(
     egui::Area::new(egui::Id::new("hunger_warning"))
         .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, -20.0))
         .show(ctx, |ui| {
-            ui.label(apply_brainrot_ui(
-                egui::RichText::new(text).color(color).size(56.0).strong(),
-                player.brainrot,
-                ui.style(),
-                egui::FontSelection::Default,
-                egui::Align::Center,
-            ));
+            ui.add(
+                egui::Label::new(apply_brainrot_ui(
+                    egui::RichText::new(text).color(color).size(56.0).strong(),
+                    player.brainrot,
+                    ui.style(),
+                    egui::FontSelection::Default,
+                    egui::Align::Center,
+                ))
+                .wrap_mode(egui::TextWrapMode::Extend),
+            );
         });
 }
 
@@ -3824,6 +3840,68 @@ fn update_fov_mask(
                     data[idx] = 0;
                     data[idx + 1] = 0;
                     data[idx + 2] = 0;
+                }
+            }
+        }
+    }
+}
+
+fn update_crawlr_animation(
+    mut state: ResMut<mobile_apps::CrawlrState>,
+    mut player_query: Single<&mut Player>,
+    mut mob_query: Query<(&crate::game::DropsCorpse, &mut Mob)>,
+    time: Res<Time>,
+) {
+    if let Some(effect) = &mut state.match_effect {
+        effect.timer -= time.delta_secs();
+        effect.teletype_timer -= time.delta_secs();
+        if effect.teletype_timer <= 0.0 && effect.teletype_index < effect.text.len() {
+            effect.teletype_index += 1;
+            effect.teletype_timer = 0.05;
+        }
+        if effect.timer <= 0.0 {
+            state.match_effect = None;
+        }
+    }
+
+    // Update swipe animation timer
+    if state.swipe_animation_timer > 0.0 {
+        state.swipe_animation_timer -= time.delta_secs();
+        if state.swipe_animation_timer <= 0.0 {
+            state.swipe_animation_timer = 0.0;
+            // Finish swipe
+            if let Some(entity) = state.last_swiped_entity.take() {
+                state.swiped_entities.insert(entity);
+                player_query.brainrot += 2;
+
+                let is_match = state.matches.contains(&entity);
+                if state.last_swiped_is_like {
+                    if is_match {
+                        state.pending_faction_changes.insert(entity, FRIENDLY_FACTION);
+                        if let Ok((_, mut mob)) = mob_query.get_mut(entity) {
+                            mob.target = None;
+                        }
+                    } else {
+                        // PROACTIVE SWIPE
+                        if let Ok((corpse, _)) = mob_query.get(entity) {
+                            let chance = (corpse.kind.get_attractiveness() as f64 / 100.0) * 0.03;
+                            state.pending_swipes.push(mobile_apps::PendingRightSwipe {
+                                entity,
+                                turns_remaining: 20,
+                                chance,
+                            });
+                        }
+                    }
+                } else {
+                    if is_match {
+                        state.pending_psychic_damage.insert(entity);
+                        state.match_effect = Some(mobile_apps::MatchEffect {
+                            text: "ouch".to_string(),
+                            timer: 2.0,
+                            teletype_index: 0,
+                            teletype_timer: 0.05,
+                        });
+                    }
                 }
             }
         }

@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_egui::egui::{self, Color32, RichText};
+use std::collections::{HashMap, HashSet};
 
 use crate::game::animation;
 use crate::game::apply_brainrot_ui;
@@ -8,7 +9,7 @@ use crate::game::chat::StreamingState;
 use crate::game::delivery::{DungeonDashScreen, DungeonDashState as DungeonDashSelection, FOODS};
 use crate::game::phone::{PhoneScreen, PhoneState};
 use crate::game::upgrades::{UPGRADES, UpgradeMessage};
-use crate::game::{Creature, Player};
+use crate::game::{Creature, Mob, Player, FRIENDLY_FACTION};
 
 const FROG_HANDLES: &[&str] = &["@Hopper", "@Ribbit", "@SwampKing"];
 const GYM_BRO_HANDLES: &[&str] = &["@LiftHeavy", "@ProteinShake", "@DoYouEvenLift"];
@@ -62,6 +63,224 @@ pub struct CockatriceState {
     pub turn_timer: f32,
 }
 
+pub struct CrawlrMob {
+    pub entity: Entity,
+    pub name: String,
+    pub glyph: char,
+    pub color: Color32,
+    pub distance: f32,
+    pub age: u32,
+    pub gender: String,
+}
+
+pub struct PendingRightSwipe {
+    pub entity: Entity,
+    pub turns_remaining: u32,
+    pub chance: f64,
+}
+
+pub struct MatchEffect {
+    pub text: String,
+    pub timer: f32,
+    pub teletype_index: usize,
+    pub teletype_timer: f32,
+}
+
+#[derive(Resource, Default)]
+pub struct CrawlrState {
+    pub matches: Vec<Entity>,
+    pub turn_counter: u32,
+    pub has_new_match: bool,
+    pub swiped_entities: HashSet<Entity>,
+    pub last_mobs: Vec<CrawlrMob>,
+    pub pending_swipes: Vec<PendingRightSwipe>,
+    pub match_effect: Option<MatchEffect>,
+    pub pending_psychic_damage: HashSet<Entity>,
+    pub pending_faction_changes: HashMap<Entity, i32>,
+    pub swipe_animation_timer: f32,
+    pub swipe_animation_dir: f32, // -1.0 for left, 1.0 for right
+    pub last_swiped_entity: Option<Entity>,
+    pub last_swiped_is_like: bool,
+}
+
+pub fn update_crawlr(
+    mut state: ResMut<CrawlrState>,
+    turn_counter: Res<crate::game::TurnCounter>,
+    player_query: Single<(&mut Player, &crate::game::map::MapPos)>,
+    mut mob_query: Query<
+        (
+            Entity,
+            &mut Creature,
+            &Name,
+            &Text2d,
+            &TextColor,
+            &crate::game::DropsCorpse,
+            &crate::game::map::MapPos,
+            &mut Mob,
+        ),
+    >,
+    mut phone_state: ResMut<PhoneState>,
+) {
+    let (mut player, player_pos) = player_query.into_inner();
+
+    // Process psychic damage
+    for _entity in state.pending_psychic_damage.drain() {
+        player.brainrot += 5;
+    }
+
+    // Process faction changes
+    for (entity, new_faction) in state.pending_faction_changes.drain() {
+        if let Ok((_, mut creature, _, _, _, _, _, mut mob)) = mob_query.get_mut(entity) {
+            creature.faction = new_faction;
+            mob.attrs.friendly = true;
+            mob.target = None;
+        }
+    }
+
+    // Only check every new turn
+    static LAST_TURN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let current_turn = turn_counter.0;
+    if LAST_TURN.swap(current_turn, std::sync::atomic::Ordering::Relaxed) == current_turn {
+        return;
+    }
+
+    state.turn_counter += 1;
+
+    // Update pending swipes
+    let mut rng = rand::rng();
+    use rand::Rng;
+    let mut new_matches = vec![];
+    state.pending_swipes.retain_mut(|pending| {
+        if pending.turns_remaining > 0 {
+            pending.turns_remaining -= 1;
+            true
+        } else {
+            if rng.random_bool(pending.chance) {
+                new_matches.push(pending.entity);
+            }
+            false
+        }
+    });
+
+    for entity in new_matches {
+        if !state.matches.contains(&entity) && mob_query.get(entity).is_ok_and(|m| m.1.hp > 0) {
+            state.matches.push(entity);
+            state.has_new_match = true;
+            phone_state.vibrate_timer = 0.5;
+            state.match_effect = Some(MatchEffect {
+                text: "You got a match!".to_string(),
+                timer: 2.0,
+                teletype_index: 0,
+                teletype_timer: 0.05,
+            });
+
+            // Make them friendly
+            if let Ok((_, mut creature, _, _, _, _, _, mut mob)) = mob_query.get_mut(entity) {
+                creature.faction = FRIENDLY_FACTION;
+                mob.attrs.friendly = true;
+                mob.target = None;
+            }
+        }
+    }
+
+    // Clean up dead mobs from matches
+    state.matches.retain(|&e| mob_query.get(e).is_ok_and(|m| m.1.hp > 0));
+
+    // Update potential matches pool for the UI
+    state.last_mobs.clear();
+    for (entity, creature, name, text, color, corpse, mob_pos, _) in mob_query.iter() {
+        if creature.hp <= 0 {
+            continue;
+        }
+        let diff = (player_pos.0 - mob_pos.0).abs();
+        let dist = diff.max_element() as f32;
+        if dist <= 50.0 {
+            use rand::SeedableRng;
+            let mut seeded_rng = rand::rngs::StdRng::seed_from_u64(entity.to_bits());
+
+            let age = match corpse.kind {
+                crate::game::mapgen::MobKind::GiantFrog => seeded_rng.random_range(1..12),
+                crate::game::mapgen::MobKind::GymBro => seeded_rng.random_range(18..45),
+                crate::game::mapgen::MobKind::Influencer => seeded_rng.random_range(18..35),
+                crate::game::mapgen::MobKind::Normie => seeded_rng.random_range(18..80),
+                crate::game::mapgen::MobKind::AmogusCrew | crate::game::mapgen::MobKind::AmogusImpostor => seeded_rng.random_range(0..999),
+                crate::game::mapgen::MobKind::Capybara => seeded_rng.random_range(1..15),
+                _ => seeded_rng.random_range(18..99),
+            };
+
+            let gender = match seeded_rng.random_range(0..3) {
+                0 => "M".to_string(),
+                1 => "F".to_string(),
+                _ => "NB".to_string(),
+            };
+
+            let [r, g, b, a] = color.0.to_srgba().to_u8_array();
+            state.last_mobs.push(CrawlrMob {
+                entity,
+                name: name.to_string(),
+                glyph: text.0.chars().next().unwrap_or('?'),
+                color: Color32::from_rgba_unmultiplied(r, g, b, a),
+                distance: dist,
+                age,
+                gender,
+            });
+        }
+    }
+
+    if state.turn_counter % 20 == 0 {
+        let player_attractiveness = player.rizz as f32 + player.strength as f32 * 0.2;
+
+        let chance = if player_attractiveness < 30.0 {
+            0.0
+        } else if player_attractiveness > 100.0 {
+            1.0
+        } else {
+            (player_attractiveness - 30.0) / (100.0 - 30.0)
+        };
+
+        // Roughly once every 100 turns on average (at 100% chance)
+        let chance = (chance as f64) * (20.0 / 100.0);
+
+        use rand::Rng;
+        let mut rng = rand::rng();
+        if rng.random_bool(chance) {
+            // Find nearby mobs (50 tile radius)
+            let mut nearby_mobs = vec![];
+            for (entity, creature, _name, _text, _color, corpse, mob_pos, mob) in mob_query.iter_mut() {
+                if creature.hp <= 0 || state.matches.contains(&entity) || state.swiped_entities.contains(&entity) {
+                    continue;
+                }
+                let diff = (player_pos.0 - mob_pos.0).abs();
+                let dist = diff.max_element();
+                if dist <= 50 {
+                    nearby_mobs.push((entity, corpse.kind.get_attractiveness(), creature, mob));
+                }
+            }
+
+            if !nearby_mobs.is_empty() {
+                use rand::seq::IndexedMutRandom;
+                // Weighted selection
+                if let Ok(matched_mob) = nearby_mobs.choose_weighted_mut(&mut rng, |m| m.1 as f32 + 1.0) {
+                    state.matches.push(matched_mob.0);
+                    state.has_new_match = true;
+                    phone_state.vibrate_timer = 0.5;
+                    state.match_effect = Some(MatchEffect {
+                        text: "You got a like!".to_string(),
+                        timer: 2.0,
+                        teletype_index: 0,
+                        teletype_timer: 0.05,
+                    });
+                    
+                    // Make them friendly
+                    matched_mob.2.faction = FRIENDLY_FACTION;
+                    matched_mob.3.attrs.friendly = true;
+                    matched_mob.3.target = None;
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
 pub enum AppId {
     Crawlr,
@@ -96,6 +315,7 @@ pub trait MobileApp: Send + Sync {
         msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         next_phone_screen: &mut NextState<PhoneScreen>,
         cockatrice_state: &mut CockatriceState,
+        crawlr_state: &mut CrawlrState,
         map_info: &crate::game::mapgen::MapInfo,
     );
 }
@@ -114,24 +334,211 @@ impl MobileApp for Crawlr {
     }
     fn draw_content(
         &self,
-        _ui: &mut egui::Ui,
+        ui: &mut egui::Ui,
         _phone_state: &mut PhoneState,
         _streaming_state: &mut StreamingState,
-        _player: &mut Player,
+        player: &mut Player,
         _creature: &mut Creature,
         _player_pos: &crate::game::map::MapPos,
         _active_delivery: &mut crate::game::delivery::ActiveDelivery,
         _walk_blocked_map: &crate::game::map::WalkBlockedMap,
-        _scale: f32,
-        _alpha: u8,
+        scale: f32,
+        alpha: u8,
         _dd_screen: &DungeonDashScreen,
         _next_dd_screen: &mut NextState<DungeonDashScreen>,
         _dd_selection: &mut DungeonDashSelection,
         _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         _next_phone_screen: &mut NextState<PhoneScreen>,
         _cockatrice_state: &mut CockatriceState,
+        crawlr_state: &mut CrawlrState,
         _map_info: &crate::game::mapgen::MapInfo,
     ) {
+        crawlr_state.has_new_match = false;
+
+        let mut potential_matches = vec![];
+        for mob in &crawlr_state.last_mobs {
+            if crawlr_state.swiped_entities.contains(&mob.entity) {
+                continue;
+            }
+            let is_match = crawlr_state.matches.contains(&mob.entity);
+            potential_matches.push((mob, is_match));
+        }
+
+        // Sort: Matches first, then others
+        potential_matches.sort_by_key(|m| !m.1);
+
+        if potential_matches.is_empty() {
+            ui.add_space(ui.available_height() * 0.4);
+            ui.label(crate::game::apply_brainrot_ui(
+                RichText::new("No one new in your area...")
+                    .size(32.0 * scale)
+                    .color(Color32::from_rgba_unmultiplied(0, 0, 0, alpha)),
+                player.brainrot,
+                ui.style(),
+                egui::FontSelection::Default,
+                egui::Align::Center,
+            ));
+            return;
+        }
+
+        let (mob, is_match) = potential_matches[0];
+
+        ui.add_space(40.0 * scale);
+
+        let swipe_offset = if crawlr_state.swipe_animation_timer > 0.0 {
+            let t = 1.0 - (crawlr_state.swipe_animation_timer / 0.3);
+            let eased_t = t * t;
+            crawlr_state.swipe_animation_dir * eased_t * 500.0 * scale
+        } else {
+            0.0
+        };
+
+        let card_alpha = if crawlr_state.swipe_animation_timer > 0.0 {
+            (alpha as f32 * (crawlr_state.swipe_animation_timer / 0.3)) as u8
+        } else {
+            alpha
+        };
+
+        // Profile Card
+        let card_width = ui.available_width() * 0.9;
+        let card_height = ui.available_height() * 0.7;
+        let (mut rect, _response) = ui.allocate_exact_size(
+            egui::vec2(card_width, card_height),
+            egui::Sense::hover(),
+        );
+
+        rect.min.x += swipe_offset;
+        rect.max.x += swipe_offset;
+
+        let fill = Color32::from_rgba_unmultiplied(255, 255, 255, card_alpha);
+        ui.painter().rect_filled(rect, 10.0 * scale, fill);
+        ui.painter().rect_stroke(
+            rect,
+            10.0 * scale,
+            egui::Stroke::new(2.0, Color32::BLACK),
+            egui::StrokeKind::Middle,
+        );
+
+        let mut child_ui = ui.new_child(egui::UiBuilder::new().max_rect(rect));
+        child_ui.vertical_centered(|ui| {
+            ui.add_space(20.0 * scale);
+
+            // Large Icon
+            let icon_size = 350.0 * scale;
+            let (icon_rect, _) =
+                ui.allocate_exact_size(egui::vec2(icon_size, icon_size), egui::Sense::hover());
+            ui.painter().rect_filled(
+                icon_rect,
+                5.0 * scale,
+                Color32::from_rgba_unmultiplied(240, 240, 240, card_alpha),
+            );
+            ui.painter().rect_stroke(
+                icon_rect,
+                5.0 * scale,
+                egui::Stroke::new(1.0, Color32::GRAY),
+                egui::StrokeKind::Middle,
+            );
+
+            let glyph = mob.glyph.to_string();
+            let color = mob.color;
+
+            let text_job = crate::game::apply_brainrot_ui(
+                RichText::new(glyph).size(250.0 * scale).color(
+                    Color32::from_rgba_unmultiplied(
+                        color.r(),
+                        color.g(),
+                        color.b(),
+                        (color.a() as f32 * (card_alpha as f32 / 255.0)) as u8,
+                    ),
+                ),
+                player.brainrot,
+                ui.style(),
+                egui::FontSelection::Default,
+                egui::Align::Center,
+            )
+            .into_layout_job(
+                ui.style(),
+                egui::FontSelection::Default,
+                egui::Align::Center,
+            );
+
+            let galley = ui.painter().layout_job((*text_job).clone());
+            ui.painter().galley(
+                icon_rect.center() - galley.size() * 0.5,
+                galley,
+                Color32::WHITE,
+            );
+
+            ui.add_space(20.0 * scale);
+
+            if is_match {
+                ui.label(crate::game::apply_brainrot_ui(
+                    RichText::new("Likes you!")
+                        .size(32.0 * scale)
+                        .color(Color32::from_rgba_unmultiplied(255, 50, 50, card_alpha))
+                        .strong(),
+                    player.brainrot,
+                    ui.style(),
+                    egui::FontSelection::Default,
+                    egui::Align::Center,
+                ));
+                ui.add_space(5.0 * scale);
+            }
+
+            ui.label(crate::game::apply_brainrot_ui(
+                RichText::new(format!("{}, {}", mob.name, mob.age))
+                    .size(48.0 * scale)
+                    .strong()
+                    .color(Color32::from_rgba_unmultiplied(0, 0, 0, card_alpha)),
+                player.brainrot,
+                ui.style(),
+                egui::FontSelection::Default,
+                egui::Align::Center,
+            ));
+
+            ui.add_space(10.0 * scale);
+
+            ui.label(crate::game::apply_brainrot_ui(
+                RichText::new(format!("{} • {} tiles away", mob.gender, mob.distance as i32))
+                    .size(24.0 * scale)
+                    .color(Color32::from_rgba_unmultiplied(100, 100, 100, card_alpha)),
+                player.brainrot,
+                ui.style(),
+                egui::FontSelection::Default,
+                egui::Align::Center,
+            ));
+        });
+
+        ui.add_space(40.0 * scale);
+
+        // Buttons
+        ui.horizontal(|ui| {
+            ui.add_space(ui.available_width() * 0.2);
+            let left_btn = ui.add(
+                egui::Button::new(RichText::new("❌").size(64.0 * scale))
+                    .fill(Color32::from_rgba_unmultiplied(255, 200, 200, alpha))
+                    .stroke(egui::Stroke::new(2.0, Color32::BLACK)),
+            );
+            ui.add_space(ui.available_width() * 0.4);
+            let right_btn = ui.add(
+                egui::Button::new(RichText::new("❤").size(64.0 * scale))
+                    .fill(Color32::from_rgba_unmultiplied(200, 255, 200, alpha))
+                    .stroke(egui::Stroke::new(2.0, Color32::BLACK)),
+            );
+
+            if left_btn.clicked() && crawlr_state.swipe_animation_timer <= 0.0 {
+                crawlr_state.swipe_animation_timer = 0.3;
+                crawlr_state.swipe_animation_dir = -1.0;
+                crawlr_state.last_swiped_entity = Some(mob.entity);
+                crawlr_state.last_swiped_is_like = false;
+            }
+            if right_btn.clicked() && crawlr_state.swipe_animation_timer <= 0.0 {
+                crawlr_state.swipe_animation_timer = 0.3;
+                crawlr_state.swipe_animation_dir = 1.0;
+                crawlr_state.last_swiped_entity = Some(mob.entity);
+                crawlr_state.last_swiped_is_like = true;
+            }
+        });
     }
 }
 
@@ -165,6 +572,7 @@ impl MobileApp for DungeonDash {
         _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         _next_phone_screen: &mut NextState<PhoneScreen>,
         _cockatrice_state: &mut CockatriceState,
+        _crawlr_state: &mut CrawlrState,
         map_info: &crate::game::mapgen::MapInfo,
     ) {
         let role_selection_alpha = ui.ctx().animate_bool_with_time(
@@ -1103,6 +1511,7 @@ impl MobileApp for UndergroundTV {
         _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         _next_phone_screen: &mut NextState<PhoneScreen>,
         _cockatrice_state: &mut CockatriceState,
+        _crawlr_state: &mut CrawlrState,
         _map_info: &crate::game::mapgen::MapInfo,
     ) {
         ui.add_space(ui.available_height() * 0.4);
@@ -1188,6 +1597,7 @@ impl MobileApp for Cockatrice {
         _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         _next_phone_screen: &mut NextState<PhoneScreen>,
         cockatrice_state: &mut CockatriceState,
+        _crawlr_state: &mut CrawlrState,
         _map_info: &crate::game::mapgen::MapInfo,
     ) {
         if cockatrice_state.tweets.is_empty() {
@@ -1430,6 +1840,7 @@ impl MobileApp for Upgrade {
         msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         next_phone_screen: &mut NextState<PhoneScreen>,
         _cockatrice_state: &mut CockatriceState,
+        _crawlr_state: &mut CrawlrState,
         _map_info: &crate::game::mapgen::MapInfo,
     ) {
         ui.add_space(40.0 * scale);

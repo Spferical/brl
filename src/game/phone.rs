@@ -36,6 +36,7 @@ pub struct PhoneState {
     pub is_hovered: bool,
     pub unread_notification: Option<AppId>,
     pub forced_open: bool,
+    pub vibrate_timer: f32,
 }
 
 impl PhoneState {
@@ -51,9 +52,15 @@ impl PhoneState {
     }
 }
 
-pub fn set_notification(mut phone_state: ResMut<PhoneState>, player: Single<&Player>) {
+pub fn set_notification(
+    mut phone_state: ResMut<PhoneState>,
+    player: Single<&Player>,
+    crawlr_state: Res<mobile_apps::CrawlrState>,
+) {
     if player.pending_upgrades > 0 {
         phone_state.set_notification(Some(AppId::Upgrade));
+    } else if crawlr_state.has_new_match {
+        phone_state.set_notification(Some(AppId::Crawlr));
     } else {
         phone_state.set_notification(None);
     }
@@ -230,6 +237,11 @@ pub fn update_phone(
         phone_state.app_launch_progress = 0.0;
     }
 
+    if phone_state.vibrate_timer > 0.0 {
+        phone_state.vibrate_timer -= time.delta_secs();
+        needs_repaint = true;
+    }
+
     if (needs_repaint || (phone_state.is_open && *current_screen.get() != PhoneScreen::Home))
         && let Ok(ctx) = contexts.ctx_mut()
     {
@@ -252,6 +264,7 @@ pub fn draw_phone(
     mut dd_selection: ResMut<DungeonDashSelection>,
     mut msg_upgrade: MessageWriter<UpgradeMessage>,
     mut cockatrice_state: ResMut<mobile_apps::CockatriceState>,
+    mut crawlr_state: ResMut<mobile_apps::CrawlrState>,
     map_info: Res<crate::game::mapgen::MapInfo>,
 ) {
     let (mut player, mut creature, player_pos) = player_query.into_inner();
@@ -331,6 +344,11 @@ pub fn draw_phone(
     if phone_state.creep_progress > 0.0 {
         let creep_offset = phone_state.creep_progress * 150.0;
         current_y -= creep_offset;
+    }
+
+    if phone_state.vibrate_timer > 0.0 {
+        let shake = (phone_state.vibrate_timer * 100.0).sin() * 5.0;
+        current_y += shake;
     }
 
     let phone_rect = egui::Rect::from_center_size(egui::pos2(center_x, current_y), phone_size);
@@ -484,6 +502,22 @@ pub fn draw_phone(
                         galley,
                         Color32::from_rgba_unmultiplied(255, 255, 255, home_alpha),
                     );
+
+                    // Notification dot
+                    if phone_state.unread_notification == Some(app_id) {
+                        let dot_radius = 12.0 * scale_x;
+                        let dot_center = base_icon_rect.right_top() + egui::vec2(-dot_radius, dot_radius);
+                        ui.painter().circle_filled(
+                            dot_center,
+                            dot_radius,
+                            Color32::from_rgba_unmultiplied(255, 0, 0, home_alpha),
+                        );
+                        ui.painter().circle_stroke(
+                            dot_center,
+                            dot_radius,
+                            egui::Stroke::new(2.0, Color32::from_rgba_unmultiplied(255, 255, 255, home_alpha)),
+                        );
+                    }
                 }
 
                 if let Some(unread_idx) = phone_state.unread_notification {
@@ -510,8 +544,14 @@ pub fn draw_phone(
 
                     ui.painter().rect_filled(banner_rect, 10.0 * scale_x, fill);
 
+                    let banner_text = match unread_idx {
+                        AppId::Upgrade => "New Upgrade Available!",
+                        AppId::Crawlr => "You got a like!",
+                        _ => "New notification",
+                    };
+
                     let text_job = apply_brainrot_ui(
-                        RichText::new("New Upgrade Available!").size(32.0 * scale_x),
+                        RichText::new(banner_text).size(32.0 * scale_x),
                         player.brainrot,
                         ui.style(),
                         egui::FontSelection::Default,
@@ -597,6 +637,7 @@ pub fn draw_phone(
                                 &mut msg_upgrade,
                                 &mut next_screen,
                                 &mut cockatrice_state,
+                                &mut crawlr_state,
                                 &map_info,
                             );
                         }
