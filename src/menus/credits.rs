@@ -35,20 +35,21 @@ fn credits_menu(
                     .show(ui, |ui| {
                         ui.label("Spferical");
                         ui.label("Programming & Level Design");
+                        ui.label("https://github.com/spferical");
                         ui.end_row();
                         ui.label("AnimatedRNG");
                         ui.label("Programming & Level Design");
+                        ui.label("https://github.com/animatedrng");
                         ui.end_row();
-                        ui.label("Micheal Chang");
-                        ui.label("Level Design");
+                        ui.label("ellenjiang7");
+                        ui.label("Art");
+                        ui.label("https://instagram.com/ellenjiang7");
                         ui.end_row();
-                        ui.label("inexazkt");
+                        ui.label("inexzakt");
                         ui.label("Music");
+                        ui.label("https://soundcloud.com/inexzakt");
                         ui.end_row();
                     });
-                ui.label(egui::RichText::new("Assets").heading());
-                ui.label("Winlu Spaceship Tileset");
-                ui.label("2D Platformer Shooter Space Combat Suit Character Sprite");
                 if ui.button("Back").clicked() || keyboard_input.just_pressed(KeyCode::Escape) {
                     next_menu.set(Menu::Main);
                 }
