@@ -136,7 +136,7 @@ const POND_DIST: &[(MobKind, usize)] = &[
     (MobKind::GiantFrog, 2),
 ];
 const OFFICE_DIST: &[(MobKind, usize)] = &[
-    (MobKind::ChadGPT, 10),
+    (MobKind::ChadGPT, 1),
     (MobKind::Normie, 1),
     (MobKind::Drone, 1),
 ];
