@@ -26,6 +26,22 @@ pub(crate) const USERNAMES: &[&str] = &[
     "DungeonBackseater",
     "YoSoyUnKobold",
     "BasementDweller",
+    "feelsg00dman",
+    "ilovedankcaves",
+    "rodent_withabigbutt",
+    "pumpingiron",
+    "red_is_sus",
+    "straight_shooter",
+    "dontlookatme",
+    "umad234",
+    "chuck99999",
+    "baked_b3an",
+    "reeeeeeee_77",
+    "and-bones",
+    "ender_biggin",
+    "droner38",
+    "rageagainstthebachine",
+    "4nonymous",
 ];
 
 const GENERIC_MESSAGES: &[&str] = &[
@@ -47,6 +63,7 @@ const GENERIC_MESSAGES: &[&str] = &[
     "poggers",
     "monkaS",
     "Kappa",
+    "does this game let you move diagonally",
 ];
 
 const ATTACK_MESSAGES: &[&str] = &[
