@@ -66,9 +66,12 @@ pub fn is_phone_closed(phone_state: Res<PhoneState>) -> bool {
 pub fn toggle_phone(
     keyboard_input: Res<ButtonInput<KeyCode>>,
     mouse_button: Res<ButtonInput<MouseButton>>,
+    touches: Res<Touches>,
     mut phone_state: ResMut<PhoneState>,
 ) {
-    if keyboard_input.just_pressed(KeyCode::Space) || mouse_button.just_pressed(MouseButton::Right)
+    if keyboard_input.just_pressed(KeyCode::Space)
+        || mouse_button.just_pressed(MouseButton::Right)
+        || (touches.any_just_pressed() && touches.iter().count() == 2)
     {
         if phone_state.is_open && phone_state.forced_open {
             return;

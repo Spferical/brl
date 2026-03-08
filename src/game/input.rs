@@ -106,6 +106,7 @@ pub(crate) fn handle_input(
     mut msg_cursor: MessageReader<CursorMoved>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     keyboard_input: Res<ButtonInput<Key>>,
+    touches: Res<Touches>,
     mut commands: Commands,
     player: Single<(Entity, &Player, &MapPos, &GlobalTransform)>,
     mut mode: ResMut<InputMode>,
@@ -117,16 +118,21 @@ pub(crate) fn handle_input(
 ) {
     let (player_entity, player, player_pos, player_transform) = player.into_inner();
     let (camera, camera_transform) = camera.into_inner();
+    let is_ui_hovered = ctx
+        .ctx_mut()
+        .map(|ctx| ctx.is_pointer_over_area())
+        .unwrap_or(false);
     let mouse_pos = window.cursor_position();
-    let tile_clicked = if let Some(mouse_pos) = mouse_pos
-        && mouse_button_input.just_pressed(MouseButton::Left)
-        && !ctx
-            .ctx_mut()
-            .map(|ctx| ctx.is_pointer_over_area())
-            .unwrap_or(false)
-    {
+    let touch_pos = touches.first_pressed_position();
+    let active_press_pos = if mouse_button_input.just_pressed(MouseButton::Left) {
+        mouse_pos
+    } else {
+        touch_pos
+    };
+
+    let tile_clicked = if !is_ui_hovered && let Some(press_pos) = active_press_pos {
         camera
-            .viewport_to_world(camera_transform, mouse_pos)
+            .viewport_to_world(camera_transform, press_pos)
             .ok()
             .map(|ray| MapPos::from_vec2(ray.origin.truncate()))
     } else {
@@ -135,9 +141,9 @@ pub(crate) fn handle_input(
     let mouse_move_pos = msg_cursor
         .read()
         .last()
-        .and_then(|CursorMoved { position, .. }| {
-            camera.viewport_to_world(camera_transform, *position).ok()
-        })
+        .map(|CursorMoved { position, .. }| *position)
+        .or_else(|| touches.iter().next().map(|t| t.position()))
+        .and_then(|pos| camera.viewport_to_world(camera_transform, pos).ok())
         .map(|ray| MapPos::from_vec2(ray.origin.truncate()));
     let mut intent = None;
 
@@ -173,17 +179,11 @@ pub(crate) fn handle_input(
         InputMode::Normal => {
             if let Some(direction) = check_direction_keys(&keyboard_input) {
                 intent = Some(PlayerIntent::Move(MapPos(player_pos.0 + direction)));
-            } else if mouse_button_input.just_pressed(MouseButton::Left)
-                && !ctx
-                    .ctx_mut()
-                    .map(|ctx| ctx.is_pointer_over_area())
-                    .unwrap_or(false)
-            {
-                if let Some(mouse_pos) = mouse_pos
-                    && let Ok(player_viewport_pos) =
-                        camera.world_to_viewport(camera_transform, player_transform.translation())
+            } else if !is_ui_hovered && let Some(press_pos) = active_press_pos {
+                if let Ok(player_viewport_pos) =
+                    camera.world_to_viewport(camera_transform, player_transform.translation())
                 {
-                    let diff = mouse_pos - player_viewport_pos;
+                    let diff = press_pos - player_viewport_pos;
                     if diff.length() < 20.0 {
                         intent = Some(PlayerIntent::Wait);
                     } else {

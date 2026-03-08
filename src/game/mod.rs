@@ -2774,10 +2774,12 @@ fn sidebar(
     examine_results: Res<examine::ExamineResults>,
     world_assets: If<Res<WorldAssets>>,
     atlas_assets: If<Res<Assets<TextureAtlasLayout>>>,
-    input_mode: Res<InputMode>,
+    mut input_mode: ResMut<InputMode>,
+    mut examine_pos: ResMut<examine::ExaminePos>,
     mut msg_ability_clicked: MessageWriter<AbilityClicked>,
+    mut phone_state: ResMut<phone::PhoneState>,
 ) {
-    let (player, _) = player.into_inner();
+    let (player, player_pos) = player.into_inner();
     let sword = world_assets
         .get_urizen_egui_image(&mut contexts, &atlas_assets, 1262)
         .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
@@ -2799,7 +2801,7 @@ fn sidebar(
     egui::SidePanel::right("sidebar")
         .min_width(TILE_WIDTH * 8.0)
         .show(ctx, |ui| {
-            let examine_pos = examine_results.info.as_ref().map(|i| i.pos);
+            let active_examine_pos = examine_results.info.as_ref().map(|i| i.pos);
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.group(|ui| {
                     ui.set_min_height(400.0);
@@ -2807,7 +2809,7 @@ fn sidebar(
                     for (i, (pos, creature, mob, text, color, _sprite, name)) in
                         nearby_mobs.mobs.iter().enumerate()
                     {
-                        let highlight = Some(*pos) == examine_pos;
+                        let highlight = Some(*pos) == active_examine_pos;
                         let mut frame = egui::Frame::new().inner_margin(Margin::same(4));
                         if highlight {
                             frame = frame.fill(ui.style().visuals.code_bg_color);
@@ -3055,20 +3057,33 @@ fn sidebar(
                                 FontSelection::Default,
                                 Align::LEFT,
                             ));
-                            ui.label(apply_brainrot_ui(
-                                "examine: x",
-                                player.brainrot,
-                                ui.style(),
-                                FontSelection::Default,
-                                Align::LEFT,
-                            ));
-                            ui.label(apply_brainrot_ui(
-                                "phone: space",
-                                player.brainrot,
-                                ui.style(),
-                                FontSelection::Default,
-                                Align::LEFT,
-                            ));
+                            if ui
+                                .button(apply_brainrot_ui(
+                                    "examine: x",
+                                    player.brainrot,
+                                    ui.style(),
+                                    FontSelection::Default,
+                                    Align::LEFT,
+                                ))
+                                .clicked()
+                            {
+                                *input_mode = InputMode::Examine(player_pos.0);
+                                examine_pos.pos = Some(*player_pos);
+                            }
+                            if ui
+                                .button(apply_brainrot_ui(
+                                    "phone: space",
+                                    player.brainrot,
+                                    ui.style(),
+                                    FontSelection::Default,
+                                    Align::LEFT,
+                                ))
+                                .clicked()
+                            {
+                                if !phone_state.forced_open {
+                                    phone_state.is_open = !phone_state.is_open;
+                                }
+                            }
                             ui.label(apply_brainrot_ui(
                                 "wait: .",
                                 player.brainrot,
@@ -3139,13 +3154,19 @@ fn sidebar(
                                 FontSelection::Default,
                                 Align::LEFT,
                             ));
-                            ui.label(apply_brainrot_ui(
-                                "exit: x",
-                                player.brainrot,
-                                ui.style(),
-                                FontSelection::Default,
-                                Align::LEFT,
-                            ));
+                            if ui
+                                .button(apply_brainrot_ui(
+                                    "exit: x",
+                                    player.brainrot,
+                                    ui.style(),
+                                    FontSelection::Default,
+                                    Align::LEFT,
+                                ))
+                                .clicked()
+                            {
+                                *input_mode = InputMode::Normal;
+                                examine_pos.pos = None;
+                            }
                         }
                         InputMode::Targeting(ability, _pos) => {
                             ui.label(apply_brainrot_ui(
@@ -3176,13 +3197,19 @@ fn sidebar(
                                 FontSelection::Default,
                                 Align::LEFT,
                             ));
-                            ui.label(apply_brainrot_ui(
-                                "exit: x",
-                                player.brainrot,
-                                ui.style(),
-                                FontSelection::Default,
-                                Align::LEFT,
-                            ));
+                            if ui
+                                .button(apply_brainrot_ui(
+                                    "exit: x",
+                                    player.brainrot,
+                                    ui.style(),
+                                    FontSelection::Default,
+                                    Align::LEFT,
+                                ))
+                                .clicked()
+                            {
+                                *input_mode = InputMode::Normal;
+                                examine_pos.pos = None;
+                            }
                             if ability == Ability::Sprint {
                                 ui.label(apply_brainrot_ui(
                                     "exit: shift",
