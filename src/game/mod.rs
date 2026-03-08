@@ -2470,8 +2470,9 @@ fn process_mob_turn(
                     ty: mob.get_melee_damage_type(),
                 });
                 *pos = teleport_pos;
+                let from_vec3 = old_pos.to_vec3(PLAYER_Z);
                 commands.entity(entity).insert(MoveAnimation {
-                    from: old_pos.to_vec3(PLAYER_Z),
+                    from: from_vec3,
                     to: teleport_pos.to_vec3(PLAYER_Z),
                     timer: Timer::new(Duration::from_millis(1), TimerMode::Once),
 
@@ -2484,8 +2485,8 @@ fn process_mob_turn(
                     screen_shake.trauma = (screen_shake.trauma + 0.7).min(1.0);
                 }
                 floating_text.write(FloatingTextMessage {
-                    entity: Some(entity),
-                    world_pos: None,
+                    entity: None,
+                    world_pos: Some(from_vec3),
                     text: "Teleported!".to_string(),
                     color: Color::srgb(1.0, 0.0, 1.0),
                     ..default()
