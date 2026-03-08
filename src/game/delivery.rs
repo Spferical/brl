@@ -5,6 +5,7 @@ use crate::game::{
     assets::WorldAssets, map,
 };
 use bevy::prelude::*;
+use bevy_egui::EguiContexts;
 use rand::Rng;
 
 #[derive(States, Default, Debug, Clone, PartialEq, Eq, Hash)]
@@ -331,6 +332,7 @@ pub(crate) fn draw_delivery_indicators(
     q_camera: Single<(&Camera, &GlobalTransform), With<crate::PrimaryCamera>>,
     mut gizmos: Gizmos,
     time: Res<Time>,
+    mut contexts: EguiContexts,
 ) {
     for delivery in active_delivery.deliveries.iter() {
         if delivery.turns_remaining <= 5 {
@@ -381,14 +383,23 @@ pub(crate) fn draw_delivery_indicators(
                 return;
             };
 
+            let mut visible_rect_min = Vec2::ZERO;
+            let mut visible_rect_max = viewport_size;
+
+            if let Ok(ctx) = contexts.ctx_mut() {
+                let available_rect = ctx.available_rect();
+                visible_rect_min = Vec2::new(available_rect.min.x, available_rect.min.y);
+                visible_rect_max = Vec2::new(available_rect.max.x, available_rect.max.y);
+            }
+
             // Check if point is outside the viewport
-            if viewport_pos.x < 0.0
-                || viewport_pos.x > viewport_size.x
-                || viewport_pos.y < 0.0
-                || viewport_pos.y > viewport_size.y
+            if viewport_pos.x < visible_rect_min.x
+                || viewport_pos.x > visible_rect_max.x
+                || viewport_pos.y < visible_rect_min.y
+                || viewport_pos.y > visible_rect_max.y
             {
-                let viewport_center = viewport_size / 2.0;
-                let dir_to_target = (viewport_pos - viewport_center).normalize();
+                let visible_center = (visible_rect_min + visible_rect_max) / 2.0;
+                let dir_to_target = (viewport_pos - visible_center).normalize();
 
                 // Direction in world space for the arrow rotation
                 // We use NDC to get world direction as viewport is y-down
@@ -398,23 +409,23 @@ pub(crate) fn draw_delivery_indicators(
                 }
 
                 // Raycast to find intersection with screen edge in viewport space
-                let mut edge_viewport = viewport_center;
+                let mut edge_viewport = visible_center;
 
                 let dx = dir_to_target.x;
                 let dy = dir_to_target.y;
 
                 let t_x = if dx > 0.0 {
-                    (viewport_size.x - viewport_center.x) / dx
+                    (visible_rect_max.x - visible_center.x) / dx
                 } else if dx < 0.0 {
-                    (0.0 - viewport_center.x) / dx
+                    (visible_rect_min.x - visible_center.x) / dx
                 } else {
                     f32::MAX
                 };
 
                 let t_y = if dy > 0.0 {
-                    (viewport_size.y - viewport_center.y) / dy
+                    (visible_rect_max.y - visible_center.y) / dy
                 } else if dy < 0.0 {
-                    (0.0 - viewport_center.y) / dy
+                    (visible_rect_min.y - visible_center.y) / dy
                 } else {
                     f32::MAX
                 };
