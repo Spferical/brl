@@ -424,7 +424,9 @@ pub fn draw_phone(mut params: DrawPhoneParams) {
 
             let screen_width = phone_screen_rect.width();
             let icon_size = 150.0 * scale_x;
-            let spacing = (screen_width - 3.0 * icon_size) / 4.0;
+            let columns = 3;
+            let spacing = (screen_width - columns as f32 * icon_size) / (columns as f32 + 1.0);
+            let top_offset = 60.0 * scale_y;
 
             // Draw Home Screen (Apps)
             if params.phone_state.app_open_progress < 1.0 {
@@ -436,12 +438,14 @@ pub fn draw_phone(mut params: DrawPhoneParams) {
                         continue;
                     }
                     let app_id = app.0;
-                    let row = visible_idx / 3;
-                    let col = visible_idx % 3;
+                    let row = visible_idx / columns;
+                    let col = visible_idx % columns;
                     visible_idx += 1;
 
                     let x = phone_screen_rect.min.x + spacing + (icon_size + spacing) * col as f32;
-                    let y = phone_screen_rect.min.y + spacing + (icon_size + spacing) * row as f32;
+                    let y = phone_screen_rect.min.y
+                        + top_offset
+                        + (icon_size + spacing + 40.0 * scale_y) * row as f32;
 
                     let base_icon_rect = egui::Rect::from_min_size(
                         egui::pos2(x, y),
@@ -493,15 +497,6 @@ pub fn draw_phone(mut params: DrawPhoneParams) {
                         egui::vec2(scaled_size, scaled_size),
                     );
 
-                    ui.painter().circle_stroke(
-                        icon_rect.center(),
-                        icon_rect.width() / 2.0,
-                        egui::Stroke::new(
-                            2.0,
-                            Color32::from_rgba_unmultiplied(255, 255, 255, home_alpha),
-                        ),
-                    );
-
                     let icon_id = app_icons[i];
                     if let Some(icon_id) = icon_id {
                         let mut icon_mesh = egui::Mesh::with_texture(icon_id);
@@ -513,9 +508,9 @@ pub fn draw_phone(mut params: DrawPhoneParams) {
                         ui.painter().add(icon_mesh);
                     }
 
-                    let wrapped_name = textwrap::fill(app.1.name(), 15);
+                    let wrapped_name = textwrap::fill(app.1.name(), 12);
                     let text_job = apply_brainrot_ui(
-                        RichText::new(wrapped_name).size(25.0 * scale_x),
+                        RichText::new(wrapped_name).size(20.0 * scale_x),
                         player.brainrot,
                         ui.style(),
                         egui::FontSelection::Default,
@@ -536,7 +531,7 @@ pub fn draw_phone(mut params: DrawPhoneParams) {
                     let galley = ui.painter().layout_job(text_job);
                     let text_pos = egui::pos2(
                         base_icon_rect.center().x,
-                        base_icon_rect.bottom() + 8.0 * scale_y,
+                        base_icon_rect.bottom() + 4.0 * scale_y,
                     );
 
                     ui.painter().galley(
@@ -770,8 +765,8 @@ pub fn draw_phone(mut params: DrawPhoneParams) {
             }
 
             // Home Button Interaction
-            let home_x = rect.min.x + 457.0 * scale_x;
-            let home_y = rect.min.y + 1375.0 * scale_y;
+            let home_x = rect.min.x + 461.0 * scale_x;
+            let home_y = rect.min.y + 1365.0 * scale_y;
             let home_radius = 46.0 * scale_x;
             let home_rect = egui::Rect::from_center_size(
                 egui::pos2(home_x, home_y),
