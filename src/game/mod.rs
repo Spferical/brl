@@ -32,7 +32,7 @@ use crate::{
             MapPos, PlayerMemoryMap, PlayerVisibilityMap, PosToCreature, PosToInteractable,
             TILE_HEIGHT, TILE_WIDTH, WalkBlockedMap,
         },
-        mapgen::{MapInfo, MobKind},
+        mapgen::{LevelTitle, MapInfo, MobKind},
         spawn::spawn_mob,
         upgrades::{Effect, UPGRADES},
     },
@@ -2847,8 +2847,14 @@ fn sidebar(
     mut msg_ability_clicked: MessageWriter<AbilityClicked>,
     mut msg_wait: MessageWriter<WaitMessage>,
     mut phone_state: ResMut<phone::PhoneState>,
+    map_info: Res<MapInfo>,
 ) {
     let (player, player_pos) = player.into_inner();
+    let current_level = map_info.get_level(*player_pos);
+    let is_amogus_ship = current_level
+        .map(|l| l.ty == LevelTitle::AmogusSpaceship)
+        .unwrap_or(false);
+
     let sword = world_assets
         .get_urizen_egui_image(&mut contexts, &atlas_assets, 1262)
         .fit_to_exact_size(egui::vec2(TILE_WIDTH, TILE_HEIGHT));
@@ -2974,7 +2980,9 @@ fn sidebar(
                                                 "Will fight for you",
                                             ),
                                             (
-                                                creature.faction == FRIENDLY_FACTION,
+                                                creature.faction == FRIENDLY_FACTION
+                                                    && (!is_amogus_ship
+                                                        || name.as_str() != "Amogus"),
                                                 "Friendly",
                                                 egui::Color32::LIGHT_BLUE,
                                                 "Neutral and peaceful",
