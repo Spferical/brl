@@ -4039,6 +4039,9 @@ fn update_crawlr_animation(
     mut state: ResMut<mobile_apps::CrawlrState>,
     mut player_query: Single<&mut Player>,
     mut mob_query: Query<(&crate::game::DropsCorpse, &mut Mob)>,
+    mut phone_state: ResMut<phone::PhoneState>,
+    mut commands: Commands,
+    assets: Res<assets::WorldAssets>,
     time: Res<Time>,
 ) {
     if let Some(effect) = &mut state.match_effect {
@@ -4072,13 +4075,24 @@ fn update_crawlr_animation(
                         }
                     } else {
                         // PROACTIVE SWIPE
-                        if let Ok((corpse, _)) = mob_query.get(entity) {
-                            let chance = (corpse.kind.get_attractiveness() as f64 / 100.0) * 0.03;
-                            state.pending_swipes.push(mobile_apps::PendingRightSwipe {
-                                entity,
-                                turns_remaining: 20,
-                                chance,
-                            });
+                        if let Ok((_corpse, mut mob)) = mob_query.get_mut(entity) {
+                            if state.proactive_match.unwrap_or(false) {
+                                state.matches.push(entity);
+                                state.has_new_match = true;
+                                state.match_effect = Some(mobile_apps::MatchEffect {
+                                    text: "You got a match!".to_string(),
+                                    timer: 2.0,
+                                    teletype_index: 0,
+                                    teletype_timer: 0.05,
+                                });
+                                state.pending_faction_changes.insert(entity, ALLIED_FACTION);
+                                mob.target = None;
+                            } else {
+                                player_query.brainrot += 5;
+                                phone_state.vibrate_timer = 0.3;
+                                phone_state.dim_flash_timer = 0.2;
+                                commands.spawn(crate::audio::sound_effect(assets.oof.clone()));
+                            }
                         }
                     }
                 } else if is_match {

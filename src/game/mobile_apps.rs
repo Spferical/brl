@@ -170,12 +170,7 @@ pub struct CrawlrMob {
     pub distance: f32,
     pub age: u32,
     pub gender: String,
-}
-
-pub struct PendingRightSwipe {
-    pub entity: Entity,
-    pub turns_remaining: u32,
-    pub chance: f64,
+    pub attractiveness: i32,
 }
 
 pub struct MatchEffect {
@@ -192,7 +187,6 @@ pub struct CrawlrState {
     pub has_new_match: bool,
     pub swiped_entities: HashSet<Entity>,
     pub last_mobs: Vec<CrawlrMob>,
-    pub pending_swipes: Vec<PendingRightSwipe>,
     pub match_effect: Option<MatchEffect>,
     pub pending_psychic_damage: HashSet<Entity>,
     pub pending_faction_changes: HashMap<Entity, i32>,
@@ -200,6 +194,8 @@ pub struct CrawlrState {
     pub swipe_animation_dir: f32, // -1.0 for left, 1.0 for right
     pub last_swiped_entity: Option<Entity>,
     pub last_swiped_is_like: bool,
+    pub current_swipe_label: Option<String>,
+    pub proactive_match: Option<bool>,
 }
 
 pub fn update_crawlr(
@@ -243,43 +239,6 @@ pub fn update_crawlr(
 
     state.turn_counter += 1;
 
-    // Update pending swipes
-    let mut rng = rand::rng();
-    use rand::Rng;
-    let mut new_matches = vec![];
-    state.pending_swipes.retain_mut(|pending| {
-        if pending.turns_remaining > 0 {
-            pending.turns_remaining -= 1;
-            true
-        } else {
-            if rng.random_bool(pending.chance) {
-                new_matches.push(pending.entity);
-            }
-            false
-        }
-    });
-
-    for entity in new_matches {
-        if !state.matches.contains(&entity) && mob_query.get(entity).is_ok_and(|m| m.1.hp > 0) {
-            state.matches.push(entity);
-            state.has_new_match = true;
-            phone_state.vibrate_timer = 0.5;
-            state.match_effect = Some(MatchEffect {
-                text: "You got a match!".to_string(),
-                timer: 2.0,
-                teletype_index: 0,
-                teletype_timer: 0.05,
-            });
-
-            // Make them friendly
-            if let Ok((_, mut creature, _, _, _, _, _, mut mob)) = mob_query.get_mut(entity) {
-                creature.faction = ALLIED_FACTION;
-                mob.attrs.friendly = true;
-                mob.target = None;
-            }
-        }
-    }
-
     // Clean up dead mobs from matches
     state
         .matches
@@ -294,6 +253,7 @@ pub fn update_crawlr(
         let diff = (player_pos.0 - mob_pos.0).abs();
         let dist = diff.max_element() as f32;
         if dist <= 50.0 {
+            use rand::Rng;
             use rand::SeedableRng;
             let mut seeded_rng = rand::rngs::StdRng::seed_from_u64(entity.to_bits());
 
@@ -323,51 +283,43 @@ pub fn update_crawlr(
                 distance: dist,
                 age,
                 gender,
+                attractiveness: corpse.kind.get_attractiveness(),
             });
         }
     }
 
-    if state.turn_counter.is_multiple_of(20) {
-        let player_attractiveness = player.rizz as f32 + player.strength as f32 * 0.2;
+    if state.turn_counter.is_multiple_of(50) {
+        let player_attractiveness = player.rizz as f64 + player.strength as f64 * 0.2;
 
-        let chance = if player_attractiveness < 30.0 {
-            0.0
-        } else if player_attractiveness > 100.0 {
-            1.0
-        } else {
-            (player_attractiveness - 30.0) / (100.0 - 30.0)
-        };
-
-        // Roughly once every 100 turns on average (at 100% chance)
-        let chance = (chance as f64) * (20.0 / 100.0);
-
-        use rand::Rng;
-        let mut rng = rand::rng();
-        if rng.random_bool(chance) {
-            // Find nearby mobs (50 tile radius)
-            let mut nearby_mobs = vec![];
-            for (entity, creature, _name, _text, _color, corpse, mob_pos, mob) in
-                mob_query.iter_mut()
+        // Find nearby mobs (50 tile radius)
+        let mut nearby_mobs = vec![];
+        for (entity, creature, _name, _text, _color, corpse, mob_pos, mob) in mob_query.iter_mut() {
+            if creature.hp <= 0
+                || state.matches.contains(&entity)
+                || state.swiped_entities.contains(&entity)
             {
-                if creature.hp <= 0
-                    || state.matches.contains(&entity)
-                    || state.swiped_entities.contains(&entity)
-                {
-                    continue;
-                }
-                let diff = (player_pos.0 - mob_pos.0).abs();
-                let dist = diff.max_element();
-                if dist <= 50 {
-                    nearby_mobs.push((entity, corpse.kind.get_attractiveness(), creature, mob));
-                }
+                continue;
             }
+            let diff = (player_pos.0 - mob_pos.0).abs();
+            let dist = diff.max_element();
+            if dist <= 50 {
+                nearby_mobs.push((entity, corpse.kind.get_attractiveness(), creature, mob));
+            }
+        }
 
-            if !nearby_mobs.is_empty() {
-                use rand::seq::IndexedMutRandom;
-                // Weighted selection
-                if let Ok(matched_mob) =
-                    nearby_mobs.choose_weighted_mut(&mut rng, |m| m.1 as f32 + 1.0)
-                {
+        if !nearby_mobs.is_empty() {
+            use rand::Rng;
+            use rand::seq::IndexedMutRandom;
+            let mut rng = rand::rng();
+
+            // Pick a random mob, then test the difference-based odds.
+            if let Some(matched_mob) = nearby_mobs.choose_mut(&mut rng) {
+                let mob_attr = matched_mob.1 as f64;
+                let diff = player_attractiveness - mob_attr;
+
+                let chance = (0.05 + diff * 0.015).clamp(0.01, 0.95);
+
+                if rng.random_bool(chance) {
                     state.matches.push(matched_mob.0);
                     state.has_new_match = true;
                     phone_state.vibrate_timer = 0.5;
@@ -601,7 +553,26 @@ impl MobileApp for Crawlr {
 
             ui.add_space(20.0 * scale);
 
-            if is_match {
+            if crawlr_state.swipe_animation_timer > 0.0 {
+                if let Some(label) = &crawlr_state.current_swipe_label {
+                    let color = if label == "It's a match!" {
+                        Color32::from_rgba_unmultiplied(50, 255, 50, card_alpha)
+                    } else {
+                        Color32::from_rgba_unmultiplied(255, 50, 50, card_alpha)
+                    };
+                    ui.label(crate::game::apply_brainrot_ui(
+                        RichText::new(label)
+                            .size(40.0 * scale)
+                            .color(color)
+                            .strong(),
+                        player.brainrot,
+                        ui.style(),
+                        egui::FontSelection::Default,
+                        egui::Align::Center,
+                    ));
+                    ui.add_space(5.0 * scale);
+                }
+            } else if is_match {
                 ui.label(crate::game::apply_brainrot_ui(
                     RichText::new("Likes you!")
                         .size(32.0 * scale)
@@ -663,16 +634,38 @@ impl MobileApp for Crawlr {
             play_button_sounds(ui, commands, assets, &right_btn);
 
             if left_btn.clicked() && crawlr_state.swipe_animation_timer <= 0.0 {
+                player.boredom = player.boredom.saturating_sub(2);
                 crawlr_state.swipe_animation_timer = 0.3;
                 crawlr_state.swipe_animation_dir = -1.0;
                 crawlr_state.last_swiped_entity = Some(mob.entity);
                 crawlr_state.last_swiped_is_like = false;
+                crawlr_state.current_swipe_label = None;
             }
             if right_btn.clicked() && crawlr_state.swipe_animation_timer <= 0.0 {
+                player.boredom = player.boredom.saturating_sub(2);
                 crawlr_state.swipe_animation_timer = 0.3;
                 crawlr_state.swipe_animation_dir = 1.0;
                 crawlr_state.last_swiped_entity = Some(mob.entity);
                 crawlr_state.last_swiped_is_like = true;
+
+                if is_match {
+                    crawlr_state.current_swipe_label = Some("It's a match!".to_string());
+                } else {
+                    let player_attr = player.rizz as f64 + player.strength as f64 * 0.2;
+                    let mob_attr = mob.attractiveness as f64;
+                    let diff = player_attr - mob_attr;
+
+                    let chance = (0.10 + diff * 0.015).clamp(0.01, 0.95);
+
+                    use rand::Rng;
+                    let result = rand::rng().random_bool(chance);
+                    crawlr_state.proactive_match = Some(result);
+                    if result {
+                        crawlr_state.current_swipe_label = Some("It's a match!".to_string());
+                    } else {
+                        crawlr_state.current_swipe_label = Some("Not interested!".to_string());
+                    }
+                }
             }
         });
     }
