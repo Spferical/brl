@@ -34,6 +34,7 @@ use crate::{
         },
         mapgen::{MapInfo, MobKind},
         spawn::spawn_mob,
+        upgrades::{Effect, UPGRADES},
     },
     screens::Screen,
 };
@@ -3454,6 +3455,26 @@ fn left_sidebar(
                         FontSelection::Default,
                         Align::LEFT,
                     ));
+                }
+            }
+            // non-subscription non-active upgrades
+            let passive_upgrades = player_stats
+                .upgrades
+                .iter()
+                .map(|u| &UPGRADES[*u])
+                .filter(|upgrade| {
+                    upgrade
+                        .effects
+                        .iter()
+                        .all(|eff| !matches!(eff, Effect::GainAbility(_) | Effect::Subscription(_)))
+                })
+                .collect::<Vec<_>>();
+            if !passive_upgrades.is_empty() {
+                ui.add_space(20.0);
+                ui.label("PASSIVE UPGRADES:");
+                ui.add_space(5.0);
+                for upgrade in passive_upgrades.into_iter() {
+                    ui.label(upgrade.name);
                 }
             }
         });
