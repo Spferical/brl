@@ -83,7 +83,6 @@ pub(crate) enum MobKind {
 
 const LVL1_DIST: &[(MobKind, usize)] = &[
     (MobKind::GiantFrog, 1),
-    (MobKind::GymBro, 1),
     (MobKind::Influencer, 1),
     (MobKind::Normie, 1),
     (MobKind::Capybara, 1),
