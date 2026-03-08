@@ -226,6 +226,7 @@ pub(super) fn plugin(app: &mut App) {
                 // damage
                 apply_damage,
                 prune_dead,
+                update_frozen,
                 map::update_pos_to_creature,
                 // end-of-turn bookkeeping
                 redo_faction_map,
@@ -234,7 +235,6 @@ pub(super) fn plugin(app: &mut App) {
                 .chain()
                 .run_if(player_moved),
             (
-                update_frozen,
                 map::update_sight_blocked_map,
                 map::update_player_visibility,
                 map::apply_hard_fov_to_tiles,
