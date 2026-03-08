@@ -255,57 +255,76 @@ pub fn update_phone(
     }
 }
 
-pub fn draw_phone(
-    mut contexts: EguiContexts,
-    player_query: Single<(&mut Player, &mut Creature, &crate::game::map::MapPos)>,
-    mut phone_state: ResMut<PhoneState>,
-    mut streaming_state: ResMut<crate::game::chat::StreamingState>,
-    mut active_delivery: ResMut<crate::game::delivery::ActiveDelivery>,
-    walk_blocked_map: Res<crate::game::map::WalkBlockedMap>,
-    assets: Res<WorldAssets>,
-    current_screen: Res<State<PhoneScreen>>,
-    mut next_screen: ResMut<NextState<PhoneScreen>>,
-    dd_screen: Res<State<DungeonDashScreen>>,
-    mut next_dd_screen: ResMut<NextState<DungeonDashScreen>>,
-    mut dd_selection: ResMut<DungeonDashSelection>,
-    mut msg_upgrade: MessageWriter<UpgradeMessage>,
-    mut cockatrice_state: ResMut<mobile_apps::CockatriceState>,
-    mut crawlr_state: ResMut<mobile_apps::CrawlrState>,
-    map_info: Res<crate::game::mapgen::MapInfo>,
-) {
-    let (mut player, mut creature, player_pos) = player_query.into_inner();
-    let texture_id = contexts.add_image(EguiTextureHandle::Weak(assets.phone.id()));
+use bevy::ecs::system::SystemParam;
+
+#[derive(SystemParam)]
+pub struct DrawPhoneParams<'w, 's> {
+    pub commands: Commands<'w, 's>,
+    pub contexts: EguiContexts<'w, 's>,
+    pub player_query: Single<
+        'w,
+        's,
+        (
+            &'static mut Player,
+            &'static mut Creature,
+            &'static crate::game::map::MapPos,
+        ),
+    >,
+    pub phone_state: ResMut<'w, PhoneState>,
+    pub streaming_state: ResMut<'w, crate::game::chat::StreamingState>,
+    pub active_delivery: ResMut<'w, crate::game::delivery::ActiveDelivery>,
+    pub walk_blocked_map: Res<'w, crate::game::map::WalkBlockedMap>,
+    pub assets: Res<'w, WorldAssets>,
+    pub current_screen: Res<'w, State<PhoneScreen>>,
+    pub next_screen: ResMut<'w, NextState<PhoneScreen>>,
+    pub dd_screen: Res<'w, State<DungeonDashScreen>>,
+    pub next_dd_screen: ResMut<'w, NextState<DungeonDashScreen>>,
+    pub dd_selection: ResMut<'w, DungeonDashSelection>,
+    pub msg_upgrade: MessageWriter<'w, UpgradeMessage>,
+    pub cockatrice_state: ResMut<'w, mobile_apps::CockatriceState>,
+    pub crawlr_state: ResMut<'w, mobile_apps::CrawlrState>,
+    pub map_info: Res<'w, crate::game::mapgen::MapInfo>,
+}
+
+pub fn draw_phone(mut params: DrawPhoneParams) {
+    let (mut player, mut creature, player_pos) = params.player_query.into_inner();
+    let texture_id = params
+        .contexts
+        .add_image(EguiTextureHandle::Weak(params.assets.phone.id()));
     let apps = mobile_apps::get_apps();
     let app_icons: Vec<Option<egui::TextureId>> = apps
         .iter()
         .map(|app| {
-            app.1
-                .icon(&assets)
-                .map(|handle| contexts.add_image(EguiTextureHandle::Weak(handle.id())))
+            app.1.icon(&params.assets).map(|handle| {
+                params
+                    .contexts
+                    .add_image(EguiTextureHandle::Weak(handle.id()))
+            })
         })
         .collect();
 
-    let Ok(ctx) = contexts.ctx_mut() else {
+    let Ok(ctx) = params.contexts.ctx_mut() else {
         return;
     };
 
-    if phone_state.slide_progress <= 0.0
-        && phone_state.bump_progress <= 0.0
-        && phone_state.creep_progress <= 0.0
+    if params.phone_state.slide_progress <= 0.0
+        && params.phone_state.bump_progress <= 0.0
+        && params.phone_state.creep_progress <= 0.0
     {
         return;
     }
 
     let eased_progress = EasingCurve::new(0.0, 1.0, EaseFunction::CubicInOut)
-        .sample_clamped(phone_state.slide_progress);
+        .sample_clamped(params.phone_state.slide_progress);
 
     let screen_rect = ctx.content_rect();
 
     if eased_progress > 0.0 {
         let mut dim_alpha = (220.0 * eased_progress) as u8;
-        if phone_state.dim_flash_timer > 0.0 {
-            dim_alpha =
-                (dim_alpha as f32 * (1.0 - (phone_state.dim_flash_timer * 5.0).min(1.0))) as u8;
+        if params.phone_state.dim_flash_timer > 0.0 {
+            dim_alpha = (dim_alpha as f32
+                * (1.0 - (params.phone_state.dim_flash_timer * 5.0).min(1.0)))
+                as u8;
         }
 
         egui::Area::new(egui::Id::new("phone_dim_area"))
@@ -320,8 +339,11 @@ pub fn draw_phone(
                     0.0,
                     Color32::from_rgba_premultiplied(0, 0, 0, dim_alpha),
                 );
-                if response.clicked() && !phone_state.forced_open {
-                    phone_state.is_open = false;
+                if response.clicked() && !params.phone_state.forced_open {
+                    params.phone_state.is_open = false;
+                    params.commands.spawn(crate::audio::sound_effect(
+                        params.assets.button_click.clone(),
+                    ));
                 }
             });
     }
@@ -346,18 +368,18 @@ pub fn draw_phone(
 
     let mut current_y = egui::lerp(offscreen_y..=onscreen_y, eased_progress);
 
-    if phone_state.bump_progress > 0.0 {
-        let bump_offset = (phone_state.bump_progress * std::f32::consts::PI).sin() * 100.0;
+    if params.phone_state.bump_progress > 0.0 {
+        let bump_offset = (params.phone_state.bump_progress * std::f32::consts::PI).sin() * 100.0;
         current_y -= bump_offset;
     }
 
-    if phone_state.creep_progress > 0.0 {
-        let creep_offset = phone_state.creep_progress * 150.0;
+    if params.phone_state.creep_progress > 0.0 {
+        let creep_offset = params.phone_state.creep_progress * 150.0;
         current_y -= creep_offset;
     }
 
-    if phone_state.vibrate_timer > 0.0 {
-        let shake = (phone_state.vibrate_timer * 100.0).sin() * 5.0;
+    if params.phone_state.vibrate_timer > 0.0 {
+        let shake = (params.phone_state.vibrate_timer * 100.0).sin() * 5.0;
         current_y += shake;
     }
 
@@ -368,17 +390,20 @@ pub fn draw_phone(
         .constrain(false)
         .fixed_pos(phone_rect.min)
         .show(ctx, |ui| {
-            let sense = if phone_state.is_open {
+            let sense = if params.phone_state.is_open {
                 egui::Sense::hover()
             } else {
                 egui::Sense::click()
             };
             let (rect, response) = ui.allocate_exact_size(phone_size, sense);
 
-            phone_state.is_hovered = response.hovered();
+            params.phone_state.is_hovered = response.hovered();
 
-            if response.clicked() && !phone_state.is_open {
-                phone_state.is_open = true;
+            if response.clicked() && !params.phone_state.is_open {
+                params.phone_state.is_open = true;
+                params.commands.spawn(crate::audio::sound_effect(
+                    params.assets.button_click.clone(),
+                ));
             }
 
             let mut mesh = egui::Mesh::with_texture(texture_id);
@@ -402,8 +427,8 @@ pub fn draw_phone(
             let spacing = (screen_width - 3.0 * icon_size) / 4.0;
 
             // Draw Home Screen (Apps)
-            if phone_state.app_open_progress < 1.0 {
-                let home_alpha = (255.0 * (1.0 - phone_state.app_open_progress)) as u8;
+            if params.phone_state.app_open_progress < 1.0 {
+                let home_alpha = (255.0 * (1.0 - params.phone_state.app_open_progress)) as u8;
 
                 let mut visible_idx = 0;
                 for (i, app) in apps.iter().enumerate() {
@@ -428,6 +453,12 @@ pub fn draw_phone(
                         ui.id().with("app_icon").with(i),
                         egui::Sense::click(),
                     );
+                    mobile_apps::play_button_sounds(
+                        ui,
+                        &mut params.commands,
+                        &params.assets,
+                        &response,
+                    );
 
                     let hover_t = ui.ctx().animate_bool_with_time(
                         ui.id().with("hover").with(i),
@@ -436,12 +467,13 @@ pub fn draw_phone(
                     );
                     let hover_scale = 1.0 + hover_t * 0.1;
 
-                    if response.clicked() && *current_screen.get() == PhoneScreen::Home {
-                        phone_state.click_progress.insert(app_id, 0.01);
-                        next_screen.set(PhoneScreen::App(app_id));
+                    if response.clicked() && *params.current_screen.get() == PhoneScreen::Home {
+                        params.phone_state.click_progress.insert(app_id, 0.01);
+                        params.next_screen.set(PhoneScreen::App(app_id));
                     }
 
-                    let click_p = phone_state
+                    let click_p = params
+                        .phone_state
                         .click_progress
                         .get(&app_id)
                         .copied()
@@ -514,7 +546,7 @@ pub fn draw_phone(
                     );
 
                     // Notification dot
-                    if phone_state.unread_notification == Some(app_id) {
+                    if params.phone_state.unread_notification == Some(app_id) {
                         let dot_radius = 12.0 * scale_x;
                         let dot_center =
                             base_icon_rect.right_top() + egui::vec2(-dot_radius, dot_radius);
@@ -534,7 +566,7 @@ pub fn draw_phone(
                     }
                 }
 
-                if let Some(unread_idx) = phone_state.unread_notification {
+                if let Some(unread_idx) = params.phone_state.unread_notification {
                     let banner_width = screen_width * 0.9;
                     let banner_height = 80.0 * scale_y;
                     let banner_rect = egui::Rect::from_center_size(
@@ -549,6 +581,12 @@ pub fn draw_phone(
                         banner_rect,
                         ui.id().with("notification_banner"),
                         egui::Sense::click(),
+                    );
+                    mobile_apps::play_button_sounds(
+                        ui,
+                        &mut params.commands,
+                        &params.assets,
+                        &response,
                     );
                     let fill = if response.hovered() {
                         Color32::from_rgba_unmultiplied(220, 220, 220, home_alpha)
@@ -591,28 +629,28 @@ pub fn draw_phone(
                         Color32::from_rgba_unmultiplied(0, 0, 0, home_alpha),
                     );
 
-                    if response.clicked() && *current_screen.get() == PhoneScreen::Home {
-                        phone_state.unread_notification = None;
-                        next_screen.set(PhoneScreen::App(unread_idx));
+                    if response.clicked() && *params.current_screen.get() == PhoneScreen::Home {
+                        params.phone_state.unread_notification = None;
+                        params.next_screen.set(PhoneScreen::App(unread_idx));
                     }
                 }
             }
 
             // Draw App Overlay Transition
-            if phone_state.app_open_progress > 0.0 {
-                let app_alpha = (255.0 * phone_state.app_open_progress) as u8;
+            if params.phone_state.app_open_progress > 0.0 {
+                let app_alpha = (255.0 * params.phone_state.app_open_progress) as u8;
                 ui.painter().rect_filled(
                     phone_screen_rect,
                     0.0,
                     Color32::from_rgba_unmultiplied(230, 230, 230, app_alpha),
                 );
 
-                if let Some(app_id) = phone_state.last_opened_app {
+                if let Some(app_id) = params.phone_state.last_opened_app {
                     let i = apps.iter().position(|a| a.0 == app_id).unwrap();
                     let app = &apps[i];
 
-                    if phone_state.app_launch_progress > 0.5 {
-                        let content_alpha = (phone_state.app_launch_progress - 0.5) / 0.5;
+                    if params.phone_state.app_launch_progress > 0.5 {
+                        let content_alpha = (params.phone_state.app_launch_progress - 0.5) / 0.5;
                         let alpha_byte = (255.0 * content_alpha) as u8;
 
                         let mut child_ui = ui.new_child(
@@ -636,34 +674,37 @@ pub fn draw_phone(
                         } else {
                             app.1.draw_content(
                                 &mut child_ui,
-                                &mut phone_state,
-                                &mut streaming_state,
+                                &mut params.commands,
+                                &params.assets,
+                                &mut params.phone_state,
+                                &mut params.streaming_state,
                                 &mut player,
                                 &mut creature,
                                 player_pos,
-                                &mut active_delivery,
-                                &walk_blocked_map,
+                                &mut params.active_delivery,
+                                &params.walk_blocked_map,
                                 scale_x,
                                 alpha_byte,
-                                dd_screen.get(),
-                                &mut next_dd_screen,
-                                &mut dd_selection,
-                                &mut msg_upgrade,
-                                &mut next_screen,
-                                &mut cockatrice_state,
-                                &mut crawlr_state,
-                                &map_info,
+                                params.dd_screen.get(),
+                                &mut params.next_dd_screen,
+                                &mut params.dd_selection,
+                                &mut params.msg_upgrade,
+                                &mut params.next_screen,
+                                &mut params.cockatrice_state,
+                                &mut params.crawlr_state,
+                                &params.map_info,
                             );
                         }
                     }
 
                     // Draw splash screen (icon and name) if not fully faded in.
-                    let should_draw_splash_icons = phone_state.app_launch_progress < 0.75;
+                    let should_draw_splash_icons = params.phone_state.app_launch_progress < 0.75;
 
                     if should_draw_splash_icons {
-                        let splash_alpha = if phone_state.app_launch_progress > 0.5 {
+                        let splash_alpha = if params.phone_state.app_launch_progress > 0.5 {
                             // Fade out splash icons
-                            (255.0 * (1.0 - (phone_state.app_launch_progress - 0.5) / 0.25)) as u8
+                            (255.0 * (1.0 - (params.phone_state.app_launch_progress - 0.5) / 0.25))
+                                as u8
                         } else {
                             app_alpha
                         };
@@ -742,8 +783,17 @@ pub fn draw_phone(
             let response =
                 ui.interact(home_rect, ui.id().with("home_button"), egui::Sense::click());
 
-            let is_not_home = *current_screen.get() != PhoneScreen::Home;
-            let can_go_home = is_not_home && !phone_state.forced_open;
+            let is_not_home = *params.current_screen.get() != PhoneScreen::Home;
+            let can_go_home = is_not_home && !params.phone_state.forced_open;
+
+            if can_go_home {
+                mobile_apps::play_button_sounds(
+                    ui,
+                    &mut params.commands,
+                    &params.assets,
+                    &response,
+                );
+            }
 
             if can_go_home {
                 let time = ui.ctx().input(|i| i.time);
@@ -772,8 +822,8 @@ pub fn draw_phone(
                 );
             }
 
-            if response.clicked() && is_not_home && !phone_state.forced_open {
-                next_screen.set(PhoneScreen::Home);
+            if response.clicked() && is_not_home && !params.phone_state.forced_open {
+                params.next_screen.set(PhoneScreen::Home);
             }
         });
 }

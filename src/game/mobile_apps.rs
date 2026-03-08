@@ -308,6 +308,8 @@ pub trait MobileApp: Send + Sync {
     fn draw_content(
         &self,
         ui: &mut egui::Ui,
+        commands: &mut Commands,
+        assets: &WorldAssets,
         phone_state: &mut PhoneState,
         streaming_state: &mut StreamingState,
         player: &mut Player,
@@ -328,6 +330,27 @@ pub trait MobileApp: Send + Sync {
     );
 }
 
+pub fn play_button_sounds(
+    ui: &mut egui::Ui,
+    commands: &mut Commands,
+    assets: &WorldAssets,
+    response: &egui::Response,
+) {
+    if response.clicked() {
+        commands.spawn(crate::audio::sound_effect(assets.button_click.clone()));
+    }
+
+    let was_hovered_id = response.id.with("was_hovered");
+    let was_hovered = ui.data_mut(|d| d.get_temp::<bool>(was_hovered_id).unwrap_or(false));
+    let is_hovered = response.hovered();
+
+    if is_hovered && !was_hovered {
+        commands.spawn(crate::audio::sound_effect(assets.button_hover.clone()));
+    }
+
+    ui.data_mut(|d| d.insert_temp(was_hovered_id, is_hovered));
+}
+
 pub struct Crawlr;
 
 impl MobileApp for Crawlr {
@@ -343,6 +366,8 @@ impl MobileApp for Crawlr {
     fn draw_content(
         &self,
         ui: &mut egui::Ui,
+        commands: &mut Commands,
+        assets: &WorldAssets,
         _phone_state: &mut PhoneState,
         _streaming_state: &mut StreamingState,
         player: &mut Player,
@@ -528,12 +553,15 @@ impl MobileApp for Crawlr {
                     .fill(Color32::from_rgba_unmultiplied(255, 200, 200, alpha))
                     .stroke(egui::Stroke::new(2.0, Color32::BLACK)),
             );
+            play_button_sounds(ui, commands, assets, &left_btn);
+
             ui.add_space(ui.available_width() * 0.4);
             let right_btn = ui.add(
                 egui::Button::new(RichText::new("❤").size(64.0 * scale))
                     .fill(Color32::from_rgba_unmultiplied(200, 255, 200, alpha))
                     .stroke(egui::Stroke::new(2.0, Color32::BLACK)),
             );
+            play_button_sounds(ui, commands, assets, &right_btn);
 
             if left_btn.clicked() && crawlr_state.swipe_animation_timer <= 0.0 {
                 crawlr_state.swipe_animation_timer = 0.3;
@@ -566,6 +594,8 @@ impl MobileApp for DungeonDash {
     fn draw_content(
         &self,
         ui: &mut egui::Ui,
+        commands: &mut Commands,
+        assets: &WorldAssets,
         _phone_state: &mut PhoneState,
         _streaming_state: &mut StreamingState,
         player: &mut Player,
@@ -606,6 +636,8 @@ impl MobileApp for DungeonDash {
             let combined_alpha = (alpha as f32 * role_selection_alpha) as u8;
             self.draw_role_selection(
                 ui,
+                commands,
+                assets,
                 player,
                 player_pos,
                 walk_blocked_map,
@@ -618,6 +650,8 @@ impl MobileApp for DungeonDash {
             let combined_alpha = (alpha as f32 * menu_alpha) as u8;
             self.draw_menu(
                 ui,
+                commands,
+                assets,
                 player,
                 scale,
                 combined_alpha,
@@ -628,6 +662,8 @@ impl MobileApp for DungeonDash {
             let combined_alpha = (alpha as f32 * job_offer_alpha) as u8;
             self.draw_job_offer(
                 ui,
+                commands,
+                assets,
                 player,
                 scale,
                 combined_alpha,
@@ -640,6 +676,8 @@ impl MobileApp for DungeonDash {
         } else if *dd_screen == DungeonDashScreen::Checkout {
             self.draw_checkout(
                 ui,
+                commands,
+                assets,
                 player,
                 creature,
                 player_pos,
@@ -658,6 +696,8 @@ impl DungeonDash {
     fn draw_role_selection(
         &self,
         ui: &mut egui::Ui,
+        commands: &mut Commands,
+        assets: &WorldAssets,
         player: &Player,
         player_pos: &crate::game::map::MapPos,
         walk_blocked_map: &crate::game::map::WalkBlockedMap,
@@ -691,6 +731,7 @@ impl DungeonDash {
                 .fill(button_color)
                 .stroke(egui::Stroke::new(2.0, Color32::BLACK)),
             );
+            play_button_sounds(ui, commands, assets, &order_button);
 
             if order_button.clicked() {
                 next_dd_screen.set(DungeonDashScreen::Menu);
@@ -724,6 +765,7 @@ impl DungeonDash {
                 .fill(work_button_color)
                 .stroke(egui::Stroke::new(2.0, Color32::BLACK)),
             );
+            play_button_sounds(ui, commands, assets, &work_button);
 
             if work_button.clicked()
                 && dd_selection.deliveries_this_level < 3
@@ -766,6 +808,8 @@ impl DungeonDash {
     fn draw_job_offer(
         &self,
         ui: &mut egui::Ui,
+        commands: &mut Commands,
+        assets: &WorldAssets,
         player: &Player,
         scale: f32,
         alpha: u8,
@@ -876,6 +920,7 @@ impl DungeonDash {
                     .fill(Color32::from_rgba_unmultiplied(100, 200, 100, alpha))
                     .stroke(egui::Stroke::new(2.0, Color32::BLACK)),
                 );
+                play_button_sounds(ui, commands, assets, &go_button);
 
                 if go_button.clicked() {
                     dd_selection.start_job(turn_limit as u32, max_amount);
@@ -911,6 +956,8 @@ impl DungeonDash {
                 .fill(back_button_color)
                 .stroke(egui::Stroke::new(2.0, if is_job_active { Color32::GRAY } else { Color32::BLACK })),
             );
+            play_button_sounds(ui, commands, assets, &back_button);
+
             if back_button.clicked() && !is_job_active {
                 next_dd_screen.set(DungeonDashScreen::RoleSelection);
             }
@@ -920,11 +967,13 @@ impl DungeonDash {
     fn draw_menu(
         &self,
         ui: &mut egui::Ui,
+        commands: &mut Commands,
+        assets: &WorldAssets,
         player: &Player,
         scale: f32,
         alpha: u8,
         next_dd_screen: &mut NextState<DungeonDashScreen>,
-        dd_selection: &mut DungeonDashSelection,
+        _dd_selection: &mut DungeonDashSelection,
     ) {
         let item_height = 120.0 * scale;
         let spacing = 16.0 * scale;
@@ -947,6 +996,7 @@ impl DungeonDash {
                 .fill(Color32::from_rgba_unmultiplied(200, 200, 200, alpha))
                 .stroke(egui::Stroke::new(2.0, Color32::BLACK)),
             );
+            play_button_sounds(ui, commands, assets, &back_button);
             if back_button.clicked() {
                 next_dd_screen.set(DungeonDashScreen::RoleSelection);
             }
@@ -977,6 +1027,7 @@ impl DungeonDash {
                         let height = 120.0 * scale;
                         let (rect, response) =
                             ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
+                        play_button_sounds(ui, commands, assets, &response);
 
                         let fill = if response.is_pointer_button_down_on() {
                             Color32::from_rgba_unmultiplied(150, 150, 150, alpha)
@@ -1050,9 +1101,9 @@ impl DungeonDash {
 
                         if response.clicked() {
                             next_dd_screen.set(DungeonDashScreen::Checkout);
-                            dd_selection.selected_food = Some(i);
-                            dd_selection.checkout_start_time = ui.input(|i| i.time);
-                            dd_selection.tip_percentage = 15;
+                            _dd_selection.selected_food = Some(i);
+                            _dd_selection.checkout_start_time = ui.input(|i| i.time);
+                            _dd_selection.tip_percentage = 15;
                         }
 
                         ui.add_space(16.0 * scale);
@@ -1064,6 +1115,8 @@ impl DungeonDash {
     fn draw_checkout(
         &self,
         ui: &mut egui::Ui,
+        commands: &mut Commands,
+        assets: &WorldAssets,
         player: &mut Player,
         _creature: &mut Creature,
         player_pos: &crate::game::map::MapPos,
@@ -1224,6 +1277,7 @@ impl DungeonDash {
                                     t,
                                     RichText::new(format!("{}%", t)).color(color),
                                 );
+                                play_button_sounds(ui, commands, assets, &res);
                                 if res.changed() {
                                     ui.ctx().request_repaint();
                                 }
@@ -1338,6 +1392,7 @@ impl DungeonDash {
                     .fill(button_color)
                     .stroke(egui::Stroke::new(2.0, Color32::BLACK)),
                 );
+                play_button_sounds(ui, commands, assets, &button);
 
                 if button.clicked() {
                     clicked_buy = true;
@@ -1360,6 +1415,7 @@ impl DungeonDash {
                         .fill(button_color)
                         .stroke(egui::Stroke::new(2.0, Color32::BLACK)),
                     );
+                    play_button_sounds(ui, commands, assets, &klarna_button);
 
                     let rect = klarna_button.rect;
                     ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
@@ -1478,6 +1534,7 @@ impl DungeonDash {
                     .fill(button_color)
                     .stroke(egui::Stroke::new(2.0, Color32::BLACK)),
                 );
+                play_button_sounds(ui, commands, assets, &back_button);
                 if back_button.clicked() {
                     next_dd_screen.set(DungeonDashScreen::Menu);
                 }
@@ -1505,6 +1562,8 @@ impl MobileApp for UndergroundTV {
     fn draw_content(
         &self,
         ui: &mut egui::Ui,
+        commands: &mut Commands,
+        assets: &WorldAssets,
         _phone_state: &mut PhoneState,
         streaming_state: &mut StreamingState,
         player: &mut Player,
@@ -1543,6 +1602,7 @@ impl MobileApp for UndergroundTV {
             .stroke(egui::Stroke::new(2.0, Color32::BLACK))
             .fill(Color32::from_rgba_unmultiplied(200, 200, 200, alpha)),
         );
+        play_button_sounds(ui, commands, assets, &button_res);
         if button_res.clicked() {
             streaming_state.is_streaming = !streaming_state.is_streaming;
             if streaming_state.is_streaming {
@@ -1591,6 +1651,8 @@ impl MobileApp for Cockatrice {
     fn draw_content(
         &self,
         ui: &mut egui::Ui,
+        _commands: &mut Commands,
+        _assets: &WorldAssets,
         _phone_state: &mut PhoneState,
         _streaming_state: &mut StreamingState,
         player: &mut Player,
@@ -1834,6 +1896,8 @@ impl MobileApp for Upgrade {
     fn draw_content(
         &self,
         ui: &mut egui::Ui,
+        commands: &mut Commands,
+        assets: &WorldAssets,
         _phone_state: &mut PhoneState,
         _streaming_state: &mut StreamingState,
         player: &mut Player,
@@ -1846,7 +1910,7 @@ impl MobileApp for Upgrade {
         _dd_screen: &DungeonDashScreen,
         _next_dd_screen: &mut NextState<DungeonDashScreen>,
         _dd_selection: &mut DungeonDashSelection,
-        msg_upgrade: &mut MessageWriter<UpgradeMessage>,
+        _msg_upgrade: &mut MessageWriter<UpgradeMessage>,
         next_phone_screen: &mut NextState<PhoneScreen>,
         _cockatrice_state: &mut CockatriceState,
         _crawlr_state: &mut CrawlrState,
@@ -1871,6 +1935,7 @@ impl MobileApp for Upgrade {
                 let height = 180.0 * scale;
                 let (rect, response) =
                     ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::click());
+                play_button_sounds(ui, commands, assets, &response);
 
                 let fill = if response.is_pointer_button_down_on() {
                     Color32::from_rgba_unmultiplied(150, 150, 150, alpha)
@@ -1922,7 +1987,7 @@ impl MobileApp for Upgrade {
                 });
 
                 if response.clicked() {
-                    msg_upgrade.write(UpgradeMessage {
+                    _msg_upgrade.write(UpgradeMessage {
                         upgrade: *upgrade_idx,
                     });
                     next_phone_screen.set(PhoneScreen::Home);

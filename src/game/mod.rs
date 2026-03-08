@@ -262,7 +262,6 @@ pub(super) fn plugin(app: &mut App) {
             chat::draw_chat,
             draw_interactable_popup,
         )
-            .chain()
             .run_if(in_state(Screen::Gameplay)),
     );
 }
@@ -2094,7 +2093,8 @@ fn apply_damage(
                                 if let Some(attacker) = attacker
                                     && let Ok((_, _, _, _, attacker_name)) = creatures.get(attacker)
                                 {
-                                    info.killer_name = attacker_name.map(|n| n.as_str().to_string());
+                                    info.killer_name =
+                                        attacker_name.map(|n| n.as_str().to_string());
                                 }
                                 next_screen.set(Screen::GameOver);
                             }
@@ -2115,7 +2115,8 @@ fn apply_damage(
                                 if let Some(attacker) = attacker
                                     && let Ok((_, _, _, _, attacker_name)) = creatures.get(attacker)
                                 {
-                                    info.killer_name = attacker_name.map(|n| n.as_str().to_string());
+                                    info.killer_name =
+                                        attacker_name.map(|n| n.as_str().to_string());
                                 }
                                 next_screen.set(Screen::GameOver);
                             }
@@ -2134,7 +2135,8 @@ fn apply_damage(
                                 if let Some(attacker) = attacker
                                     && let Ok((_, _, _, _, attacker_name)) = creatures.get(attacker)
                                 {
-                                    info.killer_name = attacker_name.map(|n| n.as_str().to_string());
+                                    info.killer_name =
+                                        attacker_name.map(|n| n.as_str().to_string());
                                 }
                                 next_screen.set(Screen::GameOver);
                             }

@@ -41,6 +41,8 @@ pub struct WorldAssets {
     pub music: Handle<AudioSource>,
     pub meme_sounds: Vec<Handle<AudioSource>>,
     pub oof: Handle<AudioSource>,
+    pub button_click: Handle<AudioSource>,
+    pub button_hover: Handle<AudioSource>,
 }
 
 pub const FORBIDDEN_EMOTE_IDS: &[u32] = &[
@@ -370,19 +372,27 @@ impl FromWorld for WorldAssets {
         let underground_tv = images.add(underground_tv_image);
         let cockatrice = images.add(cockatrice_image);
 
-        let music = world.resource_mut::<Assets<AudioSource>>().add(AudioSource {
-            bytes: include_bytes!("../../assets/audio/music/brl_loop_v3.ogg")
-                .to_vec()
-                .into(),
-        });
+        let music = world
+            .resource_mut::<Assets<AudioSource>>()
+            .add(AudioSource {
+                bytes: include_bytes!("../../assets/audio/music/brl_loop_v3.ogg")
+                    .to_vec()
+                    .into(),
+            });
 
         let mut meme_sounds = Vec::new();
         let mut audio_assets = world.resource_mut::<Assets<AudioSource>>();
         for bytes in [
-            include_bytes!("../../assets/audio/sound_effects/meme_sounds/cartoon run.ogg").as_slice(),
-            include_bytes!("../../assets/audio/sound_effects/meme_sounds/cartoon running.ogg").as_slice(),
-            include_bytes!("../../assets/audio/sound_effects/meme_sounds/he needs some milk.ogg").as_slice(),
-            include_bytes!("../../assets/audio/sound_effects/meme_sounds/knuckles i don't know.ogg").as_slice(),
+            include_bytes!("../../assets/audio/sound_effects/meme_sounds/cartoon run.ogg")
+                .as_slice(),
+            include_bytes!("../../assets/audio/sound_effects/meme_sounds/cartoon running.ogg")
+                .as_slice(),
+            include_bytes!("../../assets/audio/sound_effects/meme_sounds/he needs some milk.ogg")
+                .as_slice(),
+            include_bytes!(
+                "../../assets/audio/sound_effects/meme_sounds/knuckles i don't know.ogg"
+            )
+            .as_slice(),
             include_bytes!("../../assets/audio/sound_effects/meme_sounds/wow!.ogg").as_slice(),
         ] {
             meme_sounds.push(audio_assets.add(AudioSource {
@@ -392,6 +402,18 @@ impl FromWorld for WorldAssets {
 
         let oof = audio_assets.add(AudioSource {
             bytes: include_bytes!("../../assets/audio/sound_effects/meme_sounds/oof.ogg")
+                .to_vec()
+                .into(),
+        });
+
+        let button_click = audio_assets.add(AudioSource {
+            bytes: include_bytes!("../../assets/audio/sound_effects/button_click.ogg")
+                .to_vec()
+                .into(),
+        });
+
+        let button_hover = audio_assets.add(AudioSource {
+            bytes: include_bytes!("../../assets/audio/sound_effects/button_hover.ogg")
                 .to_vec()
                 .into(),
         });
@@ -419,6 +441,8 @@ impl FromWorld for WorldAssets {
             music,
             meme_sounds,
             oof,
+            button_click,
+            button_hover,
         }
     }
 }

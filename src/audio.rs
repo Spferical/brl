@@ -10,8 +10,10 @@ pub(super) fn plugin(app: &mut App) {
                 resource_exists::<crate::game::assets::WorldAssets>
                     .and(in_state(crate::screens::Screen::Gameplay)),
             ),
-            (play_meme_sounds, update_music_speed).run_if(in_state(crate::screens::Screen::Gameplay)),
-            (fade_out_music, stop_music_on_fade_out).run_if(in_state(crate::screens::Screen::GameOver)),
+            (play_meme_sounds, update_music_speed)
+                .run_if(in_state(crate::screens::Screen::Gameplay)),
+            (fade_out_music, stop_music_on_fade_out)
+                .run_if(in_state(crate::screens::Screen::GameOver)),
         ),
     );
     app.add_systems(OnEnter(crate::screens::Screen::GameOver), start_fade_out);
@@ -23,7 +25,10 @@ struct MusicFadeOut {
     timer: Timer,
 }
 
-fn start_fade_out(mut commands: Commands, music_query: Query<(Entity, &PlaybackSettings), With<Music>>) {
+fn start_fade_out(
+    mut commands: Commands,
+    music_query: Query<(Entity, &PlaybackSettings), With<Music>>,
+) {
     for (entity, playback) in &music_query {
         commands.entity(entity).insert(MusicFadeOut {
             initial_volume: playback.volume.to_linear(),
@@ -45,10 +50,7 @@ fn fade_out_music(
     }
 }
 
-fn stop_music_on_fade_out(
-    mut commands: Commands,
-    music_query: Query<(Entity, &MusicFadeOut)>,
-) {
+fn stop_music_on_fade_out(mut commands: Commands, music_query: Query<(Entity, &MusicFadeOut)>) {
     for (entity, fade) in &music_query {
         if fade.timer.is_finished() {
             commands.entity(entity).despawn();
@@ -95,7 +97,9 @@ fn play_meme_sounds(
             let max = 60.0 - (60.0 - 8.0) * t;
             rng.random_range(min..max)
         };
-        timer.0.set_duration(std::time::Duration::from_secs_f32(next_duration));
+        timer
+            .0
+            .set_duration(std::time::Duration::from_secs_f32(next_duration));
         timer.0.reset();
     }
 }
