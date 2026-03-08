@@ -729,14 +729,14 @@ impl Ability {
         match self {
             Ability::Sprint => "Move multiple tiles in one turn. Costs hunger.",
             Ability::ShoulderCheck => "Damage and swap positions with an adjacent enemy.",
-            Ability::Mog => "Deal aura damage to an adjacent enemy. Scales with rizz.",
+            Ability::Mog => "Deal aura damage to an enemy up to 2 tiles way. Scales with rizz.",
             Ability::Cook => "Cook a corpse you are standing on. Requires < 10 brainrot.",
             Ability::Gun => "Get a big iron on your hip.",
             Ability::ReadBook => {
                 "Reduce brainrot. Might be a little boring. (Borrow period: 10 turns)"
             }
             Ability::Yap => {
-                "Deal boredom damage to a nearby enemy. Scales with boredom. Increases your own boredom."
+                "Deal boredom damage to an enemy up to 3 tiles away. Scales with boredom. Increases your own boredom."
             }
             Ability::Surveys => "Gain money and boredom. Requires < 50 brainrot.",
         }
@@ -745,7 +745,7 @@ impl Ability {
         match self {
             Ability::Sprint => AbilityTarget::ReachableTile { maxdist: 5 },
             Ability::ShoulderCheck => AbilityTarget::NearbyMob { maxdist: 1 },
-            Ability::Mog => AbilityTarget::NearbyMob { maxdist: 1 },
+            Ability::Mog => AbilityTarget::NearbyMob { maxdist: 2 },
             Ability::Gun => AbilityTarget::NearbyTile { maxdist: 1 },
             Ability::Cook | Ability::ReadBook => AbilityTarget::NoTarget,
             Ability::Yap => AbilityTarget::NearbyMob { maxdist: 3 },
