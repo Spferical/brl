@@ -983,7 +983,7 @@ impl MobKind {
                         raids_player: true,
                         summon: Some(Summon {
                             kind: MobKind::Whale,
-                            delay: 4,
+                            delay: 8,
                         }),
                         physical_resist: Resist::Weak,
                         aura_resist: Resist::Strong,
@@ -1145,6 +1145,8 @@ impl LevelDraft {
             .tiles
             .iter()
             .filter(|(_p, t)| t.is_floor())
+            .filter(|(p, _t)| self.entrances.contains(p))
+            .filter(|(p, _t)| self.exits.contains(p))
             .map(|(p, _t)| *p)
             .collect::<HashSet<_>>();
         for e in self.entrances.iter().chain(self.exits.iter()) {
@@ -2379,9 +2381,10 @@ pub(crate) fn gen_map(
             gen_backrooms(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
                 .with_walls()
                 .sprinkle_mobs(rng, BACKROOM_DIST, 20),
-            gen_dungeon_fitness(rng)
+            gen_amogus_spaceship(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, GYM_DIST, 20),
+                .sprinkle_mobs(rng, AMOGUS_DIST, 20)
+                .with_upgrade(rng, None),
         ],
         vec![
             gen_island(rng)
@@ -2394,14 +2397,13 @@ pub(crate) fn gen_map(
                 .with_upgrade(rng, Some("Animatronic Bear Mask")),
         ],
         vec![
-            gen_amogus_spaceship(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, AMOGUS_DIST, 20)
-                .with_upgrade(rng, None),
             gen_minecraft(rng)
                 .with_walls()
                 .sprinkle_mobs(rng, MINECRAFT_DIST, 25)
                 .with_upgrade(rng, None),
+            gen_dungeon_fitness(rng)
+                .with_walls()
+                .sprinkle_mobs(rng, GYM_DIST, 20),
         ],
         vec![
             draft_level_mapgen_drunk(rng)
