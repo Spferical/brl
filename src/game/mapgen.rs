@@ -935,7 +935,7 @@ impl MobKind {
                 },
             },
             MobKind::Fortnite(faction) => MobBundle {
-                name: Name::new("Shooty McShootFace"),
+                name: Name::new("Battler"),
                 creature: Creature {
                     hp: 5,
                     max_hp: 5,
@@ -953,7 +953,7 @@ impl MobKind {
                     },
                     ..default()
                 },
-                sprite: assets.get_ascii_sprite('@', Color::srgb(0.8, 0.8, 1.0)),
+                sprite: assets.get_ascii_sprite('@', Color::srgb(0.7, 0.3, 0.9)),
                 corpse: DropsCorpse {
                     sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
                     nutrition: 4,
@@ -2322,10 +2322,10 @@ pub(crate) fn spawn_level(
                 tile.insert((Name::new("Star"), sprite));
             }
             TileKind::Upgrade(name) => {
-                let color = Color::srgb(0.2, 0.2, 1.0);
+                let color = Color::srgb(0.5, 0.0, 1.0);
                 let sprite = assets.get_ascii_sprite('*', color);
                 tile.insert((
-                    Name::new("Upgrade"),
+                    Name::new("Upgrade Orb"),
                     sprite,
                     Interactable {
                         action: "Use".to_string(),
