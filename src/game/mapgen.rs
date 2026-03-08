@@ -2503,6 +2503,7 @@ pub(crate) fn gen_map(
             subscriptions: vec![],
             food_cooldowns: HashMap::default(),
             is_raided: false,
+            high_metabolism: false,
         },
         Creature {
             hp: 10,

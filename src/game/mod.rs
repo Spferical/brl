@@ -634,6 +634,7 @@ pub struct Player {
     pub subscriptions: Vec<Subscription>,
     pub food_cooldowns: HashMap<usize, u32>,
     pub is_raided: bool,
+    pub high_metabolism: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect)]
@@ -1166,6 +1167,15 @@ fn tick_meters(
         if *cooldown > 0 {
             *cooldown -= 1;
         }
+    }
+
+    let hunger_cooldown = if player.high_metabolism { 3 } else { 5 };
+    if turn_counter.0.is_multiple_of(hunger_cooldown) {
+        player.apply_hunger_damage(&mut creature, 1);
+    }
+
+    if player.high_metabolism && turn_counter.0.is_multiple_of(10) {
+        creature.hp = (creature.hp + 1).clamp(0, creature.max_hp);
     }
 
     if turn_counter.0.is_multiple_of(5) {
