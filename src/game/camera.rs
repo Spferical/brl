@@ -33,7 +33,7 @@ pub(crate) fn update_camera(
     // Apply screen shake
     if screen_shake.trauma > 0.0 {
         let shake = screen_shake.trauma * screen_shake.trauma;
-        let max_offset = 20.0;
+        let max_offset = 15.0;
         let time_s = time.elapsed_secs() * 50.0;
         let offset_x = (time_s.sin() * 1.5 + (time_s * 1.3).cos()) * max_offset * shake;
         let offset_y = ((time_s * 1.2).cos() * 1.5 + (time_s * 0.8).sin()) * max_offset * shake;

@@ -1390,7 +1390,7 @@ fn handle_player_move(
                         timer: Timer::new(Duration::from_millis(150), TimerMode::Once),
                         base_translation: old_pos.to_vec3(PLAYER_Z),
                     });
-                screen_shake.trauma = (screen_shake.trauma + 0.4).min(1.0);
+                screen_shake.trauma = (screen_shake.trauma + 0.15).min(1.0);
             } else {
                 pos.0 = new_pos.0;
                 commands.entity(player_entity).insert(MoveAnimation {
@@ -1434,7 +1434,7 @@ fn handle_player_move(
                             color: Color::srgb(0.0, 1.0, 0.0),
                             ..default()
                         });
-                        screen_shake.trauma = (screen_shake.trauma + 0.4).min(1.0);
+                        screen_shake.trauma = (screen_shake.trauma + 0.2).min(1.0);
                         commands.spawn(crate::audio::sound_effect(assets.oof.clone()));
                     }
                     InteractionType::MedicalPod => {
@@ -2051,7 +2051,7 @@ fn check_bullet_collision(
                 ty: bullet.ty,
             });
             if player_q.get(*mob).is_ok() {
-                screen_shake.trauma = (screen_shake.trauma + 0.6).min(1.0);
+                screen_shake.trauma = (screen_shake.trauma + 0.3).min(1.0);
             }
         }
         if pos_to_mob.0.contains_key(&pos.0) || sight_blocked_map.0.contains(&pos.0) {
@@ -2560,7 +2560,7 @@ fn process_mob_turn(
                     base_translation: old_pos.to_vec3(PLAYER_Z),
                 });
                 if enemy == player_entity {
-                    screen_shake.trauma = (screen_shake.trauma + 0.7).min(1.0);
+                    screen_shake.trauma = (screen_shake.trauma + 0.4).min(1.0);
                 }
             }
             Action::RangedAttack(new_pos) => {
@@ -2596,7 +2596,7 @@ fn process_mob_turn(
                     sway: None,
                 });
                 if enemy == player_entity {
-                    screen_shake.trauma = (screen_shake.trauma + 0.7).min(1.0);
+                    screen_shake.trauma = (screen_shake.trauma + 0.4).min(1.0);
                 }
                 floating_text.write(FloatingTextMessage {
                     entity: None,
