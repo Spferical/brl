@@ -2341,6 +2341,7 @@ fn process_mob_turn(
                     && !claimed_locations.contains(&p.0)
             });
             if let Some(spawn_pos) = spawn_pos {
+                claimed_locations.insert(spawn_pos.0);
                 spawn::spawn_mob(&mut commands, world_entity, spawn_pos, kind, &assets);
                 let name = kind.get_bundle(&assets).name;
                 floating_text.write(FloatingTextMessage {
