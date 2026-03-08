@@ -564,8 +564,8 @@ impl MobKind {
             MobKind::GiantFrog => MobBundle {
                 name: Name::new("Giant Frog"),
                 creature: Creature {
-                    hp: 4,
-                    max_hp: 4,
+                    hp: 2,
+                    max_hp: 2,
                     faction: ENEMY_FACTION,
                     killed_by_player: false,
                     machine: false,
