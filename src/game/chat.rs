@@ -42,6 +42,16 @@ pub(crate) const USERNAMES: &[&str] = &[
     "droner38",
     "rageagainstthebachine",
     "4nonymous",
+    "Hopper",
+    "Ribbitt",
+    "swampking59",
+    "liftHeavy",
+    "PROTEINSHAKE",
+    "____DOYOUEVENLIFT____",
+    "sponcon33",
+    "imcrewipromise",
+    "imposter",
+    "waterdog32",
 ];
 
 const GENERIC_MESSAGES: &[&str] = &[
@@ -64,6 +74,7 @@ const GENERIC_MESSAGES: &[&str] = &[
     "monkaS",
     "Kappa",
     "does this game let you move diagonally",
+    "does anyone know what's at the bottom of the dungeon?",
 ];
 
 const ATTACK_MESSAGES: &[&str] = &[

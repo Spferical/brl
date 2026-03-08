@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 use bevy_egui::egui::{self, Color32, RichText};
+use rand::seq::IndexedRandom;
 use std::collections::{HashMap, HashSet};
 
 use crate::game::animation;
@@ -11,39 +12,137 @@ use crate::game::phone::{PhoneScreen, PhoneState};
 use crate::game::upgrades::{UPGRADES, UpgradeMessage};
 use crate::game::{ALLIED_FACTION, Creature, Mob, Player};
 
+const FROG_NAMES: &[&str] = &["Giant Frog", "Sad Frog", "Smug Frog", "Mad Frog"];
 const FROG_HANDLES: &[&str] = &["@Hopper", "@Ribbit", "@SwampKing"];
+const GYM_NAMES: &[&str] = &["Gym Bro"];
 const GYM_BRO_HANDLES: &[&str] = &["@LiftHeavy", "@ProteinShake", "@DoYouEvenLift"];
+const INF_NAMES: &[&str] = &["Influencer", "Streamer", "E-Celeb"];
 const INFLUENCER_HANDLES: &[&str] = &["@LikeAndSubscribe", "@SponCon", "@TrendSetter"];
+const NORM_NAMES: &[&str] = &["Normie"];
 const NORMIE_HANDLES: &[&str] = &["@JustAGuy", "@AverageJoe", "@JohnDoe"];
+const AMOGUS_NAMES: &[&str] = &["Amogus"];
 const AMOGUS_HANDLES: &[&str] = &["@Sus", "@Imposter", "@RedIsSus"];
+const CAPY_NAMES: &[&str] = &["Capybara"];
 const CAPYBARA_HANDLES: &[&str] = &["@ChillVibes", "@WaterDog", "@OkayPullUp"];
 
 const FROG_CONTENTS: &[&str] = &[
     "Ribbit ribbit...",
     "Looking for flies.",
     "It is Wednesday, my dudes.",
+    ">implying",
+    "IF THE ZOO BANS ME FOR HOLLERING AT THE ANIMALS I WILL FACE GOD AND WALK BACKWARDS INTO HELL",
 ];
 const GYM_BRO_CONTENTS: &[&str] = &[
     "Just hit a new PR! #gains",
     "Don't skip leg day bro.",
     "Where is my pre-workout?",
+    "if you have a problem with me kissing pictures of Dragons while driving the bus, fight me. i just ate like 30 hotdogs and im near invincible",
+    "its fucked up how there are like 1000 christmas songs but only 1 song aboutr the boys being back in town",
 ];
 const INFLUENCER_CONTENTS: &[&str] = &[
     "New unboxing video dropping soon!  ",
     "Feeling blessed today.",
     "Link in bio!  ",
+    "every generation deserves at least 5 movies named \"Spider Man 2\"",
 ];
 const NORMIE_CONTENTS: &[&str] = &[
     "What is going on?",
     "I just want to go home.",
     "Another day, another dollar.",
+    "wtf why do burritos cost this much",
 ];
 const AMOGUS_CONTENTS: &[&str] = &[
     "Doing tasks in electrical.",
     "I saw someone vent.",
     "Blue is acting sus.",
+    "issuing correction on a previous post of mine, regarding the terror group SUS. you do not, under any circumstances, \"gotta hand it to them\"",
 ];
 const CAPYBARA_CONTENTS: &[&str] = &["Chilling.", "Water is nice.", "Pull up."];
+const FORT_HANDLES: &[&str] = &[
+    "Shooter23",
+    "John Fortnite",
+    "Master Chef",
+    "Alan Bake",
+    "The guy from that game",
+    "Boomguy",
+];
+const FORT_NAMES: &[&str] = &["Shooty McShootFace"];
+const FORT_CONTENTS: &[&str] = &[
+    "the human mind... perhaps the most powerful weapon. second only to the \"GUN\"",
+    "about to shoot my shot... I'm scared",
+    "i dropped my gun and can't find it, please contact me if you find a gun lying in the sand",
+];
+const ANIM_HANDLES: &[&str] = &["Friendo's Pizza & Prizes"];
+const ANIM_NAMES: &[&str] = &["Animatronic"];
+const ANIM_CONTENTS: &[&str] = &[
+    "FRIENDO'S PIZZA AND PRIZES IS OPEN FOR BUSINESS. PLEASE COME IN",
+    "COME AND SEE YOUR FAVORITE FRIENDOS DANCE ON STAGE",
+    "COME TO FRIENDO'S AND EXCHANGE MONEY FOR UNMATCHED ENTERTAINMENT. BRING YOUR FRIENDS TOO",
+];
+const CHAD_HANDLES: &[&str] = &["ChadGPT81398194"];
+const CHAD_NAMES: &[&str] = &["ChadGPT"];
+const CHAD_CONTENTS: &[&str] = &[
+    "Big realization this week: success isn’t about working harder—it’s about aligning the right people, processes, and purpose.
+
+When teams operate in true synergy, amazing things happen. Silos disappear. Ideas compound. Impact scales.
+
+Grateful to collaborate with people who challenge the status quo and push the needle forward every day.
+
+Let’s keep building, learning, and unlocking value together.
+
+#Leadership #Synergy #GrowthMindset #Innovation",
+    "One thing I’ve learned in business: strategy gets you started, but culture gets you across the finish line.
+
+The most effective teams I’ve worked with share three things:
+• Radical ownership
+• Clear communication
+• A bias toward action
+
+When you empower people and trust the process, momentum follows.
+
+Excited about what’s ahead. Big things coming.
+
+#Teamwork #Execution #BusinessStrategy",
+    "Just wrapped up a series of conversations with some brilliant minds across industries.
+
+The common thread? The future belongs to organizations that can adapt faster than the market changes.
+
+That means:
+→ Listening more than you talk
+→ Experimenting more than you plan
+→ Failing faster so you can learn faster
+
+The playbook is evolving—and that’s where the opportunity lives.
+
+Onward. 📈
+
+#FutureOfWork #Innovation #Leadership",
+];
+
+const TWEETS: &[(&[&str], &[&str], &[&str])] = &[
+    (FROG_NAMES, FROG_HANDLES, FROG_CONTENTS),
+    (GYM_NAMES, GYM_BRO_HANDLES, GYM_BRO_CONTENTS),
+    (INF_NAMES, INFLUENCER_HANDLES, INFLUENCER_CONTENTS),
+    (NORM_NAMES, NORMIE_HANDLES, NORMIE_CONTENTS),
+    (AMOGUS_NAMES, AMOGUS_HANDLES, AMOGUS_CONTENTS),
+    (CAPY_NAMES, CAPYBARA_HANDLES, CAPYBARA_CONTENTS),
+    (FORT_NAMES, FORT_HANDLES, FORT_CONTENTS),
+    (ANIM_NAMES, ANIM_HANDLES, ANIM_CONTENTS),
+    (CHAD_NAMES, CHAD_HANDLES, CHAD_CONTENTS),
+    (&["Zombie"], &["UnaliveButStillKicking"], &["Uuuuuuuuugh."]),
+    (
+        &["Spider"],
+        &["DaddyLongLegs"],
+        &[
+            "\"average giant spider eats 3 humans a year\" factoid actualy just statistical error. average spider eats 0 humans per year. Spiders Georg, who lives in cave & eats over 10,000 each day, is an outlier adn should not have been counted",
+        ],
+    ),
+    (
+        &["Skeleton"],
+        &["calcium_cal43"],
+        &["Who out there shooting their bow"],
+    ),
+];
 
 #[derive(Clone)]
 pub struct Tweet {
@@ -2022,35 +2121,22 @@ pub fn update_cockatrice(
         use rand::Rng;
         let mut rng = rand::rng();
         for (name, text, color) in mob_query.iter() {
-            let handle = match name.as_str() {
-                "Giant Frog" => FROG_HANDLES[rng.random_range(0..FROG_HANDLES.len())],
-                "Gym Bro" => GYM_BRO_HANDLES[rng.random_range(0..GYM_BRO_HANDLES.len())],
-                "Influencer" => INFLUENCER_HANDLES[rng.random_range(0..INFLUENCER_HANDLES.len())],
-                "Normie" => NORMIE_HANDLES[rng.random_range(0..NORMIE_HANDLES.len())],
-                "Amogus" => AMOGUS_HANDLES[rng.random_range(0..AMOGUS_HANDLES.len())],
-                "Capybara" => CAPYBARA_HANDLES[rng.random_range(0..CAPYBARA_HANDLES.len())],
-                _ => "@Monster",
-            };
-
-            let content = match name.as_str() {
-                "Giant Frog" => FROG_CONTENTS[rng.random_range(0..FROG_CONTENTS.len())],
-                "Gym Bro" => GYM_BRO_CONTENTS[rng.random_range(0..GYM_BRO_CONTENTS.len())],
-                "Influencer" => INFLUENCER_CONTENTS[rng.random_range(0..INFLUENCER_CONTENTS.len())],
-                "Normie" => NORMIE_CONTENTS[rng.random_range(0..NORMIE_CONTENTS.len())],
-                "Amogus" => AMOGUS_CONTENTS[rng.random_range(0..AMOGUS_CONTENTS.len())],
-                "Capybara" => CAPYBARA_CONTENTS[rng.random_range(0..CAPYBARA_CONTENTS.len())],
-                _ => "Rawr!",
-            };
-
-            let [r, g, b, a] = color.0.to_srgba().to_u8_array();
-            state.tweets.push(Tweet {
-                handle: handle.to_string(),
-                content: content.to_string(),
-                hours_ago: rng.random_range(1..24),
-                eggs: rng.random_range(0..1000),
-                glyph: text.0.chars().next().unwrap_or('?'),
-                color: Color32::from_rgba_unmultiplied(r, g, b, a),
-            });
+            for (names, handles, contents) in TWEETS {
+                if names.contains(&name.as_str()) {
+                    let handle = handles.choose(&mut rng).unwrap();
+                    let content = contents.choose(&mut rng).unwrap();
+                    let [r, g, b, a] = color.0.to_srgba().to_u8_array();
+                    state.tweets.push(Tweet {
+                        handle: handle.to_string(),
+                        content: content.to_string(),
+                        hours_ago: rng.random_range(1..24),
+                        eggs: rng.random_range(0..1000),
+                        glyph: text.0.chars().next().unwrap_or('?'),
+                        color: Color32::from_rgba_unmultiplied(r, g, b, a),
+                    });
+                    break;
+                }
+            }
         }
         use rand::seq::SliceRandom;
         state.tweets.shuffle(&mut rng);

@@ -956,7 +956,7 @@ impl MobKind {
                 },
             },
             MobKind::Fortnite(faction) => MobBundle {
-                name: Name::new("Battler"),
+                name: Name::new("Shooty McShootFace"),
                 creature: Creature {
                     hp: 5,
                     max_hp: 5,
