@@ -504,11 +504,7 @@ impl MobKind {
                     ranged_damage: 20,
                     ranged_damage_type: DamageType::Psychic,
                     ranged: true,
-                    keepaway: false,
-                    attrs: MobAttrs {
-                        moves_randomly: true,
-                        ..Default::default()
-                    },
+                    keepaway: true,
                     ..default()
                 },
                 sprite: assets.get_ascii_sprite('@', Color::srgb(1.0, 0.0, 1.0)),
