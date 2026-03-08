@@ -678,8 +678,8 @@ impl MobKind {
             MobKind::GymBro => MobBundle {
                 name: Name::new("Gym Bro"),
                 creature: Creature {
-                    hp: 4,
-                    max_hp: 4,
+                    hp: 3,
+                    max_hp: 3,
                     faction: ENEMY_FACTION,
                     killed_by_player: false,
                     machine: false,
