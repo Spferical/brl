@@ -1,9 +1,11 @@
 use bevy::{
-    asset::RenderAssetUsages,
+    asset::{RenderAssetUsages, embedded_asset},
     image::{CompressedImageFormats, ImageSampler, ImageType},
     prelude::*,
     render::render_resource::{Extent3d, TextureDimension, TextureFormat},
 };
+
+pub(crate) fn plugin(_app: &mut App) {}
 use bevy_egui::{
     EguiContexts, EguiTextureHandle,
     egui::{self, Color32},
@@ -13,11 +15,15 @@ use std::collections::HashMap;
 
 use crate::game::map::{TILE_HEIGHT, TILE_WIDTH};
 
-#[derive(Clone, Reflect)]
+#[derive(Clone, Reflect, Asset)]
 pub struct PhoneAppIcons {
+    #[dependency]
     pub crawlr: Handle<Image>,
+    #[dependency]
     pub dungeon_dash: Handle<Image>,
+    #[dependency]
     pub underground_tv: Handle<Image>,
+    #[dependency]
     pub cockatrice: Handle<Image>,
 }
 
@@ -47,6 +53,7 @@ pub struct WorldAssets {
     solid_mask: Handle<Image>,
     #[dependency]
     pub phone: Handle<Image>,
+    #[dependency]
     pub phone_app_icons: PhoneAppIcons,
     #[dependency]
     pub music: Handle<AudioSource>,

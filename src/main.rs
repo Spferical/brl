@@ -44,10 +44,10 @@ impl Plugin for AppPlugin {
                 }),
         );
 
-        bevy::asset::embedded_asset!(app, "../assets/emotes/ffz_tileset.png");
-
         // Add other plugins.
+        bevy::asset::embedded_asset!(app, "../assets/emotes/ffz_tileset.png");
         app.add_plugins((
+            game::assets::plugin,
             EguiPlugin::default(),
             asset_tracking::plugin,
             audio::plugin,
