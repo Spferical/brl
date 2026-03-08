@@ -734,7 +734,7 @@ impl Ability {
         match self {
             Ability::Sprint => AbilityTarget::ReachableTile { maxdist: 5 },
             Ability::ShoulderCheck => AbilityTarget::NearbyMob { maxdist: 1 },
-            Ability::Mog => AbilityTarget::NearbyMob { maxdist: 5 },
+            Ability::Mog => AbilityTarget::NearbyMob { maxdist: 1 },
             Ability::Cook | Ability::ReadBook => AbilityTarget::NoTarget,
             Ability::Yap => AbilityTarget::NearbyMob { maxdist: 3 },
         }
