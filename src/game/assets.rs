@@ -340,8 +340,8 @@ impl FromWorld for WorldAssets {
             Font::try_from_bytes(comic_relief_bold_bytes.to_vec()).unwrap();
         let comic_relief_bold = asset_server.add(comic_relief_bold_asset);
 
-        let phone_image = Image::from_buffer(
-            include_bytes!("../../assets/mobile_app/phone.png"),
+        let mut phone_image = Image::from_buffer(
+            include_bytes!("../../assets/mobile_app/iphone_900x1600.png"),
             ImageType::Extension("png"),
             CompressedImageFormats::NONE,
             true,
@@ -349,8 +349,8 @@ impl FromWorld for WorldAssets {
             RenderAssetUsages::default(),
         )
         .unwrap();
-        let crawlr_image = Image::from_buffer(
-            include_bytes!("../../assets/mobile_app/crawlr.png"),
+        let mut crawlr_image = Image::from_buffer(
+            include_bytes!("../../assets/mobile_app/crawlr_271x256.png"),
             ImageType::Extension("png"),
             CompressedImageFormats::NONE,
             true,
@@ -358,8 +358,8 @@ impl FromWorld for WorldAssets {
             RenderAssetUsages::default(),
         )
         .unwrap();
-        let dungeon_dash_image = Image::from_buffer(
-            include_bytes!("../../assets/mobile_app/dungeon_dash.png"),
+        let mut dungeon_dash_image = Image::from_buffer(
+            include_bytes!("../../assets/mobile_app/dungeondash_271x256.png"),
             ImageType::Extension("png"),
             CompressedImageFormats::NONE,
             true,
@@ -367,8 +367,8 @@ impl FromWorld for WorldAssets {
             RenderAssetUsages::default(),
         )
         .unwrap();
-        let underground_tv_image = Image::from_buffer(
-            include_bytes!("../../assets/mobile_app/underground_tv.png"),
+        let mut underground_tv_image = Image::from_buffer(
+            include_bytes!("../../assets/mobile_app/underground_tv_271x256.png"),
             ImageType::Extension("png"),
             CompressedImageFormats::NONE,
             true,
@@ -376,8 +376,8 @@ impl FromWorld for WorldAssets {
             RenderAssetUsages::default(),
         )
         .unwrap();
-        let cockatrice_image = Image::from_buffer(
-            include_bytes!("../../assets/mobile_app/cockatrice.png"),
+        let mut cockatrice_image = Image::from_buffer(
+            include_bytes!("../../assets/mobile_app/cockatrice_271x256.png"),
             ImageType::Extension("png"),
             CompressedImageFormats::NONE,
             true,
@@ -385,6 +385,23 @@ impl FromWorld for WorldAssets {
             RenderAssetUsages::default(),
         )
         .unwrap();
+
+        for image in [
+            &mut phone_image,
+            &mut crawlr_image,
+            &mut dungeon_dash_image,
+            &mut underground_tv_image,
+            &mut cockatrice_image,
+        ] {
+            if let Some(data) = &mut image.data {
+                for chunk in data.chunks_exact_mut(4) {
+                    let a = chunk[3] as f32 / 255.0;
+                    chunk[0] = (chunk[0] as f32 * a) as u8;
+                    chunk[1] = (chunk[1] as f32 * a) as u8;
+                    chunk[2] = (chunk[2] as f32 * a) as u8;
+                }
+            }
+        }
 
         let phone = asset_server.add(phone_image);
         let crawlr = asset_server.add(crawlr_image);
