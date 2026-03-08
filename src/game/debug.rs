@@ -19,7 +19,7 @@ pub fn ui_settings(ui: &mut Ui, settings: &mut DebugSettings) {
         ui.radio_value(&mut settings.show_faction_map, Some(1), "1");
         ui.checkbox(&mut settings.nohurt, "nohurt");
         ui.label("TP");
-        for i in 0..10 {
+        for i in 0..15 {
             if ui.button(i.to_string()).clicked() {
                 settings.teleport_to = Some(i);
             }

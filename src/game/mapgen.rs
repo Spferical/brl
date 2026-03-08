@@ -127,6 +127,12 @@ const CAVES_DIST: &[(MobKind, usize)] = &[
     (MobKind::Eceleb, 5),
     (MobKind::Animatronic, 2),
 ];
+const POND_DIST: &[(MobKind, usize)] = &[
+    (MobKind::SadFrog, 2),
+    (MobKind::MadFrog, 3),
+    (MobKind::SmugFrog, 3),
+    (MobKind::GiantFrog, 2),
+];
 
 impl MobKind {
     pub(crate) fn get_cooked_meal(&self) -> (&'static str, CookedMeal) {
@@ -1009,6 +1015,7 @@ pub enum LevelTitle {
     AmogusSpaceship,
     Freddy,
     Minecraft,
+    FrogPond,
 }
 
 impl std::fmt::Display for LevelTitle {
@@ -1023,6 +1030,7 @@ impl std::fmt::Display for LevelTitle {
             LevelTitle::AmogusSpaceship => "Sussy Ship",
             LevelTitle::Freddy => "Friendo's Pizza & Prizes",
             LevelTitle::Minecraft => "A Blocky Wilderness",
+            LevelTitle::FrogPond => "A Peaceful Pond",
         })
     }
 }
@@ -1858,6 +1866,56 @@ fn gen_minecraft(rng: &mut impl Rng) -> LevelDraft {
     draft
 }
 
+fn gen_frog_pond(rng: &mut impl Rng) -> LevelDraft {
+    let rect = rogue_algebra::Rect::new(0, 80, 0, 50);
+    let mut mapgen_builder = mapgen::MapBuilder::new(80, 50);
+    mapgen_builder
+        .with(mapgen::SimpleRooms::new())
+        .with(mapgen::NearestCorridors::new())
+        .with(mapgen::AreaStartingPosition::new(
+            mapgen::XStart::LEFT,
+            mapgen::YStart::CENTER,
+        ))
+        .with(mapgen::CullUnreachable::new())
+        .with(mapgen::DistantExit::new());
+    let mut draft = draft_level_mapgen_rs(
+        mapgen_builder,
+        &mut rand_8::rngs::StdRng::from_seed(rng.random()),
+        LevelTitle::FrogPond,
+    );
+
+    // second pass, generate mountain/grass/sand/water based on CA
+    let seed = rng.random();
+    for pos in rect {
+        let is_wall = draft.tiles.get(&pos).map(|t| !t.is_floor()).unwrap_or(true);
+        let frequency = 1.0f32 / 30.0f32;
+        let n = simplex_noise_2d_seeded(
+            Vec2::new(pos.x as f32 * frequency, pos.y as f32 * frequency),
+            seed,
+        );
+        if is_wall {
+            if n < -0.0 {
+                draft.tiles.insert(pos, TileKind::Water);
+            } else {
+                draft.tiles.insert(pos, TileKind::Floor(FloorKind::Rock));
+            }
+        }
+    }
+
+    // bfs from entrance and cull any unreachable floors
+    let accessible_floors = rogue_algebra::path::bfs(&draft.entrances, 99, |p| {
+        rogue_algebra::CARDINALS
+            .into_iter()
+            .map(move |o| p + o)
+            .filter(|p| draft.tiles.get(p).map(|t| t.is_floor()).unwrap_or(false))
+    })
+    .collect::<HashSet<_>>();
+    draft
+        .tiles
+        .retain(|k, v| !v.is_floor() || accessible_floors.contains(k));
+    draft
+}
+
 pub(crate) fn spawn_level(
     name: String,
     rng: &mut impl rand::Rng,
@@ -2206,9 +2264,9 @@ pub(crate) fn gen_map(
                 .sprinkle_mobs(rng, CAVES_DIST, 30),
         ],
         vec![
-            draft_level_mapgen_simple(rng)
+            gen_frog_pond(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, CAVES_DIST, 40),
+                .sprinkle_mobs(rng, POND_DIST, 40),
         ],
     ];
 
