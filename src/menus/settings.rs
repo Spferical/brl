@@ -35,7 +35,7 @@ fn settings_menu(
         .show(ctx, |ui| {
             ui.vertical_centered_justified(|ui| {
                 ui.add(
-                    egui::Slider::from_get_set(0.0..=3.0, |vol| {
+                    egui::Slider::from_get_set(0.0..=1.2, |vol| {
                         if let Some(vol) = vol {
                             global_volume.volume = Volume::Linear(vol as f32);
                             vol
