@@ -1971,7 +1971,7 @@ fn get_bullet_bundle(
         damage: BULLET_DAMAGE,
         attacker,
     };
-    (name, bullet, bullet_sprite, new_pos, transform)
+    (name, bullet, bullet_sprite, new_pos, transform, Frozen)
 }
 
 fn check_bullet_collision(
