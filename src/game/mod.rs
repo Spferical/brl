@@ -1158,6 +1158,11 @@ fn tick_meters(
         player.brainrot = (player.brainrot - 2).max(10);
     }
 
+    // Passive brainrot decay
+    if turn_counter.0.is_multiple_of(10) {
+        player.brainrot = (player.brainrot - 1).max(0);
+    }
+
     // Decrement cooldowns
     for cooldown in player.ability_cooldowns.values_mut() {
         if *cooldown > 0 {
