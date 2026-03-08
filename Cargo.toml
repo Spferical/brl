@@ -8,17 +8,17 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { version = "0.17", features = ["bevy_dev_tools", "bevy_ui_debug"] }
-bevy-inspector-egui = "0.35.0"
-bevy_egui = "0.38.0"
-bevy_firefly = "0.17.0"
+bevy = { version = "0.18", features = ["bevy_dev_tools", "bevy_ui_debug"] }
+bevy-inspector-egui = "0.36.0"
+bevy_egui = "0.39.0"
+bevy_firefly = "0.18"
 ab_glyph = "0.2"
 geo = "0.32.0"
 indexmap = "2.13.0"
 mapgen = "0.6.0"
 rand = "0.9"
 rand_8 = {package = "rand", version = "0.8"}
-rogue-algebra = { version = "0.1.0", path = "rogue-algebra", features=["bevy17"] }
+rogue-algebra = { version = "0.1.0", path = "rogue-algebra", features=["bevy_18"] }
 textwrap = "0.16.2"
 # Compile out low-severity logs to improve performance.
 # Remove these features if you want to profile your game with tracy.

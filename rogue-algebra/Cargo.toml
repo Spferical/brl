@@ -5,11 +5,11 @@ edition = "2021"
 
 [features]
 default = []
-bevy17 = ["bevy17_math"]
+bevy_18 = ["bevy_18_math"]
 
 [dependencies]
 rand = { version = "0.9", default-features = false }
-bevy17_math = { package = "bevy_math", version = "0.17.0", optional = true, default-features = false }
+bevy_18_math = { package = "bevy_math", version = "0.18.0", optional = true, default-features = false, features = ["std"] }
 
 [dev-dependencies]
 rand = { version = "0.9" }

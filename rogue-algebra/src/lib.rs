@@ -692,29 +692,29 @@ impl IntoIterator for Rect {
     }
 }
 
-#[cfg(feature = "bevy17")]
-mod bevy17 {
+#[cfg(feature = "bevy_18")]
+mod bevy_18 {
     use super::*;
-    impl From<Pos> for bevy17_math::IVec2 {
+    impl From<Pos> for bevy_18_math::IVec2 {
         fn from(pos: Pos) -> Self {
             let Pos { x, y } = pos;
             Self { x, y }
         }
     }
-    impl From<Offset> for bevy17_math::IVec2 {
+    impl From<Offset> for bevy_18_math::IVec2 {
         fn from(offset: Offset) -> Self {
             let Offset { x, y } = offset;
             Self { x, y }
         }
     }
 
-    impl From<bevy17_math::IVec2> for Pos {
-        fn from(ivec: bevy17_math::IVec2) -> Self {
-            let bevy17_math::IVec2 { x, y } = ivec;
+    impl From<bevy_18_math::IVec2> for Pos {
+        fn from(ivec: bevy_18_math::IVec2) -> Self {
+            let bevy_18_math::IVec2 { x, y } = ivec;
             Self { x, y }
         }
     }
-    impl From<Rect> for bevy17_math::IRect {
+    impl From<Rect> for bevy_18_math::IRect {
         fn from(value: Rect) -> Self {
             let Rect { x1, y1, x2, y2 } = value;
             Self::new(x1, y1, x2, y2)
