@@ -1807,7 +1807,7 @@ fn create_prefab_room(
                 '&' => TileKind::WorkoutMachine,
                 '*' => TileKind::Reactor,
                 '+' => TileKind::MedicalPod,
-                'π' => TileKind::Table,
+                'T' => TileKind::Table,
                 't' => TileKind::Throne,
                 ' ' => TileKind::Wall,
                 '<' | '>' => TileKind::Floor(FloorKind::Rock),
@@ -2404,7 +2404,7 @@ pub(crate) fn spawn_level(
             }
             TileKind::Throne => {
                 let color = Color::srgb(0.8, 0.8, 0.8);
-                let sprite = assets.get_ascii_sprite('T', color);
+                let sprite = assets.get_ascii_sprite('π', color);
                 tile.insert((Name::new("Throne"), sprite));
             }
             TileKind::Reactor => {
