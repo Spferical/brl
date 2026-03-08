@@ -1127,9 +1127,10 @@ pub struct LevelDraft {
 }
 
 impl LevelDraft {
-    fn add_upgrade(&mut self, rng: &mut impl Rng, name: Option<&'static str>) {
+    fn with_upgrade(mut self, rng: &mut impl Rng, name: Option<&'static str>) -> Self {
         self.tiles
             .insert(self.get_random_floor(rng), TileKind::Upgrade(name));
+        self
     }
     fn get_random_floor(&self, rng: &mut impl Rng) -> Pos {
         let all_floors = self
@@ -2387,37 +2388,40 @@ pub(crate) fn gen_map(
             gen_island(rng)
                 .with_walls()
                 .sprinkle_mobs(rng, FORTNITE_DIST, 30),
-            {
-                let mut freddy = gen_freddy(rng)
-                    .with_walls()
-                    .sprinkle_mobs(rng, FREDDY_DIST, 4);
-                freddy.add_upgrade(rng, Some("Animatronic Bear Mask"));
-                freddy
-            },
+            gen_freddy(rng)
+                .with_walls()
+                .sprinkle_mobs(rng, FREDDY_DIST, 4)
+                .with_upgrade(rng, Some("Animatronic Bear Mask")),
         ],
         vec![
             gen_amogus_spaceship(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, AMOGUS_DIST, 20),
+                .sprinkle_mobs(rng, AMOGUS_DIST, 20)
+                .with_upgrade(rng, None),
             gen_minecraft(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, MINECRAFT_DIST, 25),
+                .sprinkle_mobs(rng, MINECRAFT_DIST, 25)
+                .with_upgrade(rng, None),
         ],
         vec![
             draft_level_mapgen_drunk(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, CAVES_DIST, 30),
+                .sprinkle_mobs(rng, CAVES_DIST, 30)
+                .with_upgrade(rng, None),
             draft_level_mapgen_simple(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, CAVES_DIST, 30),
+                .sprinkle_mobs(rng, CAVES_DIST, 30)
+                .with_upgrade(rng, None),
         ],
         vec![
             gen_frog_pond(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, POND_DIST, 40),
+                .sprinkle_mobs(rng, POND_DIST, 40)
+                .with_upgrade(rng, None),
             gen_office(rng)
                 .with_walls()
-                .sprinkle_mobs(rng, OFFICE_DIST, 20),
+                .sprinkle_mobs(rng, OFFICE_DIST, 20)
+                .with_upgrade(rng, None),
         ],
     ];
 
