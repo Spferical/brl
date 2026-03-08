@@ -1962,6 +1962,7 @@ fn get_bullet_bundle(
         (1, 1) => 1.75 * PI,
         _ => panic!("Unexpected bullet direction: {direction:?}"),
     };
+    let name = Name::new("Bullet");
     let bullet_sprite = assets.get_ascii_sprite('^', Color::WHITE);
     let transform = Transform::from_translation(new_pos.to_vec3(PLAYER_Z))
         .with_rotation(Quat::from_rotation_z(rotation));
@@ -1970,7 +1971,7 @@ fn get_bullet_bundle(
         damage: BULLET_DAMAGE,
         attacker,
     };
-    (bullet, bullet_sprite, new_pos, transform)
+    (name, bullet, bullet_sprite, new_pos, transform)
 }
 
 fn check_bullet_collision(
