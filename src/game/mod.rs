@@ -2227,16 +2227,6 @@ fn process_mob_turn(
             }
         }
 
-        // keepaway mobs don't close in the final 2 steps unless they are
-        // damaged
-        if mob.keepaway
-            && let Some(target) = mob.target
-            && (2..=3).contains(&pos.0.chebyshev_distance(target))
-            && creature.hp >= creature.max_hp
-        {
-            mob.target = None;
-        }
-
         if mob.target.is_none() {
             if creature.faction == FRIENDLY_FACTION
                 && let Some(action) = get_crew_move(
@@ -2271,6 +2261,13 @@ fn process_mob_turn(
         if let Some(target) = target {
             let action = if mob.ranged && rng.random_bool(0.5) {
                 Action::RangedAttack(target)
+            } else if mob.keepaway
+                && (2..=3).contains(&pos.0.chebyshev_distance(target.0))
+                && creature.hp >= creature.max_hp
+            {
+                // keepaway mobs don't close in the final 2 steps unless they are
+                // damaged
+                continue;
             } else if let Some(occupier) = pos_to_creature.0.get(&target.0) {
                 if mob.attrs.sus {
                     get_teleport_action(
