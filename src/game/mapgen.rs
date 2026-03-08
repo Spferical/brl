@@ -572,7 +572,7 @@ impl MobKind {
                     friend_of_machines: false,
                 },
                 mob: Mob {
-                    melee_damage: 10,
+                    melee_damage: 5,
                     attrs: MobAttrs {
                         based: true,
                         aura_resist: Resist::Weak,
@@ -600,7 +600,7 @@ impl MobKind {
                     friend_of_machines: false,
                 },
                 mob: Mob {
-                    melee_damage: 20,
+                    melee_damage: 10,
                     attrs: MobAttrs {
                         based: true,
                         aura_resist: Resist::Weak,
@@ -628,7 +628,7 @@ impl MobKind {
                     friend_of_machines: false,
                 },
                 mob: Mob {
-                    melee_damage: 30,
+                    melee_damage: 20,
                     attrs: MobAttrs {
                         based: true,
                         aura_resist: Resist::Weak,
@@ -656,7 +656,7 @@ impl MobKind {
                     friend_of_machines: false,
                 },
                 mob: Mob {
-                    melee_damage: 30,
+                    melee_damage: 10,
                     ranged: true,
                     keepaway: true,
                     attrs: MobAttrs {
