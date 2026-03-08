@@ -42,6 +42,7 @@ enum TileKind {
     ArcadeMachine,
     Table,
     Upgrade(Option<&'static str>),
+    Throne,
 }
 
 impl TileKind {
@@ -138,6 +139,26 @@ const OFFICE_DIST: &[(MobKind, usize)] = &[
     (MobKind::ChadGPT, 1),
     (MobKind::Normie, 1),
     (MobKind::Drone, 1),
+];
+
+const TROOM_1_DIST: &[(MobKind, usize)] = &[
+    (MobKind::ChadGPT, 1),
+    (MobKind::MadFrog, 1),
+    (MobKind::Eceleb, 1),
+];
+
+const TROOM_2_DIST: &[(MobKind, usize)] = &[
+    (MobKind::Animatronic, 1),
+    (MobKind::Zombie, 1),
+    (MobKind::Streamer, 1),
+    (MobKind::GymBro, 1),
+];
+const TROOM_3_DIST: &[(MobKind, usize)] = &[
+    (MobKind::Influencer, 1),
+    (MobKind::SadFrog, 1),
+    (MobKind::Influencer, 1),
+    (MobKind::Normie, 1),
+    (MobKind::Capybara, 1),
 ];
 
 impl MobKind {
@@ -1126,6 +1147,8 @@ pub enum LevelTitle {
     Minecraft,
     FrogPond,
     Office,
+    ThroneRoom,
+    Outside,
 }
 
 impl std::fmt::Display for LevelTitle {
@@ -1141,7 +1164,9 @@ impl std::fmt::Display for LevelTitle {
             LevelTitle::Freddy => "Friendo's Pizza & Prizes",
             LevelTitle::Minecraft => "A Blocky Wilderness",
             LevelTitle::FrogPond => "A Peaceful Pond",
-            LevelTitle::Office => "An Abandoned Office Space ",
+            LevelTitle::Office => "An Abandoned Office Space",
+            LevelTitle::ThroneRoom => "Throne Room",
+            LevelTitle::Outside => "Outside",
         })
     }
 }
@@ -1765,9 +1790,10 @@ fn gen_dungeon_fitness(rng: &mut impl Rng) -> LevelDraft {
 }
 
 fn create_prefab_room(
-    tiles: &mut HashMap<Pos, TileKind>,
+    draft: &mut LevelDraft,
     start_pos: Pos,
     prefab: &str,
+    rng: &mut impl Rng,
 ) -> rogue_algebra::Rect {
     let mut max_x = 0;
     let mut max_y = 0;
@@ -1776,21 +1802,40 @@ fn create_prefab_room(
             let pos = start_pos + rogue_algebra::Offset::new(x as i32, y as i32);
             let tk = match c {
                 '#' => TileKind::Wall,
-                '.' => TileKind::Floor(FloorKind::Rock),
+                '.' | '1' | '2' | '3' => TileKind::Floor(FloorKind::Rock),
                 '$' => TileKind::ArcadeMachine,
                 '&' => TileKind::WorkoutMachine,
                 '*' => TileKind::Reactor,
                 '+' => TileKind::MedicalPod,
-                'T' => TileKind::Table,
+                'π' => TileKind::Table,
+                't' => TileKind::Throne,
                 ' ' => TileKind::Wall,
+                '<' | '>' => TileKind::Floor(FloorKind::Rock),
                 _ => {
                     warn!("create_prefab_room: unexpected '{c}'");
                     TileKind::Wall
                 }
             };
-            tiles.insert(pos, tk);
+            draft.tiles.insert(pos, tk);
             max_x = max_x.max(x as i32);
             max_y = max_y.max(y as i32);
+            let spawn_dist = match c {
+                '1' => Some(TROOM_1_DIST),
+                '2' => Some(TROOM_2_DIST),
+                '3' => Some(TROOM_3_DIST),
+                _ => None,
+            };
+            if let Some(dist) = spawn_dist {
+                draft
+                    .mobs
+                    .insert(pos, dist.choose_weighted(rng, |m| m.1).unwrap().0);
+            }
+            if c == '<' {
+                draft.entrances.push(pos);
+            }
+            if c == '>' {
+                draft.exits.push(pos);
+            }
         }
     }
     rogue_algebra::Rect::new(
@@ -1802,14 +1847,24 @@ fn create_prefab_room(
 }
 
 fn gen_amogus_spaceship(rng: &mut impl Rng) -> LevelDraft {
-    let mut tiles = HashMap::new();
     let ship_bounds = rogue_algebra::Rect::new(0, 95, 0, 48);
     let world_bounds = ship_bounds.expand(20);
+
+    let mut draft = LevelDraft {
+        title: LevelTitle::AmogusSpaceship,
+        entrances: vec![],
+        exits: vec![],
+        tiles: HashMap::new(),
+        mobs: HashMap::new(),
+        destinations: vec![],
+        override_rect: Some(ship_bounds),
+    };
+
     for p in world_bounds {
         if ship_bounds.contains(p) {
-            tiles.insert(p, TileKind::Wall);
+            draft.tiles.insert(p, TileKind::Wall);
         } else if rng.random_bool(0.01) {
-            tiles.insert(p, TileKind::Star);
+            draft.tiles.insert(p, TileKind::Star);
         }
     }
 
@@ -1871,18 +1926,18 @@ fn gen_amogus_spaceship(rng: &mut impl Rng) -> LevelDraft {
 ###########";
 
     // Place larger rooms tightly
-    let reactor = create_prefab_room(&mut tiles, Pos::new(2, 20), reactor_prefab);
-    let upper_engine = create_prefab_room(&mut tiles, Pos::new(15, 5), engine_prefab);
-    let lower_engine = create_prefab_room(&mut tiles, Pos::new(15, 35), engine_prefab);
-    let security = create_prefab_room(&mut tiles, Pos::new(17, 20), small_room_prefab);
-    let medbay = create_prefab_room(&mut tiles, Pos::new(32, 5), medbay_prefab);
-    let electrical = create_prefab_room(&mut tiles, Pos::new(32, 35), electrical_prefab);
-    let cafeteria = create_prefab_room(&mut tiles, Pos::new(48, 2), cafeteria_prefab);
-    let storage = create_prefab_room(&mut tiles, Pos::new(48, 35), storage_prefab);
-    let admin = create_prefab_room(&mut tiles, Pos::new(68, 18), admin_navigation_prefab);
-    let weapons = create_prefab_room(&mut tiles, Pos::new(72, 5), small_room_prefab);
-    let shields = create_prefab_room(&mut tiles, Pos::new(72, 35), small_room_prefab);
-    let navigation = create_prefab_room(&mut tiles, Pos::new(82, 20), admin_navigation_prefab);
+    let reactor = create_prefab_room(&mut draft, Pos::new(2, 20), reactor_prefab, rng);
+    let upper_engine = create_prefab_room(&mut draft, Pos::new(15, 5), engine_prefab, rng);
+    let lower_engine = create_prefab_room(&mut draft, Pos::new(15, 35), engine_prefab, rng);
+    let security = create_prefab_room(&mut draft, Pos::new(17, 20), small_room_prefab, rng);
+    let medbay = create_prefab_room(&mut draft, Pos::new(32, 5), medbay_prefab, rng);
+    let electrical = create_prefab_room(&mut draft, Pos::new(32, 35), electrical_prefab, rng);
+    let cafeteria = create_prefab_room(&mut draft, Pos::new(48, 2), cafeteria_prefab, rng);
+    let storage = create_prefab_room(&mut draft, Pos::new(48, 35), storage_prefab, rng);
+    let admin = create_prefab_room(&mut draft, Pos::new(68, 18), admin_navigation_prefab, rng);
+    let weapons = create_prefab_room(&mut draft, Pos::new(72, 5), small_room_prefab, rng);
+    let shields = create_prefab_room(&mut draft, Pos::new(72, 35), small_room_prefab, rng);
+    let navigation = create_prefab_room(&mut draft, Pos::new(82, 20), admin_navigation_prefab, rng);
 
     // Connect rooms with 1-tile wide corridors
     let mut corridors = vec![];
@@ -1905,38 +1960,33 @@ fn gen_amogus_spaceship(rng: &mut impl Rng) -> LevelDraft {
     for (p1, p2) in corridors {
         let mut curr = p1;
         while curr != p2 {
-            tiles.insert(curr, TileKind::Floor(FloorKind::Rock));
+            draft.tiles.insert(curr, TileKind::Floor(FloorKind::Rock));
             if curr.x != p2.x {
                 curr.x += (p2.x - curr.x).signum();
             } else if curr.y != p2.y {
                 curr.y += (p2.y - curr.y).signum();
             }
         }
-        tiles.insert(p2, TileKind::Floor(FloorKind::Rock));
+        draft.tiles.insert(p2, TileKind::Floor(FloorKind::Rock));
     }
 
-    LevelDraft {
-        title: LevelTitle::AmogusSpaceship,
-        entrances: vec![cafeteria.center()],
-        exits: vec![navigation.center()],
-        tiles,
-        mobs: HashMap::new(),
-        destinations: vec![
-            reactor.center(),
-            upper_engine.center(),
-            lower_engine.center(),
-            security.center(),
-            medbay.center(),
-            electrical.center(),
-            cafeteria.center(),
-            storage.center(),
-            admin.center(),
-            weapons.center(),
-            shields.center(),
-            navigation.center(),
-        ],
-        override_rect: Some(ship_bounds),
-    }
+    draft.entrances.push(cafeteria.center());
+    draft.exits.push(navigation.center());
+    draft.destinations = vec![
+        reactor.center(),
+        upper_engine.center(),
+        lower_engine.center(),
+        security.center(),
+        medbay.center(),
+        electrical.center(),
+        cafeteria.center(),
+        storage.center(),
+        admin.center(),
+        weapons.center(),
+        shields.center(),
+        navigation.center(),
+    ];
+    draft
 }
 
 fn gen_island(rng: &mut impl Rng) -> LevelDraft {
@@ -1972,8 +2022,82 @@ fn gen_island(rng: &mut impl Rng) -> LevelDraft {
     draft
 }
 
-fn gen_freddy(_rng: &mut impl Rng) -> LevelDraft {
-    let mut tiles = HashMap::new();
+fn gen_outside(_rng: &mut impl Rng) -> LevelDraft {
+    let mut draft = LevelDraft {
+        title: LevelTitle::Outside,
+        entrances: vec![],
+        exits: vec![],
+        tiles: HashMap::new(),
+        mobs: HashMap::new(),
+        destinations: vec![],
+        override_rect: None,
+    };
+    let rect = rogue_algebra::Rect::new(0, 40, 0, 40);
+    for p in rect {
+        let off = p - rect.center();
+        if off.x * off.x + off.y * off.y < 400 {
+            draft.tiles.insert(p, TileKind::Floor(FloorKind::Grass));
+        }
+    }
+    draft.entrances.push(rect.center());
+    draft
+}
+
+fn gen_throne_room(rng: &mut impl Rng) -> LevelDraft {
+    let mut draft = LevelDraft {
+        title: LevelTitle::ThroneRoom,
+        entrances: vec![],
+        exits: vec![],
+        tiles: HashMap::new(),
+        mobs: HashMap::new(),
+        destinations: vec![],
+        override_rect: None,
+    };
+
+    let prefab = "
+#################
+#.......>.......#
+#...............#
+#...1...t...1...#
+#...............#
+#...............#
+#...#.......#...#
+#...2.......2...#
+#...#.......#...#
+#...3.......3...#
+#...#.......#...#
+#...3.......3...#
+#...#.......#...#
+#...3.......3...#
+#...#.......#...#
+#...............#
+#...#.......#...#
+#...............#
+#...#.......#...#
+#...............#
+#...#.<.<.<.#...#
+#...............#
+#################";
+
+    let _room = create_prefab_room(&mut draft, Pos::new(0, 0), prefab, rng);
+    for t in draft.tiles.values_mut() {
+        if let TileKind::Floor(..) = t {
+            *t = TileKind::Floor(FloorKind::Custom('.', Color::srgb(1.0, 1.0, 1.0)));
+        }
+    }
+    draft
+}
+
+fn gen_freddy(rng: &mut impl Rng) -> LevelDraft {
+    let mut draft = LevelDraft {
+        title: LevelTitle::Freddy,
+        entrances: vec![],
+        exits: vec![],
+        tiles: HashMap::new(),
+        mobs: HashMap::new(),
+        destinations: vec![],
+        override_rect: None,
+    };
 
     let prefab = "
            #################
@@ -2012,22 +2136,13 @@ fn gen_freddy(_rng: &mut impl Rng) -> LevelDraft {
           #.#.........#.#
           ###############";
 
-    let _room = create_prefab_room(&mut tiles, Pos::new(0, 0), prefab);
-    for t in tiles.values_mut() {
+    let _room = create_prefab_room(&mut draft, Pos::new(0, 0), prefab, rng);
+    for t in draft.tiles.values_mut() {
         if let TileKind::Floor(..) = t {
             *t = TileKind::Floor(FloorKind::Custom('.', Color::srgb(0.0, 0.0, 1.0)));
         }
     }
-
-    LevelDraft {
-        title: LevelTitle::Freddy,
-        entrances: vec![],
-        exits: vec![],
-        tiles,
-        mobs: HashMap::new(),
-        destinations: vec![],
-        override_rect: None,
-    }
+    draft
 }
 
 fn gen_minecraft(rng: &mut impl Rng) -> LevelDraft {
@@ -2287,6 +2402,11 @@ pub(crate) fn spawn_level(
                 let sprite = assets.get_ascii_sprite('T', color);
                 tile.insert((Name::new("Table"), sprite, map::BlocksMovement));
             }
+            TileKind::Throne => {
+                let color = Color::srgb(0.8, 0.8, 0.8);
+                let sprite = assets.get_ascii_sprite('T', color);
+                tile.insert((Name::new("Throne"), sprite));
+            }
             TileKind::Reactor => {
                 let sprite = assets.get_ascii_sprite('*', Color::srgb(0.0, 1.0, 0.0));
                 tile.insert((
@@ -2521,6 +2641,8 @@ pub(crate) fn gen_map(
                     .with_upgrade(rng, None)
             }),
         ],
+        vec![with_retry(|| gen_throne_room(rng))],
+        vec![gen_outside(rng)], // no retry because it's open
     ];
 
     let mut stair_locs = vec![];
