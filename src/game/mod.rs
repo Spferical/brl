@@ -65,9 +65,9 @@ const PLAYER_FACTION: i32 = 0;
 const FRIENDLY_FACTION: i32 = 2;
 const ENEMY_FACTION: i32 = -1;
 
-const UI_GREEN: egui::Color32 = egui::Color32::from_rgb(65, 148, 109);
-const UI_YELLOW: egui::Color32 = egui::Color32::from_rgb(183, 171, 116);
-const UI_RED: egui::Color32 = egui::Color32::from_rgb(195, 135, 129);
+const UI_GREEN: egui::Color32 = egui::Color32::from_rgb(65, 163, 109);
+const UI_YELLOW: egui::Color32 = egui::Color32::from_rgb(200, 181, 93);
+const UI_RED: egui::Color32 = egui::Color32::from_rgb(227, 111, 108);
 
 pub(super) fn plugin(app: &mut App) {
     #[cfg(any(feature = "webgpu", not(target_arch = "wasm32")))]

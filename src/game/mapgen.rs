@@ -1946,16 +1946,12 @@ pub(crate) fn spawn_level(
                         )
                     }
                     FloorKind::Sand => (
-                        Color::srgb(0.703, 0.658, 0.428),
-                        if r <= 0.3 {
-                            '~'
-                        } else if r <= 0.5 {
-                            ','
-                        } else if r <= 0.7 {
-                            '`'
+                        if r2 < 0.1 {
+                            Color::srgb(1.0, 0.941, 0.894)
                         } else {
-                            '.'
+                            Color::srgb(0.929, 0.749, 0.549)
                         },
+                        if r <= 0.6 { '.' } else { ',' },
                     ),
                 };
                 tile.insert(assets.get_ascii_sprite(ch, color));
@@ -1993,11 +1989,11 @@ pub(crate) fn spawn_level(
             TileKind::Water => {
                 let r = rng.random::<f32>();
                 let color = if r < 0.05 {
-                    Color::srgb(0.157, 0.341, 0.741)
+                    Color::srgb(0.4, 0.6, 1.0)
                 } else if r < 0.1 {
-                    Color::srgb(0.4, 0.4, 1.0)
+                    Color::srgb(0.4, 0.90, 1.0)
                 } else {
-                    Color::srgb(0.133, 0.525, 0.525)
+                    Color::srgb(0.4, 0.4, 1.0)
                 };
                 let sprite = assets.get_ascii_sprite('~', color);
                 tile.insert((Name::new("Water"), sprite, map::BlocksMovement));
