@@ -195,7 +195,7 @@ pub static UPGRADES: LazyLock<Vec<Upgrade>> = LazyLock::new(|| {
             name: "Performance Enhancing Drugs",
             effects: vec![
                 Effect::AttrChange(Attr::Strength, 20),
-                Effect::AttrChange(Attr::MaxHp, 5),
+                Effect::AttrChange(Attr::MaxHp, -5),
             ],
             frequency: 1.0,
             requires: &[],
