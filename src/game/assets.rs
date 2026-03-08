@@ -43,6 +43,7 @@ pub struct WorldAssets {
     pub oof: Handle<AudioSource>,
     pub button_click: Handle<AudioSource>,
     pub button_hover: Handle<AudioSource>,
+    pub punch: Handle<AudioSource>,
 }
 
 pub const FORBIDDEN_EMOTE_IDS: &[u32] = &[
@@ -418,6 +419,12 @@ impl FromWorld for WorldAssets {
                 .into(),
         });
 
+        let punch = audio_assets.add(AudioSource {
+            bytes: include_bytes!("../../assets/audio/sound_effects/meme_sounds/punch.ogg")
+                .to_vec()
+                .into(),
+        });
+
         Self {
             font,
             comic_relief,
@@ -443,6 +450,7 @@ impl FromWorld for WorldAssets {
             oof,
             button_click,
             button_hover,
+            punch,
         }
     }
 }

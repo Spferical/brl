@@ -2189,6 +2189,13 @@ fn apply_damage(
                 world_pos,
                 is_player,
             });
+
+            if let Some(attacker) = attacker
+                && attacker == player_entity
+                && entity != player_entity
+            {
+                commands.spawn(crate::audio::sound_effect(assets.punch.clone()));
+            }
         }
     }
 }
