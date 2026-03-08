@@ -3,7 +3,7 @@ use std::time::Duration;
 use bevy::{camera::visibility::RenderLayers, prelude::*};
 use bevy_egui::egui::{self, Align, FontSelection, RichText};
 
-use crate::game::{DAMAGE_Z, DamageType, apply_brainrot_ui};
+use crate::game::{DAMAGE_Z, DamageType, GameWorld, apply_brainrot_ui};
 
 const MAX_TICK: Duration = Duration::from_nanos(1_000_000_000 / 30);
 
@@ -296,24 +296,27 @@ pub struct TitleDrop {
 }
 
 pub fn update_title_drop(
+    world: Single<Entity, With<GameWorld>>,
     mut commands: Commands,
     mut msg_title_drop: MessageReader<TitleDropMessage>,
     query: Query<(Entity, &mut TitleDrop, &mut Transform)>,
     time: Res<Time>,
 ) {
     for TitleDropMessage(text) in msg_title_drop.read() {
-        commands.spawn((
-            TitleDrop {
-                timer: Timer::from_seconds(5.0, TimerMode::Once),
-            },
-            Text2d::new(text),
-            TextFont {
-                font_size: 64.0,
-                ..default()
-            },
-            TextColor(Color::WHITE),
-            RenderLayers::layer(1),
-        ));
+        commands.entity(*world).with_children(|parent| {
+            parent.spawn((
+                TitleDrop {
+                    timer: Timer::from_seconds(5.0, TimerMode::Once),
+                },
+                Text2d::new(text),
+                TextFont {
+                    font_size: 64.0,
+                    ..default()
+                },
+                TextColor(Color::WHITE),
+                RenderLayers::layer(1),
+            ));
+        });
     }
     for (entity, mut td, mut transform) in query {
         td.timer.tick(time.delta().min(MAX_TICK));
