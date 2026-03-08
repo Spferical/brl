@@ -798,17 +798,14 @@ impl Ability {
             Ability::Sprint => None,
             Ability::ShoulderCheck => Some((
                 DamageType::Physical,
-                player.melee_damage()..=player.melee_damage(),
+                player.melee_damage()..=player.melee_damage() * 2,
             )),
-            Ability::Mog => Some((
-                DamageType::Aura,
-                2 + (rizz * 6) / 100..=2 + (rizz * 12) / 100,
-            )),
+            Ability::Mog => Some((DamageType::Aura, 2 + (rizz * 6) / 50..=2 + (rizz * 12) / 50)),
             Ability::Cook => None,
             Ability::Gun => Some((DamageType::Physical, BULLET_DAMAGE..=BULLET_DAMAGE)),
             Ability::ReadBook => None,
             Ability::Surveys => None,
-            Ability::Yap => Some((DamageType::Boredom, 1 + boredom / 50..=1 + boredom / 25)),
+            Ability::Yap => Some((DamageType::Boredom, 1 + boredom / 20..=1 + boredom / 10)),
         }
     }
 }
