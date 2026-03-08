@@ -253,6 +253,11 @@ pub(super) fn plugin(app: &mut App) {
     );
 }
 
+fn bevy_to_egui_color(color: Color) -> Color32 {
+    let [r, g, b, a] = color.to_srgba().to_u8_array();
+    Color32::from_rgba_unmultiplied(r, g, b, a)
+}
+
 fn anger_crew(
     attacked_entity: Entity,
     _player_entity: Entity,
@@ -3091,6 +3096,15 @@ fn sidebar(
                                 FontSelection::Default,
                                 Align::LEFT,
                             ));
+                            ui.label(
+                                RichText::new(format!(
+                                    "melee damage: {}-{} {}",
+                                    player.melee_damage(),
+                                    player.melee_damage(),
+                                    DamageType::Physical,
+                                ))
+                                .color(bevy_to_egui_color(DamageType::Physical.color())),
+                            );
 
                             for (i, ability) in player.abilities.iter().enumerate() {
                                 let ability_key = (i + 1) % 10;
@@ -3117,8 +3131,6 @@ fn sidebar(
                                         msg_ability_clicked.write(AbilityClicked(*ability));
                                     }
                                     if let Some((ty, range)) = ability.damage_info(player) {
-                                        let [r, g, b, a] = ty.color().to_srgba().to_u8_array();
-                                        let color = Color32::from_rgba_unmultiplied(r, g, b, a);
                                         ui.label(
                                             RichText::new(format!(
                                                 "{}-{} {} damage",
@@ -3126,7 +3138,7 @@ fn sidebar(
                                                 range.end(),
                                                 ty,
                                             ))
-                                            .color(color),
+                                            .color(bevy_to_egui_color(ty.color())),
                                         );
                                     }
                                 });
