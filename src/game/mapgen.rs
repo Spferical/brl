@@ -1,5 +1,5 @@
 use crate::game::{
-    CookedMeal, Creature, DropsCorpse, ENEMY_FACTION, FRIENDLY_FACTION, Interactable,
+    CookedMeal, Creature, DamageType, DropsCorpse, ENEMY_FACTION, FRIENDLY_FACTION, Interactable,
     InteractionType, MinSpawnZone, Mob, MobAttrs, MobBundle, PLAYER_FACTION, PLAYER_Z, Player,
     Resist, Summon, TILE_Z,
     assets::WorldAssets,
@@ -80,6 +80,7 @@ pub(crate) enum MobKind {
     Spider,
     Enderman,
     ChadGPT,
+    FinalBoss,
 }
 
 const LVL1_DIST: &[(MobKind, usize)] = &[
@@ -351,6 +352,17 @@ impl MobKind {
                     boredom: 0,
                 },
             ),
+            MobKind::FinalBoss => (
+                "Tide Pods",
+                CookedMeal {
+                    hunger: 50,
+                    hp: -50,
+                    strength: 0,
+                    rizz: 0,
+                    brainrot: 100,
+                    boredom: 0,
+                },
+            ),
         }
     }
 
@@ -382,6 +394,7 @@ impl MobKind {
             MobKind::Spider => 0,
             MobKind::Enderman => 15,
             MobKind::ChadGPT => 95,
+            MobKind::FinalBoss => 0,
         }
     }
 
@@ -473,6 +486,36 @@ impl MobKind {
                     sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
                     nutrition: 5,
                     name: "ChadGPT".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::FinalBoss => MobBundle {
+                name: Name::new(";)"),
+                creature: Creature {
+                    hp: 40,
+                    max_hp: 40,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 10,
+                    ranged_damage: 20,
+                    ranged_damage_type: DamageType::Psychic,
+                    ranged: true,
+                    keepaway: false,
+                    attrs: MobAttrs {
+                        moves_randomly: true,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('@', Color::srgb(1.0, 0.0, 1.0)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(1.0, 0.0, 1.0)),
+                    nutrition: 100,
+                    name: "Divine Ambrosia".to_string(),
                     kind: *self,
                 },
             },
@@ -920,6 +963,7 @@ impl MobKind {
                             knows_player_location: true,
                             ..Default::default()
                         },
+                        ..default()
                     },
                     sprite: assets.get_ascii_sprite('k', Color::srgb(0.2, 0.2, 0.8)),
                     corpse: DropsCorpse {
@@ -1808,7 +1852,10 @@ fn create_prefab_room(
                 '*' => TileKind::Reactor,
                 '+' => TileKind::MedicalPod,
                 'T' => TileKind::Table,
-                't' => TileKind::Throne,
+                't' => {
+                    draft.mobs.insert(pos, MobKind::FinalBoss);
+                    TileKind::Throne
+                }
                 ' ' => TileKind::Wall,
                 '<' | '>' => TileKind::Floor(FloorKind::Rock),
                 _ => {
@@ -2064,9 +2111,9 @@ fn gen_throne_room(rng: &mut impl Rng) -> LevelDraft {
 #...#.......#...#
 #...2.......2...#
 #...#.......#...#
-#...3.......3...#
+#...............#
 #...#.......#...#
-#...3.......3...#
+#...............#
 #...#.......#...#
 #...3.......3...#
 #...#.......#...#
@@ -2668,9 +2715,11 @@ pub(crate) fn gen_map(
             for (j, deeper_level) in level_drafts_per_depth[depth + 1].iter().enumerate() {
                 let lower_offset =
                     rogue_algebra::Offset::new(j as i32 * 200, (depth + 1) as i32 * 200);
+                let locked = level.title == LevelTitle::ThroneRoom;
                 stair_locs.push((
                     level.exits[j] + upper_offset,
                     deeper_level.entrances[i] + lower_offset,
+                    locked,
                 ));
             }
         }
@@ -2697,8 +2746,8 @@ pub(crate) fn gen_map(
     for (offset, name, level) in levels {
         spawn_level(name, rng, world, commands, &assets, &level, offset);
     }
-    for (p1, p2) in stair_locs {
-        spawn_stairs(world, commands, &assets, p1, p2);
+    for (p1, p2, locked) in stair_locs {
+        spawn_stairs(world, commands, &assets, p1, p2, locked);
     }
 
     // Spawn the player.

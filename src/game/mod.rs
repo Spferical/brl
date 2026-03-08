@@ -145,6 +145,7 @@ pub(super) fn plugin(app: &mut App) {
                 chat::update_chat,
             ),
             (
+                update_final_boss_sprite,
                 update_level_info_on_change,
                 (
                     animation::process_move_animations,
@@ -857,6 +858,7 @@ pub(crate) fn handle_eat(
         Option<&delivery::Food>,
         Option<&CookedMeal>,
         Has<Ambrosia>,
+        Has<DivineAmbrosia>,
         Option<&Name>,
     )>,
     mut commands: Commands,
@@ -868,7 +870,7 @@ pub(crate) fn handle_eat(
     let mut dd_selection = dd_selection;
     let (mut player, mut creature, player_entity) = player_query.into_inner();
     for event in events.read() {
-        if let Ok((food, cooked, is_ambrosia, name)) = food_query.get(event.0) {
+        if let Ok((food, cooked, is_ambrosia, is_divine_ambrosia, name)) = food_query.get(event.0) {
             let mut name_str = name.map(|n| n.as_str()).unwrap_or("Something unknown");
 
             if let Some(ref mut dd) = dd_selection
@@ -890,7 +892,11 @@ pub(crate) fn handle_eat(
                 dd.dropped_food_entity = None;
             }
 
-            if is_ambrosia {
+            if is_divine_ambrosia {
+                player.brainrot = 0;
+                creature.hp = creature.max_hp;
+                name_str = "Divine Ambrosia";
+            } else if is_ambrosia {
                 use rand::Rng;
                 let mut rng = rand::rng();
                 let amount = rng.random_range(5..=15);
@@ -927,9 +933,13 @@ pub(crate) fn handle_eat(
 pub(crate) struct Ambrosia;
 
 #[derive(Component)]
+pub(crate) struct DivineAmbrosia;
+
+#[derive(Component)]
 #[require(Interactable)]
 pub struct Stairs {
     pub(crate) destination: MapPos,
+    pub(crate) locked: bool,
 }
 
 pub(crate) fn draw_world_popup(
@@ -1029,10 +1039,14 @@ struct MobSpawner {
 }
 
 #[derive(Component)]
-struct Bullet {
-    direction: IVec2,
-    damage: i32,
-    attacker: Entity,
+pub(crate) struct FinalBossMarker;
+
+#[derive(Component)]
+pub(crate) struct Bullet {
+    pub direction: IVec2,
+    pub damage: i32,
+    pub attacker: Entity,
+    pub ty: DamageType,
 }
 
 /// Common fields between the player and mobs.
@@ -1090,6 +1104,7 @@ pub(crate) struct MobAttrs {
     pub physical_resist: Resist,
     pub psychic_resist: Resist,
     pub boredom_resist: Resist,
+    pub moves_randomly: bool,
 }
 
 #[derive(Default, Clone, Copy, Debug, Reflect)]
@@ -1100,10 +1115,11 @@ pub(crate) enum Resist {
     Strong,
 }
 
-// NPC-specific fields.
 #[derive(Component, Clone, Debug, Reflect, Default)]
 pub(crate) struct Mob {
     pub melee_damage: i32,
+    pub ranged_damage: i32,
+    pub ranged_damage_type: DamageType,
     pub ranged: bool,
     pub keepaway: bool,
     pub attrs: MobAttrs,
@@ -1250,6 +1266,7 @@ struct PlayerMoveParams<'w, 's> {
     chat: ResMut<'w, crate::game::chat::ChatHistory>,
     streaming_state: Res<'w, crate::game::chat::StreamingState>,
     sight_blocked_map: Res<'w, map::SightBlockedMap>,
+    bosses: Query<'w, 's, Entity, With<FinalBossMarker>>,
 }
 
 fn handle_player_move(
@@ -1303,6 +1320,7 @@ fn handle_player_move(
         mut chat,
         streaming_state,
         sight_blocked_map,
+        bosses,
     } = params;
     let world_entity = world.into_inner();
     let (player_entity, mut pos, maybe_intent, mut player_stats, mut creature) =
@@ -1458,10 +1476,23 @@ fn handle_player_move(
             }
         }
         PlayerIntent::UseStairs => {
-            if let Some(Stairs { destination }) = stairs
+            if let Some(Stairs {
+                destination,
+                locked,
+            }) = stairs
                 .iter_many(pos_to_interactable.0.get(&*pos).unwrap_or(&vec![]))
                 .next()
             {
+                if *locked && !bosses.is_empty() {
+                    floating_text.write(FloatingTextMessage {
+                        entity: Some(player_entity),
+                        world_pos: None,
+                        text: "The boss is still alive!".to_string(),
+                        color: Color::srgb(1.0, 0.0, 0.0),
+                        ..default()
+                    });
+                    return;
+                }
                 let old_pos = *pos;
                 *pos = *destination;
 
@@ -1592,6 +1623,8 @@ fn handle_player_move(
                         *map_pos,
                         map_pos.0 - pos.0,
                         player_entity,
+                        BULLET_DAMAGE,
+                        DamageType::Physical,
                         &assets,
                     ));
                 });
@@ -1873,7 +1906,14 @@ fn transform_brainrot_enemies(
     mut commands: Commands,
     player: Single<&Player>,
     assets: Res<assets::WorldAssets>,
-    brainrot_enemies: Query<(Entity, &MapPos), (With<BrainrotEnemyMarker>, Without<Frozen>)>,
+    brainrot_enemies: Query<
+        (Entity, &MapPos),
+        (
+            With<BrainrotEnemyMarker>,
+            Without<Frozen>,
+            Without<FinalBossMarker>,
+        ),
+    >,
 ) {
     if player.brainrot < 100 && !brainrot_enemies.is_empty() {
         for (entity, _pos) in brainrot_enemies.iter() {
@@ -1912,8 +1952,9 @@ fn transform_brainrot_corpses(
     }
 }
 
-#[derive(Reflect, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Reflect, Default)]
 pub(crate) enum DamageType {
+    #[default]
     Physical,
     Psychic,
     Aura,
@@ -1964,6 +2005,8 @@ fn get_bullet_bundle(
     new_pos: MapPos,
     direction: IVec2,
     attacker: Entity,
+    damage: i32,
+    ty: DamageType,
     assets: &WorldAssets,
 ) -> impl Bundle {
     let rotation = match (direction.x, direction.y) {
@@ -1983,8 +2026,9 @@ fn get_bullet_bundle(
         .with_rotation(Quat::from_rotation_z(rotation));
     let bullet = Bullet {
         direction,
-        damage: BULLET_DAMAGE,
+        damage,
         attacker,
+        ty,
     };
     (name, bullet, bullet_sprite, new_pos, transform, Frozen)
 }
@@ -2004,7 +2048,7 @@ fn check_bullet_collision(
                 entity: *mob,
                 attacker: Some(bullet.attacker),
                 amount: bullet.damage,
-                ty: DamageType::Physical,
+                ty: bullet.ty,
             });
             if player_q.get(*mob).is_ok() {
                 screen_shake.trauma = (screen_shake.trauma + 0.6).min(1.0);
@@ -2420,17 +2464,38 @@ fn process_mob_turn(
             continue;
         };
 
-        let target = pos
+        let target_for_ranged = pos
             .adjacent()
             .into_iter()
             .filter(|p| dijkstra_map.contains_key(p))
             .filter(|p| !claimed_locations.contains(&p.0))
             .min_by_key(|p| dijkstra_map.get(p).cloned().unwrap_or(usize::MAX));
 
+        if mob.ranged && target_for_ranged.is_some() && rng.random_bool(0.5) {
+            let target = target_for_ranged.unwrap();
+            mob_moves.insert(entity, Action::RangedAttack(target));
+            continue;
+        }
+
+        let target = if mob.attrs.moves_randomly {
+            let mut adj = pos.adjacent();
+            adj.shuffle(rng);
+            adj.into_iter()
+                .find(|p| !walk_blocked_map.0.contains(&p.0) && !claimed_locations.contains(&p.0))
+        } else {
+            pos.adjacent()
+                .into_iter()
+                .chain(std::iter::once(*pos))
+                .filter(|p| dijkstra_map.contains_key(p))
+                .filter(|p| p.0 == pos.0 || !claimed_locations.contains(&p.0))
+                .min_by_key(|p| dijkstra_map.get(p).cloned().unwrap_or(usize::MAX))
+        };
+
         if let Some(target) = target {
-            let action = if mob.ranged && rng.random_bool(0.5) {
-                Action::RangedAttack(target)
-            } else if mob.keepaway
+            if target.0 == pos.0 {
+                continue;
+            }
+            let action = if mob.keepaway
                 && (2..=3).contains(&pos.0.chebyshev_distance(target.0))
                 && creature.hp >= creature.max_hp
             {
@@ -2501,7 +2566,14 @@ fn process_mob_turn(
             Action::RangedAttack(new_pos) => {
                 let direction = new_pos.0 - old_pos.0;
                 commands.entity(world_entity).with_children(|parent| {
-                    parent.spawn(get_bullet_bundle(new_pos, direction, entity, &assets));
+                    parent.spawn(get_bullet_bundle(
+                        new_pos,
+                        direction,
+                        entity,
+                        mob.ranged_damage,
+                        mob.ranged_damage_type,
+                        &assets,
+                    ));
                 });
             }
             Action::AttackAndTeleport(enemy, teleport_pos) => {
@@ -2595,6 +2667,17 @@ fn prune_dead(
                         Interactable {
                             action: "Eat".to_string(),
                             description: Some("Directly edible brainrot essence.".to_string()),
+                            kind: InteractionType::Eat,
+                            require_on_top: false,
+                        },
+                    ));
+                } else if let mapgen::MobKind::FinalBoss = kind {
+                    entity_cmds.insert((
+                        DivineAmbrosia,
+                        Name::new("Divine Ambrosia"),
+                        Interactable {
+                            action: "Eat".to_string(),
+                            description: Some("Pure, undiluted truth.".to_string()),
                             kind: InteractionType::Eat,
                             require_on_top: false,
                         },
@@ -4026,5 +4109,19 @@ fn check_victory(
     {
         game_over_info.cause = crate::screens::game_over::DeathCause::Victory;
         next_screen.set(Screen::GameOver);
+    }
+}
+
+fn update_final_boss_sprite(
+    mut boss_q: Query<&mut Sprite, With<FinalBossMarker>>,
+    assets: Res<assets::WorldAssets>,
+    time: Res<Time>,
+) {
+    if (time.elapsed_secs() * 2.0).floor()
+        != ((time.elapsed_secs() - time.delta_secs()) * 2.0).floor()
+    {
+        for mut sprite in boss_q.iter_mut() {
+            *sprite = assets.get_brainrot_sprite();
+        }
     }
 }

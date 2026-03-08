@@ -21,6 +21,18 @@ pub(crate) fn spawn_mob(
     if mob_kind == MobKind::BrainrotEnemy {
         entity_cmds.insert(assets.get_brainrot_sprite());
     }
+    if let MobKind::FinalBoss = mob_kind {
+        entity_cmds.insert((
+            crate::game::BrainrotEnemyMarker,
+            crate::game::FinalBossMarker,
+            assets.get_brainrot_sprite(),
+        ));
+        // Remove ASCII components so they don't render over the sprite
+        entity_cmds.remove::<Text2d>();
+        entity_cmds.remove::<TextFont>();
+        entity_cmds.remove::<TextColor>();
+        entity_cmds.remove::<crate::game::assets::BaseColor>();
+    }
     let new_mob = entity_cmds.id();
     commands.entity(parent).add_child(new_mob);
     new_mob
@@ -32,6 +44,7 @@ pub(crate) fn spawn_stairs(
     assets: &WorldAssets,
     down_pos: rogue_algebra::Pos,
     up_pos: rogue_algebra::Pos,
+    locked: bool,
 ) {
     let up_pos_map = MapPos(IVec2::from(up_pos));
     let down_pos_map = MapPos(IVec2::from(down_pos));
@@ -43,6 +56,7 @@ pub(crate) fn spawn_stairs(
             Transform::from_translation(up_pos_map.to_vec3(TILE_Z)),
             Stairs {
                 destination: down_pos_map,
+                locked: false, // Up stairs are never locked in this context
             },
             Interactable {
                 action: "Go Up".to_string(),
@@ -72,6 +86,7 @@ pub(crate) fn spawn_stairs(
             Transform::from_translation(down_pos_map.to_vec3(TILE_Z)),
             Stairs {
                 destination: up_pos_map,
+                locked,
             },
             Interactable {
                 action: "Go Down".to_string(),
