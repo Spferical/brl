@@ -73,10 +73,12 @@ pub(crate) enum MobKind {
     Fan,
     Stan,
     Whale,
+    Drone,
     Zombie,
     Skeleton,
     Spider,
     Enderman,
+    ChadGPT,
 }
 
 const LVL1_DIST: &[(MobKind, usize)] = &[
@@ -133,6 +135,11 @@ const POND_DIST: &[(MobKind, usize)] = &[
     (MobKind::SmugFrog, 3),
     (MobKind::GiantFrog, 2),
 ];
+const OFFICE_DIST: &[(MobKind, usize)] = &[
+    (MobKind::ChadGPT, 10),
+    (MobKind::Normie, 1),
+    (MobKind::Drone, 1),
+];
 
 impl MobKind {
     pub(crate) fn get_cooked_meal(&self) -> (&'static str, CookedMeal) {
@@ -146,6 +153,17 @@ impl MobKind {
                     rizz: 0,
                     brainrot: 0,
                     boredom: 5,
+                },
+            ),
+            MobKind::Drone => (
+                "32GB DDR5 Memory Stick",
+                CookedMeal {
+                    hunger: 5,
+                    hp: 0,
+                    strength: 0,
+                    rizz: 0,
+                    brainrot: -5,
+                    boredom: 0,
                 },
             ),
             MobKind::Zombie => (
@@ -192,7 +210,7 @@ impl MobKind {
                     boredom: 0,
                 },
             ),
-            MobKind::GymBro => (
+            MobKind::GymBro | MobKind::ChadGPT => (
                 "Beefcake",
                 CookedMeal {
                     hunger: 25,
@@ -343,6 +361,67 @@ impl MobKind {
                     sprite: assets.get_ascii_sprite('%', Color::srgb(0.5, 0.5, 0.5)),
                     nutrition: 5,
                     name: "Animatronic".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::Drone => MobBundle {
+                name: Name::new("Drone"),
+                creature: Creature {
+                    hp: 2,
+                    max_hp: 2,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: true,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 1,
+                    attrs: MobAttrs {
+                        psychic_resist: Resist::Strong,
+                        boredom_resist: Resist::Strong,
+                        aura_resist: Resist::Strong,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('d', Color::srgb(0.5, 0.5, 0.5)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.5, 0.5, 0.5)),
+                    nutrition: 5,
+                    name: "Drone".to_string(),
+                    kind: *self,
+                },
+            },
+            MobKind::ChadGPT => MobBundle {
+                name: Name::new("ChadGPT"),
+                creature: Creature {
+                    hp: 15,
+                    max_hp: 15,
+                    faction: ENEMY_FACTION,
+                    killed_by_player: false,
+                    machine: false,
+                    friend_of_machines: false,
+                },
+                mob: Mob {
+                    melee_damage: 3,
+                    keepaway: true,
+                    attrs: MobAttrs {
+                        summon: Some(Summon {
+                            kind: MobKind::Drone,
+                            delay: 3,
+                        }),
+                        physical_resist: Resist::Strong,
+                        boredom_resist: Resist::Weak,
+                        aura_resist: Resist::Weak,
+                        ..Default::default()
+                    },
+                    ..default()
+                },
+                sprite: assets.get_ascii_sprite('C', Color::srgb(0.769, 0.529, 0.51)),
+                corpse: DropsCorpse {
+                    sprite: assets.get_ascii_sprite('%', Color::srgb(0.8, 0.2, 0.2)),
+                    nutrition: 5,
+                    name: "ChadGPT".to_string(),
                     kind: *self,
                 },
             },
@@ -1016,6 +1095,7 @@ pub enum LevelTitle {
     Freddy,
     Minecraft,
     FrogPond,
+    Office,
 }
 
 impl std::fmt::Display for LevelTitle {
@@ -1031,6 +1111,7 @@ impl std::fmt::Display for LevelTitle {
             LevelTitle::Freddy => "Friendo's Pizza & Prizes",
             LevelTitle::Minecraft => "A Blocky Wilderness",
             LevelTitle::FrogPond => "A Peaceful Pond",
+            LevelTitle::Office => "An Abandoned Office Space ",
         })
     }
 }
@@ -1399,7 +1480,7 @@ pub fn gen_bsp_tree(rect: rogue_algebra::Rect, opts: BspSplitOpts, rng: &mut imp
 }
 
 fn gen_backrooms(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
-    let mut draft = gen_offices(rng, rect);
+    let mut draft = gen_entrance(rng, rect);
     draft.title = LevelTitle::Backrooms;
     for t in draft.tiles.values_mut() {
         if t.is_floor() {
@@ -1409,7 +1490,7 @@ fn gen_backrooms(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
     draft
 }
 
-fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
+fn gen_entrance(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
     let max_width = rng.random_range(4..=rect.width().min(8));
     let min_width = max_width / 2 - 1;
     let max_height = rng.random_range(4..=rect.width().min(8));
@@ -1466,6 +1547,73 @@ fn gen_offices(rng: &mut impl Rng, rect: rogue_algebra::Rect) -> LevelDraft {
 
     LevelDraft {
         title: LevelTitle::Entrance,
+        entrances: stairs[0..3].to_vec(),
+        exits: stairs[3..].to_vec(),
+        tiles,
+        mobs: Default::default(),
+        destinations: vec![],
+        override_rect: None,
+    }
+}
+
+fn gen_office(rng: &mut impl Rng) -> LevelDraft {
+    let rect = rogue_algebra::Rect::new(0, 40, 0, 40);
+    let max_width = rng.random_range(4..=rect.width().min(8));
+    let min_width = max_width / 2 - 1;
+    let max_height = rng.random_range(4..=rect.width().min(8));
+    let min_height = max_height / 2 - 1;
+    let bsp_opts = CarveRoomOpts {
+        max_width,
+        max_height,
+        min_width,
+        min_height,
+    };
+    let tree = gen_bsp_tree(rect, bsp_opts.into(), rng);
+    let room_graph = tree.into_room_graph();
+    let rooms = room_graph.iter().collect::<Vec<rogue_algebra::Rect>>();
+    let mut doors = vec![];
+    for room in room_graph.iter() {
+        for room2 in room_graph.get_adj(room).into_iter().flatten().copied() {
+            if room.topleft() < room2.topleft()
+                && let Some(wall) = get_connecting_wall(room, room2)
+            {
+                doors.push(wall.choose(rng));
+            }
+        }
+    }
+    // Add doors for extra loops.
+    for _ in 0..room_graph.len() {
+        loop {
+            let room1 = room_graph.choose(rng).expect("no rooms in offices");
+            let room2 = room_graph.choose(rng).expect("no rooms in offices");
+            if let Some(wall) = get_connecting_wall(room1, room2) {
+                let door = wall.choose(rng);
+                doors.push(door);
+                break;
+            }
+        }
+    }
+
+    let mut tiles = HashMap::new();
+    for p in rect {
+        tiles.insert(p, TileKind::Wall);
+    }
+    for room in rooms.iter() {
+        for pos in *room {
+            tiles.insert(pos, TileKind::Floor(FloorKind::Custom('.', Color::WHITE)));
+        }
+    }
+    for door in doors {
+        tiles.insert(door, TileKind::Floor(FloorKind::Rock));
+    }
+
+    let stairs = rooms
+        .choose_multiple(rng, 6)
+        .map(|room| room.center())
+        .collect::<Vec<_>>();
+
+    LevelDraft {
+        title: LevelTitle::Office,
         entrances: stairs[0..3].to_vec(),
         exits: stairs[3..].to_vec(),
         tiles,
@@ -2221,7 +2369,7 @@ pub(crate) fn gen_map(
     map_info.levels.clear();
 
     // Generate drafts for each level.
-    let level_1_draft = gen_offices(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+    let level_1_draft = gen_entrance(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
         .with_walls()
         .sprinkle_mobs(rng, LVL1_DIST, 10);
     let player_pos = MapPos(IVec2::from(level_1_draft.entrances[0]));
@@ -2267,6 +2415,9 @@ pub(crate) fn gen_map(
             gen_frog_pond(rng)
                 .with_walls()
                 .sprinkle_mobs(rng, POND_DIST, 40),
+            gen_office(rng)
+                .with_walls()
+                .sprinkle_mobs(rng, OFFICE_DIST, 20),
         ],
     ];
 
