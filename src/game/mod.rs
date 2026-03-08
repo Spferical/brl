@@ -3103,10 +3103,9 @@ fn sidebar(
                                     Align::LEFT,
                                 ))
                                 .clicked()
+                                && !phone_state.forced_open
                             {
-                                if !phone_state.forced_open {
-                                    phone_state.is_open = !phone_state.is_open;
-                                }
+                                phone_state.is_open = !phone_state.is_open;
                             }
                             if ui
                                 .button(apply_brainrot_ui(
