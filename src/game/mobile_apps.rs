@@ -228,7 +228,7 @@ pub fn update_crawlr(
         }
     }
 
-    if state.turn_counter % 20 == 0 {
+    if state.turn_counter.is_multiple_of(20) {
         let player_attractiveness = player.rizz as f32 + player.strength as f32 * 0.2;
 
         let chance = if player_attractiveness < 30.0 {

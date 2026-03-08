@@ -3960,16 +3960,14 @@ fn update_crawlr_animation(
                             });
                         }
                     }
-                } else {
-                    if is_match {
-                        state.pending_psychic_damage.insert(entity);
-                        state.match_effect = Some(mobile_apps::MatchEffect {
-                            text: "ouch".to_string(),
-                            timer: 2.0,
-                            teletype_index: 0,
-                            teletype_timer: 0.05,
-                        });
-                    }
+                } else if is_match {
+                    state.pending_psychic_damage.insert(entity);
+                    state.match_effect = Some(mobile_apps::MatchEffect {
+                        text: "ouch".to_string(),
+                        timer: 2.0,
+                        teletype_index: 0,
+                        teletype_timer: 0.05,
+                    });
                 }
             }
         }
