@@ -1217,6 +1217,38 @@ impl LevelDraft {
         }
         self
     }
+
+    fn check(&self) -> bool {
+        let all_floors = self
+            .tiles
+            .iter()
+            .filter(|(_p, t)| t.is_floor())
+            .map(|(p, _t)| *p)
+            .collect::<HashSet<_>>();
+        let all_stairs = self
+            .entrances
+            .iter()
+            .chain(self.exits.iter())
+            .cloned()
+            .collect::<HashSet<Pos>>();
+        if all_floors.is_empty() {
+            warn!("Empty floors in {:?}", self.title);
+            return false;
+        }
+        let start_pos = *self
+            .entrances
+            .last()
+            .unwrap_or(all_floors.iter().next().unwrap());
+        // ensure all floors, entrances, and exits are accessible
+        let accessible_floors = rogue_algebra::path::bfs(&[start_pos], 999, |p| {
+            rogue_algebra::CARDINALS
+                .into_iter()
+                .map(move |o| p + o)
+                .filter(|p| self.tiles.get(p).map(|t| t.is_floor()).unwrap_or(false))
+        })
+        .collect::<HashSet<_>>();
+        all_floors == accessible_floors && accessible_floors.is_superset(&all_stairs)
+    }
 }
 
 fn draft_level_mapgen_rs(
@@ -2361,6 +2393,17 @@ impl MapInfo {
     }
 }
 
+fn with_retry(mut f: impl FnMut() -> LevelDraft) -> LevelDraft {
+    loop {
+        let lvl: LevelDraft = f();
+        if lvl.check() {
+            break lvl;
+        } else {
+            warn!("bad {:?} gen, retrying", lvl.title);
+        }
+    }
+}
+
 pub(crate) fn gen_map(
     world: Entity,
     commands: &mut Commands,
@@ -2371,59 +2414,81 @@ pub(crate) fn gen_map(
     map_info.levels.clear();
 
     // Generate drafts for each level.
-    let level_1_draft = gen_entrance(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
-        .with_walls()
-        .sprinkle_mobs(rng, LVL1_DIST, 10);
+    let level_1_draft = with_retry(|| {
+        gen_entrance(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+            .with_walls()
+            .sprinkle_mobs(rng, LVL1_DIST, 10)
+    });
     let player_pos = MapPos(IVec2::from(level_1_draft.entrances[0]));
     let mut level_drafts_per_depth = vec![
         vec![level_1_draft],
         vec![
-            gen_backrooms(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
-                .with_walls()
-                .sprinkle_mobs(rng, BACKROOM_DIST, 20),
-            gen_amogus_spaceship(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, AMOGUS_DIST, 20)
-                .with_upgrade(rng, None),
+            with_retry(|| {
+                gen_backrooms(rng, rogue_algebra::Rect::new(0, 40, 0, 40))
+                    .with_walls()
+                    .sprinkle_mobs(rng, BACKROOM_DIST, 20)
+            }),
+            with_retry(|| {
+                gen_amogus_spaceship(rng)
+                    .with_walls()
+                    .sprinkle_mobs(rng, AMOGUS_DIST, 20)
+                    .with_upgrade(rng, None)
+            }),
         ],
         vec![
-            gen_island(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, FORTNITE_DIST, 30)
-                .with_upgrade(rng, Some("Gun")),
-            gen_freddy(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, FREDDY_DIST, 4)
-                .with_upgrade(rng, Some("Animatronic Bear Mask")),
+            with_retry(|| {
+                gen_island(rng)
+                    .with_walls()
+                    .sprinkle_mobs(rng, FORTNITE_DIST, 30)
+                    .with_upgrade(rng, Some("Gun"))
+            }),
+            with_retry(|| {
+                gen_freddy(rng)
+                    .with_walls()
+                    .sprinkle_mobs(rng, FREDDY_DIST, 4)
+                    .with_upgrade(rng, Some("Animatronic Bear Mask"))
+            }),
         ],
         vec![
-            gen_minecraft(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, MINECRAFT_DIST, 25)
-                .with_upgrade(rng, None),
-            gen_dungeon_fitness(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, GYM_DIST, 20),
+            with_retry(|| {
+                gen_minecraft(rng)
+                    .with_walls()
+                    .sprinkle_mobs(rng, MINECRAFT_DIST, 25)
+                    .with_upgrade(rng, None)
+            }),
+            with_retry(|| {
+                gen_dungeon_fitness(rng)
+                    .with_walls()
+                    .sprinkle_mobs(rng, GYM_DIST, 20)
+            }),
         ],
         vec![
-            draft_level_mapgen_drunk(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, CAVES_DIST, 30)
-                .with_upgrade(rng, None),
-            draft_level_mapgen_simple(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, CAVES_DIST, 30)
-                .with_upgrade(rng, None),
+            with_retry(|| {
+                draft_level_mapgen_drunk(rng)
+                    .with_walls()
+                    .sprinkle_mobs(rng, CAVES_DIST, 30)
+                    .with_upgrade(rng, None)
+            }),
+            with_retry(|| {
+                draft_level_mapgen_simple(rng)
+                    .with_walls()
+                    .sprinkle_mobs(rng, CAVES_DIST, 30)
+                    .with_upgrade(rng, None)
+            }),
         ],
         vec![
-            gen_frog_pond(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, POND_DIST, 40)
-                .with_upgrade(rng, None),
-            gen_office(rng)
-                .with_walls()
-                .sprinkle_mobs(rng, OFFICE_DIST, 20)
-                .with_upgrade(rng, None),
+            with_retry(|| {
+                gen_frog_pond(rng)
+                    .with_walls()
+                    .sprinkle_mobs(rng, POND_DIST, 40)
+                    .with_upgrade(rng, None)
+            }),
+            with_retry(|| {
+                gen_office(rng)
+                    .with_walls()
+                    .sprinkle_mobs(rng, OFFICE_DIST, 20)
+                    .with_upgrade(rng, None)
+            }),
         ],
     ];
 
