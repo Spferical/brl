@@ -24,25 +24,41 @@ pub struct PhoneAppIcons {
 #[derive(Resource, Asset, Clone, Reflect)]
 #[reflect(Resource)]
 pub struct WorldAssets {
+    #[dependency]
     pub font: Handle<Font>,
+    #[dependency]
     pub comic_relief: Handle<Font>,
+    #[dependency]
     pub comic_relief_bold: Handle<Font>,
+    #[dependency]
     urizen: Handle<Image>,
+    #[dependency]
     urizen_mask: Handle<Image>,
+    #[dependency]
     urizen_layout: Handle<TextureAtlasLayout>,
+    #[dependency]
     ffz_tileset: Handle<Image>,
+    #[dependency]
     ffz_layout: Handle<TextureAtlasLayout>,
     pub valid_emote_indices: Option<Vec<usize>>,
     pub urizen_hulls: Vec<Vec<Vec2>>,
     pub char_hulls: HashMap<char, Vec<Vec2>>,
+    #[dependency]
     solid_mask: Handle<Image>,
+    #[dependency]
     pub phone: Handle<Image>,
     pub phone_app_icons: PhoneAppIcons,
+    #[dependency]
     pub music: Handle<AudioSource>,
+    #[dependency]
     pub meme_sounds: Vec<Handle<AudioSource>>,
+    #[dependency]
     pub oof: Handle<AudioSource>,
+    #[dependency]
     pub button_click: Handle<AudioSource>,
+    #[dependency]
     pub button_hover: Handle<AudioSource>,
+    #[dependency]
     pub punch: Handle<AudioSource>,
 }
 
@@ -204,14 +220,13 @@ impl FromWorld for WorldAssets {
             RenderAssetUsages::default(),
         );
 
-        let mut tals = world.resource_mut::<Assets<TextureAtlasLayout>>();
-        let urizen_layout = tals.add(grid_layout);
+        let asset_server = world.resource::<AssetServer>();
+        let urizen_layout = asset_server.add(grid_layout);
         let ffz_grid_layout = TextureAtlasLayout::from_grid(UVec2::splat(112), 32, 32, None, None);
-        let ffz_layout = tals.add(ffz_grid_layout.clone());
+        let ffz_layout = asset_server.add(ffz_grid_layout.clone());
 
-        let mut images = world.resource_mut::<Assets<Image>>();
-        let urizen = images.add(image);
-        let urizen_mask = images.add(mask_image);
+        let urizen = asset_server.add(image);
+        let urizen_mask = asset_server.add(mask_image);
 
         let ffz_image = Image::from_buffer(
             include_bytes!("../../assets/emotes/ffz_tileset.png"),
@@ -248,7 +263,7 @@ impl FromWorld for WorldAssets {
             }
         }
 
-        let ffz_tileset = images.add(ffz_image);
+        let ffz_tileset = asset_server.add(ffz_image);
         let valid_emote_indices = Some(valid_emote_indices);
 
         let solid_mask_image = Image::new(
@@ -262,7 +277,7 @@ impl FromWorld for WorldAssets {
             TextureFormat::Rgba8Unorm,
             RenderAssetUsages::default(),
         );
-        let solid_mask = images.add(solid_mask_image);
+        let solid_mask = asset_server.add(solid_mask_image);
 
         let font_bytes = include_bytes!("../../assets/PressStart2P/PressStart2P-Regular.ttf");
         let font_asset = Font::try_from_bytes(font_bytes.to_vec()).unwrap();
@@ -305,20 +320,18 @@ impl FromWorld for WorldAssets {
             }
         }
 
-        let font = world.resource_mut::<Assets<Font>>().add(font_asset);
+        let font = asset_server.add(font_asset);
 
         let comic_relief_bytes =
             include_bytes!("../../assets/Comic_Relief/ComicRelief-Regular.ttf");
         let comic_relief_asset = Font::try_from_bytes(comic_relief_bytes.to_vec()).unwrap();
-        let comic_relief = world.resource_mut::<Assets<Font>>().add(comic_relief_asset);
+        let comic_relief = asset_server.add(comic_relief_asset);
 
         let comic_relief_bold_bytes =
             include_bytes!("../../assets/Comic_Relief/ComicRelief-Bold.ttf");
         let comic_relief_bold_asset =
             Font::try_from_bytes(comic_relief_bold_bytes.to_vec()).unwrap();
-        let comic_relief_bold = world
-            .resource_mut::<Assets<Font>>()
-            .add(comic_relief_bold_asset);
+        let comic_relief_bold = asset_server.add(comic_relief_bold_asset);
 
         let phone_image = Image::from_buffer(
             include_bytes!("../../assets/mobile_app/phone.png"),
@@ -366,23 +379,19 @@ impl FromWorld for WorldAssets {
         )
         .unwrap();
 
-        let mut images = world.resource_mut::<Assets<Image>>();
-        let phone = images.add(phone_image);
-        let crawlr = images.add(crawlr_image);
-        let dungeon_dash = images.add(dungeon_dash_image);
-        let underground_tv = images.add(underground_tv_image);
-        let cockatrice = images.add(cockatrice_image);
+        let phone = asset_server.add(phone_image);
+        let crawlr = asset_server.add(crawlr_image);
+        let dungeon_dash = asset_server.add(dungeon_dash_image);
+        let underground_tv = asset_server.add(underground_tv_image);
+        let cockatrice = asset_server.add(cockatrice_image);
 
-        let music = world
-            .resource_mut::<Assets<AudioSource>>()
-            .add(AudioSource {
-                bytes: include_bytes!("../../assets/audio/music/brl_loop_v3.ogg")
-                    .to_vec()
-                    .into(),
-            });
+        let music = asset_server.add(AudioSource {
+            bytes: include_bytes!("../../assets/audio/music/brl_loop_v3.ogg")
+                .to_vec()
+                .into(),
+        });
 
         let mut meme_sounds = Vec::new();
-        let mut audio_assets = world.resource_mut::<Assets<AudioSource>>();
         for bytes in [
             include_bytes!("../../assets/audio/sound_effects/meme_sounds/cartoon run.ogg")
                 .as_slice(),
@@ -396,30 +405,30 @@ impl FromWorld for WorldAssets {
             .as_slice(),
             include_bytes!("../../assets/audio/sound_effects/meme_sounds/wow!.ogg").as_slice(),
         ] {
-            meme_sounds.push(audio_assets.add(AudioSource {
+            meme_sounds.push(asset_server.add(AudioSource {
                 bytes: bytes.to_vec().into(),
             }));
         }
 
-        let oof = audio_assets.add(AudioSource {
+        let oof = asset_server.add(AudioSource {
             bytes: include_bytes!("../../assets/audio/sound_effects/meme_sounds/oof.ogg")
                 .to_vec()
                 .into(),
         });
 
-        let button_click = audio_assets.add(AudioSource {
+        let button_click = asset_server.add(AudioSource {
             bytes: include_bytes!("../../assets/audio/sound_effects/button_click.ogg")
                 .to_vec()
                 .into(),
         });
 
-        let button_hover = audio_assets.add(AudioSource {
+        let button_hover = asset_server.add(AudioSource {
             bytes: include_bytes!("../../assets/audio/sound_effects/button_hover.ogg")
                 .to_vec()
                 .into(),
         });
 
-        let punch = audio_assets.add(AudioSource {
+        let punch = asset_server.add(AudioSource {
             bytes: include_bytes!("../../assets/audio/sound_effects/meme_sounds/punch.ogg")
                 .to_vec()
                 .into(),
