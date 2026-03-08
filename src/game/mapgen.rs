@@ -813,15 +813,15 @@ impl MobKind {
             MobKind::FriendlyNormie => MobBundle {
                 name: Name::new("Normie"),
                 creature: Creature {
-                    hp: 2,
-                    max_hp: 2,
+                    hp: 10,
+                    max_hp: 10,
                     faction: FRIENDLY_FACTION,
                     killed_by_player: false,
                     machine: false,
                     friend_of_machines: false,
                 },
                 mob: Mob {
-                    melee_damage: 1,
+                    melee_damage: 2,
                     attrs: MobAttrs {
                         basic: true,
                         friendly: true,
