@@ -2,3 +2,5 @@
 /dist
 *.tiled-session
 .linux-target
+dist_linux/
+dist_windows/

@@ -11,25 +11,21 @@ root=$(cargo metadata --format-version=1 | jq -r .resolve.root)
 project_name=$(cargo metadata --format-version=1 \
                | jq -r ".packages[] | select(.id==\"${root}\") | .name")
 
-function build_linux() {
-    cross build --target=x86_64-unknown-linux-gnu --release
-    target_dir=./.linux-target/
-    rm -rf dist_linux
-    mkdir -p dist_linux
-    cp "./.linux-target/x86_64-unknown-linux-gnu/release/${project_name}" dist_linux/
-}
-build_linux
+# Build Linux (Cross-compiled on CentOS for max compatibility)
+cross build --target=x86_64-unknown-linux-gnu --release
+rm -rf dist_linux
+mkdir -p dist_linux
+cp "${target_dir}/x86_64-unknown-linux-gnu/release/${project_name}" dist_linux/
 
-function build_windows() {
-    cross build --target=x86_64-pc-windows-gnu --release --no-default-features
-    rm -rf dist_windows
-    mkdir -p dist_windows
+# Build Windows
+nix build .#windows
+rm -rf dist_windows
+mkdir -p dist_windows
+cp result/bin/${project_name}.exe dist_windows/
+touch dist_windows/*
 
-    cp "${target_dir}/x86_64-pc-windows-gnu/release/${project_name}.exe" dist_windows/
-}
-build_windows
+# Build WASM
+env RELEASE=1 nix develop --command bash -c 'PATH="$HOME/.cargo/bin:$PATH" ./build_wasm.sh'
 
-function build_wasm() {
-    env RELEASE=1 nix develop --command ./build_wasm.sh
-}
-build_wasm
+# Clean up symlink
+rm -f result

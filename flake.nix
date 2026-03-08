@@ -37,158 +37,188 @@
 
         inherit (pkgs) lib;
 
-        craneLib = (crane.mkLib pkgs).overrideToolchain pkgs.rust-bin.stable.latest.default;
+        # Standard toolchain for Linux
+        rustToolchain = pkgs.rust-bin.stable.latest.default;
+        craneLib = (crane.mkLib pkgs).overrideToolchain rustToolchain;
+
+        # Toolchain with wasm target
+        rustToolchainWasm = pkgs.rust-bin.stable.latest.default.override {
+          targets = [ "wasm32-unknown-unknown" ];
+        };
+        craneLibWasm = (crane.mkLib pkgs).overrideToolchain rustToolchainWasm;
+
+        # Toolchain with windows target
+        rustToolchainWindows = pkgs.rust-bin.stable.latest.default.override {
+          targets = [ "x86_64-pc-windows-gnu" ];
+        };
+
+        # Use cross-pkgs for Windows
+        pkgsWindows = pkgs.pkgsCross.mingwW64;
+        craneLibWindows = (crane.mkLib pkgsWindows).overrideToolchain rustToolchainWindows;
+
         src = lib.cleanSourceWith {
           src = craneLib.path ./.;
-          filter = path: type: (craneLib.filterCargoSources path type) || (builtins.match ".*/assets/.*$" path != null);
+          filter = path: type: (craneLib.filterCargoSources path type) || (builtins.match ".*/assets/.*$" path != null) || (builtins.match ".*/dist/.*$" path != null) || (builtins.match ".*/wasm/.*$" path != null);
         };
-        craneLibWasm = craneLib.overrideToolchain (pkgs.rust-bin.stable.latest.default.override {
-          targets = [ "wasm32-unknown-unknown" ];
-            extensions = [ "rust-src" "rust-analyzer"];
-        });
 
-        # Common arguments can be set here to avoid repeating them later
         commonArgs = {
           inherit src;
-
           nativeBuildInputs = with pkgs; [
             cmake
             makeWrapper
-            mold
+            pkg-config
           ];
+        };
 
+        linuxArgs = commonArgs // {
           buildInputs = with pkgs; [
-            # Add additional build inputs here
             openssl
             libGL
             fontconfig
-            pkg-config
             stdenv.cc.cc
-          ] ++ lib.optionals pkgs.stdenv.isLinux [
+            zlib
             wayland
             libxkbcommon
             glew
             egl-wayland
+            vulkan-loader
             xorg.libX11
             xorg.libXcursor
             xorg.libXi
             xorg.libXrandr
             xorg.libxcb
-            vulkan-loader
             alsa-lib
             udev
-          ] ++ lib.optionals pkgs.stdenv.isDarwin [
-            # Additional darwin specific inputs can be set here
-            pkgs.libiconv
           ];
-
-          # Additional environment variables can be set directly
-          # MY_CUSTOM_VAR = "some value";
         };
 
-        wasmArgs = {
+        wasmArgs = commonArgs // {
           CARGO_BUILD_TARGET = "wasm32-unknown-unknown";
+          CARGO_BUILD_RUSTFLAGS = "--cfg getrandom_backend=\"wasm_js\" --cfg=web_sys_unstable_apis";
+          doCheck = false;
         };
 
-        craneLibLLvmTools = craneLib.overrideToolchain
-          (fenix.packages.${system}.complete.withComponents [
-            "cargo"
-            "llvm-tools"
-            "rustc"
-          ]);
+        wasmArgsWebgl2 = wasmArgs // {
+          cargoExtraArgs = "--no-default-features";
+        };
 
-        # Build *just* the cargo dependencies, so we can reuse
-        # all of that work (e.g. via cachix) when running in CI
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        wasmArgsWebgpu = wasmArgs // {
+          cargoExtraArgs = "--no-default-features --features webgpu";
+        };
 
-        # Build the actual crate itself, reusing the dependency
-        # artifacts from above.
-        my-crate = craneLib.buildPackage (commonArgs // {
+        windowsArgs = commonArgs // {
+          CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
+          # MinGW linkers need some help finding pthreads sometimes when linked via rustc
+          CARGO_TARGET_X86_64_PC_WINDOWS_GNU_RUSTFLAGS = "-C link-arg=-liphlpapi -C link-arg=-lpthread";
+          cargoExtraArgs = "--no-default-features";
+          doCheck = false;
+          buildInputs = with pkgsWindows.windows; [
+            pthreads
+          ];
+        };
+
+        cargoArtifacts = craneLib.buildDepsOnly linuxArgs;
+        cargoArtifactsWasmWebgl2 = craneLibWasm.buildDepsOnly wasmArgsWebgl2;
+        cargoArtifactsWasmWebgpu = craneLibWasm.buildDepsOnly wasmArgsWebgpu;
+        cargoArtifactsWindows = craneLibWindows.buildDepsOnly windowsArgs;
+
+        my-crate = craneLib.buildPackage (linuxArgs // {
           inherit cargoArtifacts;
+          nativeBuildInputs = linuxArgs.nativeBuildInputs ++ [ pkgs.patchelf ];
           postInstall = ''
-            wrapProgram "$out/bin/something-in-the-fog" --set LD_LIBRARY_PATH "${lib.makeLibraryPath commonArgs.buildInputs}";
+            patchelf --set-rpath "${lib.makeLibraryPath linuxArgs.buildInputs}" $out/bin/bevyrl
           '';
         });
-        # Build the actual crate itself, reusing the dependency
-        # artifacts from above.
-        my-crate-wasm = craneLibWasm.buildPackage (wasmArgs // commonArgs // {
-          inherit cargoArtifacts;
-          cargoTestCommand = "true";
+
+        my-crate-windows = craneLibWindows.buildPackage (windowsArgs // {
+          cargoArtifacts = cargoArtifactsWindows;
         });
+
+        my-crate-wasm-webgl2 = craneLibWasm.buildPackage (wasmArgsWebgl2 // {
+          cargoArtifacts = cargoArtifactsWasmWebgl2;
+          nativeBuildInputs = wasmArgsWebgl2.nativeBuildInputs ++ [ pkgs.wasm-bindgen-cli pkgs.binaryen ];
+          postInstall = ''
+            mkdir -p $out/dist
+            PROJECT_NAME="bevyrl"
+            wasm-bindgen $out/bin/$PROJECT_NAME.wasm --out-dir $out/dist --out-name ''${PROJECT_NAME}_webgl2 --target web --no-typescript
+            wasm-opt -O3 $out/dist/''${PROJECT_NAME}_webgl2_bg.wasm -o $out/dist/''${PROJECT_NAME}_webgl2_bg.wasm
+            rm -rf $out/bin
+          '';
+        });
+
+        my-crate-wasm-webgpu = craneLibWasm.buildPackage (wasmArgsWebgpu // {
+          cargoArtifacts = cargoArtifactsWasmWebgpu;
+          nativeBuildInputs = wasmArgsWebgpu.nativeBuildInputs ++ [ pkgs.wasm-bindgen-cli pkgs.binaryen ];
+          postInstall = ''
+            mkdir -p $out/dist
+            PROJECT_NAME="bevyrl"
+            wasm-bindgen $out/bin/$PROJECT_NAME.wasm --out-dir $out/dist --out-name ''${PROJECT_NAME}_webgpu --target web --no-typescript
+            wasm-opt -O3 $out/dist/''${PROJECT_NAME}_webgpu_bg.wasm -o $out/dist/''${PROJECT_NAME}_webgpu_bg.wasm
+            rm -rf $out/bin
+          '';
+        });
+
+        my-crate-wasm = pkgs.stdenv.mkDerivation {
+          name = "bevyrl-wasm";
+          src = ./.;
+          dontBuild = true;
+          installPhase = ''
+            mkdir -p $out/dist
+            cp -r wasm/* $out/dist/ 2>/dev/null || true
+            cp -r assets $out/dist/ 2>/dev/null || true
+            cp -r ${my-crate-wasm-webgl2}/dist/* $out/dist/
+            cp -r ${my-crate-wasm-webgpu}/dist/* $out/dist/
+          '';
+        };
+
       in
       {
         checks = {
-          # Build the crate as part of `nix flake check` for convenience
           inherit my-crate;
-
-          # Run clippy (and deny all warnings) on the crate source,
-          # again, resuing the dependency artifacts from above.
-          #
-          # Note that this is done as a separate derivation so that
-          # we can block the CI if there are issues here, but not
-          # prevent downstream consumers from building our crate by itself.
-          my-crate-clippy = craneLib.cargoClippy (commonArgs // {
+          my-crate-clippy = craneLib.cargoClippy (linuxArgs // {
             inherit cargoArtifacts;
             cargoClippyExtraArgs = "--all-targets -- --deny warnings";
           });
-
-          my-crate-doc = craneLib.cargoDoc (commonArgs // {
-            inherit cargoArtifacts;
-          });
-
-          # Check formatting
           my-crate-fmt = craneLib.cargoFmt {
             inherit src;
           };
-
-          # Audit dependencies
           my-crate-audit = craneLib.cargoAudit {
             inherit src advisory-db;
           };
-
-          # Run tests with cargo-nextest
-          # Consider setting `doCheck = false` on `my-crate` if you do not want
-          # the tests to run twice
-          my-crate-nextest = craneLib.cargoNextest (commonArgs // {
+          my-crate-nextest = craneLib.cargoNextest (linuxArgs // {
             inherit cargoArtifacts;
-            partitions = 1;
-            partitionType = "count";
           });
         };
 
         packages = {
           default = my-crate;
           wasm = my-crate-wasm;
-          my-crate-llvm-coverage = craneLibLLvmTools.cargoLlvmCov (commonArgs // {
-            inherit cargoArtifacts;
-          });
+          windows = my-crate-windows;
         };
 
         apps.default = flake-utils.lib.mkApp {
           drv = my-crate;
         };
 
-        devShells.default = craneLibWasm.devShell
-          {
-            # Inherit inputs from checks.
-            checks = self.checks.${system};
+        devShells.default = pkgs.mkShell {
+          inputsFrom = [ my-crate ];
+          LD_LIBRARY_PATH = "${lib.makeLibraryPath linuxArgs.buildInputs}";
 
-            # Additional dev-shell environment variables can be set directly
-            # MY_CUSTOM_DEVELOPMENT_VAR = "something else";
-            LD_LIBRARY_PATH = "${lib.makeLibraryPath commonArgs.buildInputs}";
-            CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_LINKER = "lld";
+          nativeBuildInputs = with pkgs; [
+            rustToolchainWasm
+            lld
+            uv
+            python3
+            binaryen
+            gamescope
+            wasm-bindgen-cli
+          ];
 
-            # Extra inputs can be added here; cargo and rustc are provided by default.
-            packages = with pkgs; [
-                lld
-                binaryen
-                wasm-pack
-                trunk
-                rust-analyzer
-            ];
-            shellHook = ''
+          shellHook = ''
+            if [[ $- == *i* ]]; then
               exec zsh
-            '';
-          };
+            fi
+          '';
+        };
       });
 }

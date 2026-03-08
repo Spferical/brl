@@ -15,7 +15,7 @@ mkdir -p dist
 build_and_bind() {
     local FEATURE_FLAG=$1
     local OUT_SUFFIX=$2
-    
+
     echo "Building for $OUT_SUFFIX..."
     if [ -n "$RELEASE" ]; then
         cargo build --release --no-default-features $FEATURE_FLAG --target wasm32-unknown-unknown
@@ -25,7 +25,7 @@ build_and_bind() {
 
     # Generate bindgen outputs
     wasm-bindgen "$TARGET_DIR"/"$PROJECT_NAME".wasm --out-dir dist --out-name "${PROJECT_NAME}_${OUT_SUFFIX}" --target web --no-typescript
-    
+
     if [ -n "$RELEASE" ]; then
         wasm-opt -Os dist/"${PROJECT_NAME}_${OUT_SUFFIX}_bg.wasm" -o dist/"${PROJECT_NAME}_${OUT_SUFFIX}_bg.wasm"
     fi
@@ -38,4 +38,3 @@ build_and_bind "" "webgl2"
 build_and_bind "--features webgpu" "webgpu"
 
 cp -r wasm/* dist/
-cp -r assets/ dist/
