@@ -35,7 +35,7 @@ pub(crate) fn spawn_stairs(
 ) {
     let up_pos_map = MapPos(IVec2::from(up_pos));
     let down_pos_map = MapPos(IVec2::from(down_pos));
-    let color = Color::srgb(0.4, 0.4, 0.4);
+    let color = Color::srgb(1.0, 1.0, 1.0);
     commands.entity(world).with_children(|parent| {
         let mut up_stairs = parent.spawn((
             Name::new("Stairs"),
