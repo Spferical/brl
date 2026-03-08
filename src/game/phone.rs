@@ -37,6 +37,7 @@ pub struct PhoneState {
     pub unread_notification: Option<AppId>,
     pub forced_open: bool,
     pub vibrate_timer: f32,
+    pub dim_flash_timer: f32,
 }
 
 impl PhoneState {
@@ -242,6 +243,11 @@ pub fn update_phone(
         needs_repaint = true;
     }
 
+    if phone_state.dim_flash_timer > 0.0 {
+        phone_state.dim_flash_timer -= time.delta_secs();
+        needs_repaint = true;
+    }
+
     if (needs_repaint || (phone_state.is_open && *current_screen.get() != PhoneScreen::Home))
         && let Ok(ctx) = contexts.ctx_mut()
     {
@@ -296,7 +302,11 @@ pub fn draw_phone(
     let screen_rect = ctx.content_rect();
 
     if eased_progress > 0.0 {
-        let dim_alpha = (220.0 * eased_progress) as u8;
+        let mut dim_alpha = (220.0 * eased_progress) as u8;
+        if phone_state.dim_flash_timer > 0.0 {
+            dim_alpha =
+                (dim_alpha as f32 * (1.0 - (phone_state.dim_flash_timer * 5.0).min(1.0))) as u8;
+        }
 
         egui::Area::new(egui::Id::new("phone_dim_area"))
             .order(egui::Order::Foreground)

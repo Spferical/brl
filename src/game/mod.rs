@@ -40,7 +40,7 @@ use crate::{
 };
 mod animation;
 mod assets;
-mod camera;
+pub(crate) mod camera;
 pub(crate) mod chat;
 pub(crate) mod debug;
 mod delivery;
@@ -50,11 +50,14 @@ pub mod lighting;
 mod map;
 mod mapgen;
 mod mobile_apps;
-mod phone;
+pub(crate) mod phone;
 mod signal;
 mod spawn;
 mod targeting;
 mod upgrades;
+
+use mobile_apps::AppId;
+use phone::{PhoneScreen, PhoneState};
 
 const BULLET_DAMAGE: i32 = 2;
 
@@ -2029,6 +2032,8 @@ fn apply_damage(
     mut game_over_info: Option<ResMut<crate::screens::game_over::GameOverInfo>>,
     mut next_screen: ResMut<NextState<Screen>>,
     screen: Res<State<Screen>>,
+    mut phone_state: ResMut<PhoneState>,
+    phone_screen: Res<State<PhoneScreen>>,
 ) {
     let mut dd_selection = dd_selection;
     let player_entity = *player_q;
@@ -2065,6 +2070,13 @@ fn apply_damage(
         if let Ok((mut c, player, mob, transform, _name)) = creatures.get_mut(entity) {
             let world_pos = transform.translation;
             let is_player = player.is_some();
+            if is_player
+                && phone_state.is_open
+                && matches!(phone_screen.get(), PhoneScreen::App(AppId::Cockatrice))
+            {
+                phone_state.vibrate_timer = 0.5;
+                phone_state.dim_flash_timer = 0.2;
+            }
             let mut final_amount = amount;
             match player {
                 Some(mut player) => match ty {

@@ -1948,10 +1948,10 @@ pub fn update_cockatrice(
     time: Res<Time>,
     mut state: ResMut<CockatriceState>,
     mob_query: Query<(&Name, &Text2d, &TextColor), With<crate::game::Mob>>,
-    phone_state: Res<PhoneState>,
     current_screen: Res<State<PhoneScreen>>,
     mut commands: Commands,
     player_query: Single<(Entity, &mut Player, &mut Creature)>,
+    mut phone_state: ResMut<PhoneState>,
 ) {
     if !state.initialized {
         use rand::Rng;
@@ -2006,6 +2006,8 @@ pub fn update_cockatrice(
             if creature.hp > 0 {
                 player.brainrot += 5;
                 player.apply_boredom(&mut creature, -10);
+                phone_state.vibrate_timer = 0.3;
+                phone_state.dim_flash_timer = 0.2;
 
                 commands
                     .entity(entity)
