@@ -71,6 +71,7 @@
         };
 
         linuxArgs = commonArgs // {
+          cargoExtraArgs = "--no-default-features";
           buildInputs = with pkgs; [
             openssl
             libGL

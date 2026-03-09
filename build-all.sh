@@ -12,7 +12,7 @@ project_name=$(cargo metadata --format-version=1 \
                | jq -r ".packages[] | select(.id==\"${root}\") | .name")
 
 # Build Linux (Cross-compiled on CentOS for max compatibility)
-cross build --target=x86_64-unknown-linux-gnu --release
+cross build --target=x86_64-unknown-linux-gnu --release --no-default-features
 rm -rf dist_linux
 mkdir -p dist_linux
 cp "${target_dir}/x86_64-unknown-linux-gnu/release/${project_name}" dist_linux/
