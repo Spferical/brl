@@ -553,6 +553,7 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 1,
+                    ranged_damage: 2,
                     ranged: true,
                     keepaway: false,
                     attrs: MobAttrs {
@@ -748,6 +749,8 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 10,
+                    ranged_damage: 5,
+                    ranged_damage_type: DamageType::Psychic,
                     ranged: true,
                     keepaway: true,
                     attrs: MobAttrs {
@@ -1007,6 +1010,7 @@ impl MobKind {
                 },
                 mob: Mob {
                     melee_damage: 2,
+                    ranged_damage: 2,
                     ranged: true,
                     keepaway: false,
                     attrs: MobAttrs {

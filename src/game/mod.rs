@@ -2021,7 +2021,7 @@ fn get_bullet_bundle(
         _ => panic!("Unexpected bullet direction: {direction:?}"),
     };
     let name = Name::new("Bullet");
-    let bullet_sprite = assets.get_ascii_sprite('^', Color::WHITE);
+    let bullet_sprite = assets.get_ascii_sprite('^', ty.color());
     let transform = Transform::from_translation(new_pos.to_vec3(PLAYER_Z))
         .with_rotation(Quat::from_rotation_z(rotation));
     let bullet = Bullet {
@@ -2044,6 +2044,9 @@ fn check_bullet_collision(
 ) {
     for (entity, pos, bullet) in bullets.iter() {
         if let Some(mob) = pos_to_mob.0.get(&pos.0) {
+            if *mob == bullet.attacker {
+                continue;
+            }
             damage.0.push(DamageInstance {
                 entity: *mob,
                 attacker: Some(bullet.attacker),
