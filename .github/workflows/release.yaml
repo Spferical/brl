@@ -186,7 +186,7 @@ jobs:
         if: ${{ env.is_platform_enabled == 'true' }}
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: nightly
+          toolchain: stable
           targets: ${{ matrix.targets }}
 
       - name: Restore Rust cache
@@ -228,6 +228,7 @@ jobs:
         if: ${{ env.is_platform_enabled == 'true' && matrix.platform != 'web' }}
         run: |
           for target in ${{ matrix.targets }}; do
+            # We don't need to manually set RUSTFLAGS here, bevy build handles defaults
             bevy build --locked --release --target="${target}"
             mv target/"${target}"/release/'${{ env.cargo_build_binary_name }}${{ matrix.binary_ext }}' tmp/binary/"${target}"'${{ matrix.binary_ext }}'
           done

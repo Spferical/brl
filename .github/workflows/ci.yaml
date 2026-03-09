@@ -12,9 +12,9 @@ concurrency:
 
 env:
   # Reduce compile time and cache size.
-  RUSTFLAGS: -Zthreads=0
+  RUSTFLAGS: ""
   # Use the same Rust toolchain across jobs so they can share a cache.
-  toolchain: nightly
+  toolchain: stable
 
 jobs:
   # Check formatting.
