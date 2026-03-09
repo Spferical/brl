@@ -1,10 +1,49 @@
-use bevy::prelude::*;
+use bevy::{audio::Volume, prelude::*};
+
+#[cfg(target_arch = "wasm32")]
+use web_sys::{Blob, BlobPropertyBag, HtmlAudioElement, Url};
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Component)]
+struct WebAudioSink {
+    element: HtmlAudioElement,
+    object_url: String,
+}
+
+#[cfg(target_arch = "wasm32")]
+impl WebAudioSink {
+    fn set_volume(&mut self, volume: Volume) {
+        self.element.set_volume(volume.to_linear() as f64);
+    }
+
+    fn set_speed(&mut self, speed: f32) {
+        let _ = self.element.set_playback_rate(speed as f64);
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl Drop for WebAudioSink {
+    fn drop(&mut self) {
+        let _ = self.element.pause();
+        let _ = Url::revoke_object_url(&self.object_url);
+        if let Some(parent) = self.element.parent_node() {
+            let _ = parent.remove_child(&self.element);
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+unsafe impl Send for WebAudioSink {}
+#[cfg(target_arch = "wasm32")]
+unsafe impl Sync for WebAudioSink {}
 
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<MemeSoundTimer>();
     app.add_systems(
         Update,
         (
+            #[cfg(target_arch = "wasm32")]
+            (spawn_web_audio, despawn_finished_web_audio),
             apply_global_volume.run_if(resource_changed::<GlobalVolume>),
             start_music.run_if(
                 resource_exists::<crate::game::assets::WorldAssets>
@@ -40,12 +79,12 @@ fn start_fade_out(
 fn fade_out_music(
     time: Res<Time>,
     global_volume: Res<GlobalVolume>,
-    mut music_query: Query<(&mut MusicFadeOut, &mut AudioSink)>,
+    #[cfg(not(target_arch = "wasm32"))] mut music_query: Query<(&mut MusicFadeOut, &mut AudioSink)>,
+    #[cfg(target_arch = "wasm32")] mut music_query: Query<(&mut MusicFadeOut, &mut WebAudioSink)>,
 ) {
     for (mut fade, mut sink) in &mut music_query {
         fade.timer.tick(time.delta());
         let t = 1.0 - fade.timer.fraction();
-        use bevy::audio::Volume;
         sink.set_volume(global_volume.volume * Volume::Linear(fade.initial_volume * t));
     }
 }
@@ -106,7 +145,8 @@ fn play_meme_sounds(
 
 fn update_music_speed(
     player: Single<&crate::game::Player>,
-    mut music_query: Query<&mut AudioSink, With<Music>>,
+    #[cfg(not(target_arch = "wasm32"))] mut music_query: Query<&mut AudioSink, With<Music>>,
+    #[cfg(target_arch = "wasm32")] mut music_query: Query<&mut WebAudioSink, With<Music>>,
 ) {
     let player = player.into_inner();
     let speed = if player.brainrot < 80 {
@@ -119,7 +159,7 @@ fn update_music_speed(
         1.0 + t * 0.2
     };
 
-    for sink in &mut music_query {
+    for mut sink in &mut music_query {
         sink.set_speed(speed);
     }
 }
@@ -143,11 +183,18 @@ fn start_music(
 #[reflect(Component)]
 pub struct Music;
 
+#[cfg(target_arch = "wasm32")]
+#[derive(Component)]
+struct WebAudioHandle(Handle<AudioSource>);
+
 /// A music audio instance.
 #[allow(unused)]
 pub fn music(handle: Handle<AudioSource>) -> impl Bundle {
     (
-        AudioPlayer(handle),
+        #[cfg(not(target_arch = "wasm32"))]
+        AudioPlayer(handle.clone()),
+        #[cfg(target_arch = "wasm32")]
+        WebAudioHandle(handle),
         PlaybackSettings {
             mode: bevy::audio::PlaybackMode::Loop,
             volume: bevy::audio::Volume::Linear(0.3),
@@ -169,7 +216,10 @@ pub struct SoundEffect;
 #[allow(unused)]
 pub fn sound_effect(handle: Handle<AudioSource>) -> impl Bundle {
     (
-        AudioPlayer(handle),
+        #[cfg(not(target_arch = "wasm32"))]
+        AudioPlayer(handle.clone()),
+        #[cfg(target_arch = "wasm32")]
+        WebAudioHandle(handle),
         PlaybackSettings {
             mode: bevy::audio::PlaybackMode::Despawn,
             volume: bevy::audio::Volume::Linear(0.6),
@@ -182,9 +232,76 @@ pub fn sound_effect(handle: Handle<AudioSource>) -> impl Bundle {
 /// [`GlobalVolume`] doesn't apply to already-running audio entities, so this system will update them.
 fn apply_global_volume(
     global_volume: Res<GlobalVolume>,
-    mut audio_query: Query<(&PlaybackSettings, &mut AudioSink), Without<MusicFadeOut>>,
+    #[cfg(not(target_arch = "wasm32"))] mut audio_query: Query<
+        (&PlaybackSettings, &mut AudioSink),
+        Without<MusicFadeOut>,
+    >,
+    #[cfg(target_arch = "wasm32")] mut audio_query: Query<
+        (&PlaybackSettings, &mut WebAudioSink),
+        Without<MusicFadeOut>,
+    >,
 ) {
     for (playback, mut sink) in &mut audio_query {
         sink.set_volume(global_volume.volume * playback.volume);
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn spawn_web_audio(
+    mut commands: Commands,
+    query: Query<
+        (Entity, &WebAudioHandle, &PlaybackSettings),
+        (Or<(With<Music>, With<SoundEffect>)>, Without<WebAudioSink>),
+    >,
+    assets: Res<Assets<AudioSource>>,
+) {
+    for (entity, handle, settings) in &query {
+        if let Some(source) = assets.get(&handle.0) {
+            let bytes = source.bytes.as_ref();
+            let uint8_array = js_sys::Uint8Array::from(bytes);
+            let blob_parts = js_sys::Array::new();
+            blob_parts.push(&uint8_array);
+
+            let blob_options = BlobPropertyBag::new();
+            blob_options.set_type("audio/ogg");
+
+            let blob =
+                Blob::new_with_u8_array_sequence_and_options(&blob_parts, &blob_options).unwrap();
+            let url = Url::create_object_url_with_blob(&blob).unwrap();
+
+            let element = HtmlAudioElement::new_with_src(&url).unwrap();
+            element.set_volume(settings.volume.to_linear() as f64);
+            element.set_loop(matches!(settings.mode, bevy::audio::PlaybackMode::Loop));
+
+            if let Some(window) = web_sys::window() {
+                if let Some(document) = window.document() {
+                    if let Some(body) = document.body() {
+                        let _ = body.append_child(&element);
+                    }
+                }
+            }
+
+            let _ = element.play();
+
+            commands.entity(entity).insert(WebAudioSink {
+                element,
+                object_url: url,
+            });
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn despawn_finished_web_audio(
+    mut commands: Commands,
+    query: Query<(Entity, &WebAudioSink, &PlaybackSettings)>,
+) {
+    for (entity, sink, settings) in &query {
+        if (matches!(settings.mode, bevy::audio::PlaybackMode::Despawn)
+            || matches!(settings.mode, bevy::audio::PlaybackMode::Once))
+            && sink.element.ended()
+        {
+            commands.entity(entity).despawn();
+        }
     }
 }

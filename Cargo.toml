@@ -32,6 +32,19 @@ noisy_bevy = "0.13.0"
 [target.wasm32-unknown-unknown.dependencies]
 getrandom = { version = "0.3", features = ["wasm_js"] }
 getrandom_2 = { package = "getrandom", version = "0.2", features = ["js"] }
+web-sys = { version = "0.3", features = [
+    "Document",
+    "Element",
+    "HtmlAudioElement",
+    "HtmlBodyElement",
+    "Node",
+    "Window",
+    "Url",
+    "Blob",
+    "BlobPropertyBag",
+] }
+js-sys = "0.3"
+wasm-bindgen = "0.2"
 
 [features]
 # Default to a native dev build.
