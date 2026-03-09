@@ -3991,18 +3991,17 @@ fn update_fov_mask(
         image.sampler = ImageSampler::nearest();
 
         let image_handle = images.add(image);
-
-        // Position the mask
-        let world_width = rect.width() as f32 * map::TILE_WIDTH;
-        let world_height = rect.height() as f32 * map::TILE_HEIGHT;
-        let center_x = (rect.x1 as f32 + rect.x2 as f32) * map::TILE_WIDTH / 2.0;
-        let center_y = (rect.y1 as f32 + rect.y2 as f32) * map::TILE_HEIGHT / 2.0;
-
-        transform.translation = Vec3::new(center_x, center_y, TILE_Z - 0.02);
-
         sprite.image = image_handle;
-        sprite.custom_size = Some(Vec2::new(world_width, world_height));
     }
+
+    // Position the mask
+    let world_width = rect.width() as f32 * map::TILE_WIDTH;
+    let world_height = rect.height() as f32 * map::TILE_HEIGHT;
+    let center_x = (rect.x1 as f32 + rect.x2 as f32) * map::TILE_WIDTH / 2.0;
+    let center_y = (rect.y1 as f32 + rect.y2 as f32) * map::TILE_HEIGHT / 2.0;
+
+    transform.translation = Vec3::new(center_x, center_y, TILE_Z - 0.02);
+    sprite.custom_size = Some(Vec2::new(world_width, world_height));
 
     // Update the image data
     if let Some(img) = images.get_mut(sprite.image.id()) {
