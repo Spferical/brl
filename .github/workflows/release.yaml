@@ -235,9 +235,8 @@ jobs:
             mv tmp/binary/*'${{ matrix.binary_ext }}' '${{ env.app }}/${{ env.app_binary_name }}${{ matrix.binary_ext }}'
           fi
 
-      - name: Add assets to app (non-Web)
-        if: ${{ env.is_platform_enabled == 'true' && matrix.platform != 'web' }}
-        run: cp -R ./'${{ env.assets_path }}' '${{ env.app }}' || true
+      # Assets are embedded in the binary via include_bytes! in src/game/assets.rs, 
+      # so we do not need to include the assets/ directory in the package.
 
       - name: Add metadata to app (macOS)
         if: ${{ env.is_platform_enabled == 'true' && matrix.platform == 'macos' }}
