@@ -1,7 +1,52 @@
 <!doctype html>
 <html lang="en">
 
-<body style="margin: 0px;background-color:black;">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body {
+            margin: 0px;
+            background-color: black;
+            color: white;
+            font-family: 'Courier New', Courier, monospace;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #loading-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border-left-color: #fff;
+            animation: spin 1s ease infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="loading-screen">
+        <div class="spinner"></div>
+        <div style="font-size: 24px;">Loading...</div>
+    </div>
+
     <script type="module">
         import './restart-audio-context.js'
 
@@ -29,13 +74,30 @@
         
         console.log("Loading WASM module:", scriptName);
 
+        const loadingScreen = document.getElementById('loading-screen');
+
         import(scriptName).then(module => {
             const init = module.default;
-            init().catch((error) => {
+            init().then(() => {
+                loadingScreen.remove();
+            }).catch((error) => {
                 if(!error.message.startsWith("Using exceptions for control flow, don't mind me. This isn't actually an error!")) {
+                    console.error("Initialization error:", error);
+                    const errorMsg = document.createElement('div');
+                    errorMsg.style.color = 'red';
+                    errorMsg.textContent = "Error: " + error.message;
+                    loadingScreen.appendChild(errorMsg);
                     throw error;
+                } else {
+                    loadingScreen.remove();
                 }
             });
+        }).catch(err => {
+            console.error("Failed to load script:", err);
+            const errorMsg = document.createElement('div');
+            errorMsg.style.color = 'red';
+            errorMsg.textContent = "Failed to load WASM: " + err.message;
+            loadingScreen.appendChild(errorMsg);
         });
     </script>
 </body>
