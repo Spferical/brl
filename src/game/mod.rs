@@ -45,6 +45,7 @@ pub(crate) mod chat;
 pub(crate) mod debug;
 mod delivery;
 mod examine;
+pub(crate) mod help;
 mod input;
 pub mod lighting;
 mod map;
@@ -103,6 +104,7 @@ pub(super) fn plugin(app: &mut App) {
     app.init_resource::<input::InputMode>();
     app.init_resource::<targeting::ValidTargets>();
     app.init_resource::<phone::PhoneState>();
+    app.init_resource::<help::HelpState>();
     app.init_resource::<delivery::DungeonDashState>();
     app.init_resource::<mobile_apps::CockatriceState>();
     app.init_resource::<mobile_apps::CrawlrState>();
@@ -127,8 +129,11 @@ pub(super) fn plugin(app: &mut App) {
                 lighting::update_lighting,
                 lighting::on_add_occluder,
                 lighting::on_add_player,
-                (input::handle_wait_message, input::handle_input)
-                    .run_if(is_player_alive.and(phone::is_phone_closed)),
+                (input::handle_wait_message, input::handle_input).run_if(
+                    is_player_alive
+                        .and(phone::is_phone_closed)
+                        .and(help::is_help_closed),
+                ),
                 targeting::update_valid_targets,
                 targeting::update_valid_target_indicators
                     .run_if(resource_changed::<targeting::ValidTargets>),
@@ -145,7 +150,7 @@ pub(super) fn plugin(app: &mut App) {
             ),
             (
                 update_final_boss_sprite,
-                update_level_info_on_change,
+                update_level_info_on_change.run_if(help::is_help_closed),
                 (
                     animation::process_move_animations,
                     animation::process_attack_animations,
@@ -154,7 +159,8 @@ pub(super) fn plugin(app: &mut App) {
                     animation::update_floating_text,
                     animation::update_title_drop,
                 )
-                    .chain(),
+                    .chain()
+                    .run_if(help::is_help_closed),
                 camera::update_camera,
                 examine::update_examine_info,
                 examine::highlight_examine_tile,
@@ -263,6 +269,7 @@ pub(super) fn plugin(app: &mut App) {
             phone::draw_phone,
             chat::draw_chat,
             draw_interactable_popup,
+            help::draw_help,
         )
             .run_if(in_state(Screen::Gameplay)),
     );
@@ -3793,6 +3800,7 @@ pub struct GameResetParams<'w> {
     pub nearby_mobs: ResMut<'w, NearbyMobs>,
     pub last_title_drop_level: ResMut<'w, LastTitleDropLevel>,
     pub player_memory_map: ResMut<'w, PlayerMemoryMap>,
+    pub help_state: ResMut<'w, help::HelpState>,
     #[allow(dead_code)]
     pub lighting_settings: Res<'w, lighting::LightingSettings>,
     pub game_over_info: ResMut<'w, crate::screens::game_over::GameOverInfo>,
@@ -3832,6 +3840,10 @@ pub fn enter(
     *params.nearby_mobs = NearbyMobs::default();
     *params.last_title_drop_level = LastTitleDropLevel::default();
     *params.player_memory_map = PlayerMemoryMap::default();
+    if !params.help_state.skip_tutorial {
+        params.help_state.is_open = true;
+        params.help_state.current_screen = 0;
+    }
 
     params.next_phone_screen.set(phone::PhoneScreen::Home);
     params
