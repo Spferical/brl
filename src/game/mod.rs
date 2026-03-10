@@ -142,6 +142,7 @@ pub(super) fn plugin(app: &mut App) {
                     phone::toggle_phone,
                     phone::update_phone,
                     mobile_apps::update_cockatrice,
+                    help::update_help,
                 )
                     .chain(),
                 chat::update_streaming_stats,
@@ -3842,7 +3843,7 @@ pub fn enter(
     *params.player_memory_map = PlayerMemoryMap::default();
     if !params.help_state.skip_tutorial {
         params.help_state.is_open = true;
-        params.help_state.current_screen = 0;
+        params.help_state.current_step = help::TutorialStep::Welcome;
     }
 
     params.next_phone_screen.set(phone::PhoneScreen::Home);

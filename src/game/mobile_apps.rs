@@ -825,7 +825,7 @@ impl DungeonDash {
             );
             play_button_sounds(ui, commands, assets, &order_button);
 
-            if order_button.clicked() {
+            if order_button.clicked() && !dd_selection.buttons_disabled {
                 next_dd_screen.set(DungeonDashScreen::Menu);
             }
 
@@ -862,6 +862,7 @@ impl DungeonDash {
             if work_button.clicked()
                 && dd_selection.deliveries_this_level < 3
                 && !low_customer_count
+                && !dd_selection.buttons_disabled
             {
                 next_dd_screen.set(DungeonDashScreen::JobOffer);
 
@@ -1509,6 +1510,10 @@ impl DungeonDash {
                     );
                     play_button_sounds(ui, commands, assets, &klarna_button);
 
+                    if klarna_button.clicked() {
+                        clicked_buy = true;
+                    }
+
                     let rect = klarna_button.rect;
                     ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                         let text = "BUY with Klarna";
@@ -1546,10 +1551,6 @@ impl DungeonDash {
                             );
                         });
                     });
-
-                    if klarna_button.clicked() {
-                        clicked_buy = true;
-                    }
                 }
 
                 if clicked_buy {

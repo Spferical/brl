@@ -1,26 +1,110 @@
 use crate::game::Player;
+use crate::game::TurnCounter;
 use crate::game::apply_brainrot_ui;
+use crate::game::mobile_apps::AppId;
+use crate::game::phone::{PhoneScreen, PhoneState};
 use bevy::prelude::*;
 use bevy_egui::{
     EguiContexts,
     egui::{self, Color32, RichText},
 };
 
+#[derive(Default, PartialEq, Eq, PartialOrd, Ord, Clone, Copy, Debug)]
+pub enum TutorialStep {
+    #[default]
+    Welcome,
+    PickUpgrade,
+    OpenDungeonDash,
+    DungeonDashIntro,
+    ClosePhone,
+    Movement,
+    Completed,
+}
+
 #[derive(Resource, Default)]
 pub struct HelpState {
     pub is_open: bool,
-    pub current_screen: usize,
+    pub current_step: TutorialStep,
     pub skip_tutorial: bool,
+    pub wrong_app_opened: bool,
+    pub last_pending_upgrades: Option<usize>,
+    pub initial_turns: Option<u64>,
 }
 
 pub fn is_help_closed(help_state: Res<HelpState>) -> bool {
-    !help_state.is_open
+    !help_state.is_open || help_state.current_step == TutorialStep::Movement
+}
+
+pub fn update_help(
+    mut help_state: ResMut<HelpState>,
+    phone_state: Res<PhoneState>,
+    phone_screen: Res<State<PhoneScreen>>,
+    player: Single<&Player>,
+    turn_counter: Res<TurnCounter>,
+) {
+    if !help_state.is_open || help_state.current_step == TutorialStep::Completed {
+        return;
+    }
+
+    match help_state.current_step {
+        TutorialStep::Welcome => {
+            if phone_state.is_open {
+                help_state.current_step = TutorialStep::PickUpgrade;
+                help_state.last_pending_upgrades = Some(player.pending_upgrades);
+            }
+        }
+        TutorialStep::PickUpgrade => {
+            if let Some(last) = help_state.last_pending_upgrades {
+                if player.pending_upgrades < last {
+                    help_state.current_step = TutorialStep::OpenDungeonDash;
+                }
+            } else {
+                help_state.last_pending_upgrades = Some(player.pending_upgrades);
+            }
+        }
+        TutorialStep::OpenDungeonDash => match phone_screen.get() {
+            PhoneScreen::App(app_id) => {
+                if *app_id == AppId::DungeonDash {
+                    help_state.current_step = TutorialStep::DungeonDashIntro;
+                    help_state.wrong_app_opened = false;
+                } else if *app_id != AppId::Upgrade {
+                    help_state.wrong_app_opened = true;
+                }
+            }
+            PhoneScreen::Home => {
+                help_state.wrong_app_opened = false;
+            }
+        },
+        TutorialStep::DungeonDashIntro => {
+            if *phone_screen.get() == PhoneScreen::Home {
+                help_state.current_step = TutorialStep::ClosePhone;
+            }
+        }
+        TutorialStep::ClosePhone => {
+            if !phone_state.is_open && phone_state.slide_progress == 0.0 {
+                help_state.current_step = TutorialStep::Movement;
+                help_state.initial_turns = Some(turn_counter.0);
+            }
+        }
+        TutorialStep::Movement => {
+            if let Some(initial) = help_state.initial_turns {
+                if turn_counter.0 > initial {
+                    help_state.current_step = TutorialStep::Completed;
+                    help_state.is_open = false;
+                }
+            } else {
+                help_state.initial_turns = Some(turn_counter.0);
+            }
+        }
+        TutorialStep::Completed => {}
+    }
 }
 
 pub fn draw_help(
     mut contexts: EguiContexts,
     mut help_state: ResMut<HelpState>,
     player: Single<&Player>,
+    phone_state: Res<PhoneState>,
     assets: Res<crate::game::assets::WorldAssets>,
     mut commands: Commands,
 ) {
@@ -33,35 +117,54 @@ pub fn draw_help(
     };
 
     let brainrot = player.brainrot;
-
-    // Dim background
     let screen_rect = ctx.input(|i| i.content_rect());
-    egui::Area::new(egui::Id::new("help_dim_area"))
-        .order(egui::Order::Foreground)
-        .interactable(true)
-        .fixed_pos(screen_rect.min)
-        .show(ctx, |ui| {
-            ui.allocate_exact_size(screen_rect.size(), egui::Sense::click());
-            ui.painter().rect_filled(
-                screen_rect,
-                0.0,
-                Color32::from_rgba_premultiplied(0, 0, 0, 180),
-            );
-        });
+
+    let phone_aspect_ratio = 900.0 / 1600.0;
+    let phone_max_width = screen_rect.width() / 4.0;
+    let phone_width = (screen_rect.height() * phone_aspect_ratio).min(phone_max_width);
+    let phone_right = screen_rect.center().x + phone_width / 2.0;
+
+    let sidebar_left = screen_rect.max.x - 192.0;
+    let margin = 60.0;
+
+    let available_width = (sidebar_left - phone_right - margin * 2.0).max(250.0);
+
+    let t = EasingCurve::new(0.0, 1.0, EaseFunction::CubicInOut)
+        .sample_clamped(phone_state.slide_progress);
+
+    let window_width = egui::lerp(450.0..=available_width, t).min(450.0);
+
+    let start_pos = egui::pos2(
+        screen_rect.center().x - window_width / 2.0,
+        screen_rect.min.y + 20.0,
+    );
+
+    let target_pos = egui::pos2(phone_right + margin, screen_rect.center().y - 100.0);
+
+    let current_pos = egui::pos2(
+        egui::lerp(start_pos.x..=target_pos.x, t),
+        egui::lerp(start_pos.y..=target_pos.y, t),
+    );
 
     egui::Area::new(egui::Id::new("help_window_area"))
         .order(egui::Order::Tooltip)
-        .anchor(egui::Align2::CENTER_CENTER, egui::vec2(0.0, 0.0))
+        .fixed_pos(current_pos)
         .show(ctx, |ui| {
             egui::Frame::window(ui.style())
                 .fill(Color32::from_rgb(30, 30, 30))
                 .inner_margin(egui::Margin::same(20))
                 .show(ui, |ui| {
-                    ui.set_width(450.0);
-                    ui.set_height(400.0);
+                    ui.set_width(window_width);
+                    ui.set_max_width(window_width);
 
                     // Top row with Skip button
                     ui.horizontal(|ui| {
+                        if ui.button(RichText::new("Skip Tutorial").size(12.0).color(Color32::LIGHT_GRAY)).clicked() {
+                            help_state.is_open = false;
+                            help_state.current_step = TutorialStep::Completed;
+                            help_state.skip_tutorial = true;
+                            commands.spawn(crate::audio::sound_effect(assets.button_click.clone()));
+                        }
                         ui.add_space(ui.available_width() - 40.0);
                         if ui.button(RichText::new("Skip").size(14.0).color(Color32::LIGHT_GRAY)).clicked() {
                             help_state.is_open = false;
@@ -72,16 +175,58 @@ pub fn draw_help(
                     ui.vertical_centered(|ui| {
                         ui.add_space(10.0);
 
-                        match help_state.current_screen {
-                            0 => {
+                        match help_state.current_step {
+                            TutorialStep::Welcome => {
                                 ui.label(apply_brainrot_ui(
-                                    RichText::new("Welcome to BrainrotRL!").size(24.0).strong().color(Color32::WHITE),
+                                    RichText::new("Welcome to BrainrotRL! Let's go over a quick tutorial of the controls.\n\nFirst off -- press space to open up your phone").size(18.0).color(Color32::WHITE),
                                     brainrot,
                                     ui.style(),
                                     egui::FontSelection::Default,
                                     egui::Align::Center,
                                 ));
-                                ui.add_space(15.0);
+                            }
+                            TutorialStep::PickUpgrade => {
+                                ui.label(apply_brainrot_ui(
+                                    RichText::new("Good. Looks like you have an upgrade you need to select\n\nUpgrades give you access to subscriptions, new abilities, and stat upgrades. Let's pick one now.").size(18.0).color(Color32::WHITE),
+                                    brainrot,
+                                    ui.style(),
+                                    egui::FontSelection::Default,
+                                    egui::Align::Center,
+                                ));
+                            }
+                            TutorialStep::OpenDungeonDash => {
+                                let text = if help_state.wrong_app_opened {
+                                    "Ah, that's not DungeonDash. \n\nPress the home button on the bottom of the phone to go to the home screen"
+                                } else {
+                                    "Great! Now, try and open up the DungeonDash app. It's on the top row"
+                                };
+                                ui.label(apply_brainrot_ui(
+                                    RichText::new(text).size(18.0).color(Color32::WHITE),
+                                    brainrot,
+                                    ui.style(),
+                                    egui::FontSelection::Default,
+                                    egui::Align::Center,
+                                ));
+                            }
+                            TutorialStep::DungeonDashIntro => {
+                                ui.label(apply_brainrot_ui(
+                                    RichText::new("Great. You can either order food on DungeonDash or take orders as a delivery driver.\n\nBut you can figure that out on your own. Press the home button on the bottom of the phone to go to the home screen").size(18.0).color(Color32::WHITE),
+                                    brainrot,
+                                    ui.style(),
+                                    egui::FontSelection::Default,
+                                    egui::Align::Center,
+                                ));
+                            }
+                            TutorialStep::ClosePhone => {
+                                ui.label(apply_brainrot_ui(
+                                    RichText::new("To close the phone, press space again.").size(18.0).color(Color32::WHITE),
+                                    brainrot,
+                                    ui.style(),
+                                    egui::FontSelection::Default,
+                                    egui::Align::Center,
+                                ));
+                            }
+                            TutorialStep::Movement => {
                                 ui.label(apply_brainrot_ui(
                                     RichText::new("Movement Controls:").size(18.0).color(Color32::LIGHT_GRAY),
                                     brainrot,
@@ -120,106 +265,13 @@ pub fn draw_help(
                                             ui.end_row();
                                         });
                                 });
-                            },
-                            1 => {
-                                ui.add_space(40.0);
-                                ui.label(apply_brainrot_ui(
-                                    RichText::new("The Phone").size(24.0).strong().color(Color32::WHITE),
-                                    brainrot,
-                                    ui.style(),
-                                    egui::FontSelection::Default,
-                                    egui::Align::Center,
-                                ));
-                                ui.add_space(30.0);
-                                ui.label(apply_brainrot_ui(
-                                    RichText::new("Press Space to toggle your phone.\nUse the mouse to interact with apps.").size(18.0).color(Color32::LIGHT_GRAY),
-                                    brainrot,
-                                    ui.style(),
-                                    egui::FontSelection::Default,
-                                    egui::Align::Center,
-                                ));
-                            },
-                            2 => {
-                                ui.add_space(40.0);
-                                ui.label(apply_brainrot_ui(
-                                    RichText::new("Stats & Survival").size(24.0).strong().color(Color32::WHITE),
-                                    brainrot,
-                                    ui.style(),
-                                    egui::FontSelection::Default,
-                                    egui::Align::Center,
-                                ));
-                                ui.add_space(30.0);
-                                ui.label(apply_brainrot_ui(
-                                    RichText::new("Watch your stats on the left sidebar.\nKeep your brainrot in check!").size(18.0).color(Color32::LIGHT_GRAY),
-                                    brainrot,
-                                    ui.style(),
-                                    egui::FontSelection::Default,
-                                    egui::Align::Center,
-                                ));
-                            },
-                            _ => {},
+
+                                ui.add_space(20.0);
+                            }
+                            TutorialStep::Completed => {},
                         }
 
-                        ui.add_space(40.0);
-
-                        ui.horizontal(|ui| {
-                            let total_width = ui.available_width();
-                            let button_width = 100.0;
-
-                            ui.add_space((total_width - (button_width * 2.0 + 20.0)) / 2.0);
-
-                            if help_state.current_screen > 0 {
-                                if ui.add_sized([button_width, 40.0], egui::Button::new(apply_brainrot_ui(
-                                    "< Back",
-                                    brainrot,
-                                    ui.style(),
-                                    egui::FontSelection::Default,
-                                    egui::Align::Center,
-                                ))).clicked() {
-                                    help_state.current_screen -= 1;
-                                    commands.spawn(crate::audio::sound_effect(assets.button_click.clone()));
-                                }
-                            } else {
-                                ui.add_enabled_ui(false, |ui| {
-                                    ui.add_sized([button_width, 40.0], egui::Button::new(apply_brainrot_ui(
-                                        "< Back",
-                                        brainrot,
-                                        ui.style(),
-                                        egui::FontSelection::Default,
-                                        egui::Align::Center,
-                                    )));
-                                });
-                            }
-
-                            ui.add_space(20.0);
-
-                            if help_state.current_screen < 2 {
-                                if ui.add_sized([button_width, 40.0], egui::Button::new(apply_brainrot_ui(
-                                    "Next >",
-                                    brainrot,
-                                    ui.style(),
-                                    egui::FontSelection::Default,
-                                    egui::Align::Center,
-                                ))).clicked() {
-                                    help_state.current_screen += 1;
-                                    commands.spawn(crate::audio::sound_effect(assets.button_click.clone()));
-                                }
-                            } else {
-                                if ui.add_sized([button_width, 40.0], egui::Button::new(apply_brainrot_ui(
-                                    "Close",
-                                    brainrot,
-                                    ui.style(),
-                                    egui::FontSelection::Default,
-                                    egui::Align::Center,
-                                ))).clicked() {
-                                    help_state.is_open = false;
-                                    commands.spawn(crate::audio::sound_effect(assets.button_click.clone()));
-                                }
-                            }
-                        });
-
                         ui.add_space(10.0);
-                        ui.checkbox(&mut help_state.skip_tutorial, "Don't show again at start");
                     });
                 });
         });

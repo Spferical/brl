@@ -284,6 +284,7 @@ pub struct DrawPhoneParams<'w, 's> {
     pub cockatrice_state: ResMut<'w, mobile_apps::CockatriceState>,
     pub crawlr_state: ResMut<'w, mobile_apps::CrawlrState>,
     pub map_info: Res<'w, crate::game::mapgen::MapInfo>,
+    pub help_state: Res<'w, crate::game::help::HelpState>,
 }
 
 pub fn draw_phone(mut params: DrawPhoneParams) {
@@ -643,6 +644,9 @@ pub fn draw_phone(mut params: DrawPhoneParams) {
                 if let Some(app_id) = params.phone_state.last_opened_app {
                     let i = apps.iter().position(|a| a.0 == app_id).unwrap();
                     let app = &apps[i];
+
+                    params.dd_selection.buttons_disabled = params.help_state.current_step
+                        == crate::game::help::TutorialStep::DungeonDashIntro;
 
                     if params.phone_state.app_launch_progress > 0.5 {
                         let content_alpha = (params.phone_state.app_launch_progress - 0.5) / 0.5;

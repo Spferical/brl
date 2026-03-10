@@ -35,6 +35,7 @@ pub struct DungeonDashState {
     pub deliveries_this_level: u32,
     pub initial_mobs: u32,
     pub current_mobs: u32,
+    pub buttons_disabled: bool,
 }
 
 impl DungeonDashState {
