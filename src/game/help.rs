@@ -159,15 +159,10 @@ pub fn draw_help(
 
                     // Top row with Skip button
                     ui.horizontal(|ui| {
-                        if ui.button(RichText::new("Skip Tutorial").size(12.0).color(Color32::LIGHT_GRAY)).clicked() {
+                        if ui.button(RichText::new("Skip tutorial (don't show again)").size(12.0).color(Color32::LIGHT_GRAY)).clicked() {
                             help_state.is_open = false;
                             help_state.current_step = TutorialStep::Completed;
                             help_state.skip_tutorial = true;
-                            commands.spawn(crate::audio::sound_effect(assets.button_click.clone()));
-                        }
-                        ui.add_space(ui.available_width() - 40.0);
-                        if ui.button(RichText::new("Skip").size(14.0).color(Color32::LIGHT_GRAY)).clicked() {
-                            help_state.is_open = false;
                             commands.spawn(crate::audio::sound_effect(assets.button_click.clone()));
                         }
                     });
