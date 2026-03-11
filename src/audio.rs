@@ -159,7 +159,7 @@ fn update_music_speed(
         1.0 + t * 0.2
     };
 
-    for sink in &mut music_query {
+    for mut sink in &mut music_query {
         sink.set_speed(speed);
     }
 }
